@@ -44,6 +44,50 @@ def line_webhook():
     events = json_body.get("events", [])
 
     for event in events:
+        if event.get("type") != "message":
+            continue
+
+        message = event.get("message", {})
+
+        if message.get("type") != "text":
+            continue
+
+        text = message.get("text", "").strip()
+        print("使用者輸入：", text)
+
+        match = re.fullmatch(r"完成\s*(\d+)", text)
+
+        if match:
+            task_number = int(match.group(1))
+
+            tasks = get_active_tasks()
+            ordered_tasks = get_tasks_in_display_order(tasks)
+
+            if task_number < 1 or task_number > len(ordered_tasks):
+                print("找不到第", task_number, "筆待辦")
+                continue
+
+            selected_task = ordered_tasks[task_number - 1]
+            complete_task(selected_task["id"])
+
+            print("已完成：", selected_task["title"])
+
+            return "OK"
+    body = request.get_data()
+    signature = request.headers.get("X-Line-Signature")
+
+    if not verify_signature(body, signature):
+        print("LINE 簽章驗證失敗")
+        abort(400)
+
+    json_body = request.get_json()
+
+    print("收到 LINE 訊息：")
+    print(json_body)
+
+    events = json_body.get("events", [])
+
+    for event in events:
         if event["type"] != "message":
             continue
 
