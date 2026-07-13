@@ -1,27 +1,96 @@
-from flask import Flask, request, abort
-import os
-from dotenv import load_dotenv
-import hmac
-import hashlib
 import base64
-import re
-from services.task_service import get_active_tasks, complete_task
-from services.message_service import get_tasks_in_display_order
-from services.line_service import reply_message
+import hashlib
+import hmac
+import json
+import os
+from urllib.parse import parse_qs
+
+from dotenv import load_dotenv
+from flask import Flask, abort, request
+
+from services.line_service import reply_message, reply_task_cards
+from services.task_service import complete_task, get_active_tasks
 
 load_dotenv()
+
 app = Flask(__name__)
+
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
+
+
 def verify_signature(body, signature):
-    hash = hmac.new(
+    if not LINE_CHANNEL_SECRET or not signature:
+        return False
+
+    digest = hmac.new(
         LINE_CHANNEL_SECRET.encode("utf-8"),
         body,
-        hashlib.sha256
+        hashlib.sha256,
     ).digest()
 
-    expected_signature = base64.b64encode(hash).decode()
+    expected_signature = base64.b64encode(digest).decode("utf-8")
 
     return hmac.compare_digest(expected_signature, signature)
+
+
+def handle_text_message(text, reply_token):
+    text = text.strip()
+
+    if text in ["待辦", "查看待辦", "我的待辦"]:
+        tasks = get_active_tasks()
+        reply_task_cards(reply_token, tasks)
+        return
+
+    if text.lower() in ["hello", "hi"] or text in ["哈囉", "你好"]:
+        reply_message(
+            reply_token,
+            "👋 哈囉 Lin！\n\n輸入「待辦」即可查看目前未完成事項。",
+        )
+        return
+
+    reply_message(
+        reply_token,
+        "目前可以輸入：\n\n📋 待辦",
+    )
+
+
+def handle_postback(event):
+    reply_token = event.get("replyToken")
+    postback_data = event.get("postback", {}).get("data", "")
+
+    values = parse_qs(postback_data)
+
+    action = values.get("action", [""])[0]
+    task_id = values.get("task_id", [""])[0]
+
+    if action != "complete_task" or not task_id:
+        if reply_token:
+            reply_message(reply_token, "無法辨識這個操作。")
+        return
+
+    tasks = get_active_tasks()
+
+    selected_task = next(
+        (task for task in tasks if str(task.get("id")) == task_id),
+        None,
+    )
+
+    if not selected_task:
+        if reply_token:
+            reply_message(
+                reply_token,
+                "這筆待辦可能已經完成或被刪除了。",
+            )
+        return
+
+    complete_task(task_id)
+
+    if reply_token:
+        reply_message(
+            reply_token,
+            f"✅ 已完成：{selected_task.get('title', '未命名任務')}",
+        )
+
 
 @app.route("/", methods=["GET"])
 def home():
@@ -37,14 +106,17 @@ def line_webhook():
         print("LINE 簽章驗證失敗")
         abort(400)
 
-    json_body = request.get_json()
-    print("收到 LINE 訊息：")
-    print(json_body)
-
+    json_body = json.loads(body.decode("utf-8"))
     events = json_body.get("events", [])
 
     for event in events:
-        if event.get("type") != "message":
+        event_type = event.get("type")
+
+        if event_type == "postback":
+            handle_postback(event)
+            continue
+
+        if event_type != "message":
             continue
 
         message = event.get("message", {})
@@ -52,39 +124,16 @@ def line_webhook():
         if message.get("type") != "text":
             continue
 
-        text = message.get("text", "").strip()
-        print("使用者輸入：", text)
-
+        text = message.get("text", "")
         reply_token = event.get("replyToken")
 
-        if text.lower() in ["hello", "hi"] or text in ["哈囉", "你好"]:
-            if reply_token:
-                reply_message(
-                    reply_token,
-                    "👋 哈囉 Lin！\nBEAST Workspace 已經正式在線上了。",
-        )
-            continue
+        print("使用者輸入：", text)
 
-        match = re.fullmatch(r"完成\s*(\d+)", text)
-
-        if match:
-            task_number = int(match.group(1))
-
-            tasks = get_active_tasks()
-            ordered_tasks = get_tasks_in_display_order(tasks)
-
-            if task_number < 1 or task_number > len(ordered_tasks):
-                print("找不到第", task_number, "筆待辦")
-                continue
-
-            selected_task = ordered_tasks[task_number - 1]
-            complete_task(selected_task["id"])
-            print("已完成：", selected_task["title"])
+        if reply_token:
+            handle_text_message(text, reply_token)
 
     return "OK"
 
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
-
-    

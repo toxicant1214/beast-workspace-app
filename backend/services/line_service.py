@@ -7,15 +7,17 @@ load_dotenv()
 LINE_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 
 
-def send_line_message(text):
-    """廣播給全部好友"""
-
-    url = "https://api.line.me/v2/bot/message/broadcast"
-
-    headers = {
+def get_headers():
+    return {
         "Authorization": f"Bearer {LINE_TOKEN}",
         "Content-Type": "application/json",
     }
+
+
+def send_line_message(text):
+    """廣播給全部好友，用於每天早上 9 點晨報。"""
+
+    url = "https://api.line.me/v2/bot/message/broadcast"
 
     data = {
         "messages": [
@@ -26,18 +28,21 @@ def send_line_message(text):
         ]
     }
 
-    requests.post(url, headers=headers, json=data)
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print("LINE broadcast:", response.status_code, response.text)
+    response.raise_for_status()
 
 
 def reply_message(reply_token, text):
-    """回覆目前聊天的人"""
+    """回覆目前傳訊息給 Workspace 的使用者。"""
 
     url = "https://api.line.me/v2/bot/message/reply"
-
-    headers = {
-        "Authorization": f"Bearer {LINE_TOKEN}",
-        "Content-Type": "application/json",
-    }
 
     data = {
         "replyToken": reply_token,
@@ -46,7 +51,121 @@ def reply_message(reply_token, text):
                 "type": "text",
                 "text": text,
             }
-        ]
+        ],
     }
 
-    requests.post(url, headers=headers, json=data)
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print("LINE reply:", response.status_code, response.text)
+    response.raise_for_status()
+
+
+def reply_task_cards(reply_token, tasks):
+    """回覆可直接點擊完成的待辦卡片。"""
+
+    if not tasks:
+        reply_message(reply_token, "📋 目前沒有未完成的待辦事項。")
+        return
+
+    bubbles = []
+
+    for task in tasks[:10]:
+        task_id = str(task["id"])
+        title = task.get("title") or "未命名任務"
+
+        deadline_text = "未設定日期"
+
+        if task.get("deadline_at"):
+            deadline_text = str(task["deadline_at"])[:10]
+
+        priority = task.get("priority", "normal")
+
+        if priority == "urgent":
+            priority_text = "非常重要"
+        elif priority == "high":
+            priority_text = "重要"
+        else:
+            priority_text = "一般"
+
+        bubbles.append(
+            {
+                "type": "bubble",
+                "size": "kilo",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "md",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": title,
+                            "weight": "bold",
+                            "size": "lg",
+                            "wrap": True,
+                        },
+                        {
+                            "type": "text",
+                            "text": f"截止：{deadline_text}",
+                            "size": "sm",
+                            "color": "#777777",
+                            "wrap": True,
+                        },
+                        {
+                            "type": "text",
+                            "text": f"重要程度：{priority_text}",
+                            "size": "sm",
+                            "color": "#777777",
+                            "wrap": True,
+                        },
+                    ],
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "height": "sm",
+                            "action": {
+                                "type": "postback",
+                                "label": "✅ 標記完成",
+                                "data": f"action=complete_task&task_id={task_id}",
+                                "displayText": f"完成：{title}",
+                            },
+                        }
+                    ],
+                },
+            }
+        )
+
+    url = "https://api.line.me/v2/bot/message/reply"
+
+    data = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "flex",
+                "altText": "BEAST Workspace 待辦清單",
+                "contents": {
+                    "type": "carousel",
+                    "contents": bubbles,
+                },
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print("LINE task cards:", response.status_code, response.text)
+    response.raise_for_status()
