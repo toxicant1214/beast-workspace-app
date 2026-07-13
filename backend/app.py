@@ -7,6 +7,7 @@ import base64
 import re
 from services.task_service import get_active_tasks, complete_task
 from services.message_service import get_tasks_in_display_order
+from services.line_service import reply_message
 
 load_dotenv()
 app = Flask(__name__)
@@ -53,6 +54,16 @@ def line_webhook():
 
         text = message.get("text", "").strip()
         print("使用者輸入：", text)
+
+        reply_token = event.get("replyToken")
+
+        if text.lower() in ["hello", "hi"] or text in ["哈囉", "你好"]:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "👋 哈囉 Lin！\nBEAST Workspace 已經正式在線上了。",
+        )
+            continue
 
         match = re.fullmatch(r"完成\s*(\d+)", text)
 
