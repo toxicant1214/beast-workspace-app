@@ -10,7 +10,11 @@ from flask import Flask, abort, request
 
 from services.line_service import reply_message, reply_task_cards
 from services.task_service import complete_task, get_active_tasks
-from services.workflow_service import start_workflow
+from services.workflow_service import (
+    get_workflow,
+    start_workflow,
+    update_workflow,
+)
 
 load_dotenv()
 
@@ -34,11 +38,11 @@ def verify_signature(body, signature):
     return hmac.compare_digest(expected_signature, signature)
 
 
-def handle_text_message(text, reply_token):
+def handle_text_message(text, reply_token, line_user_id):
     text = text.strip()
     if text == "新增待辦":
         start_workflow(
-            line_user_id="lin",
+            line_user_id="line_user_id,",
             flow_type="personal_task",
             first_step="title",
         )
@@ -46,6 +50,27 @@ def handle_text_message(text, reply_token):
         reply_message(
             reply_token,
             "📝 開始新增待辦\n\n請輸入任務名稱。",
+        )
+        return
+    workflow = get_workflow(line_user_id)
+
+    if (
+        workflow
+        and workflow.get("flow_type") == "personal_task"
+        and workflow.get("current_step") == "title"
+    ):
+        payload = workflow.get("payload") or {}
+        payload["title"] = text
+
+        update_workflow(
+            line_user_id=line_user_id,
+            current_step="deadline_date",
+            payload=payload,
+        )
+
+        reply_message(
+            reply_token,
+            f"✅ 任務名稱：{text}\n\n📅 請輸入截止日期，例如：2026/07/20",
         )
         return
 
@@ -124,6 +149,7 @@ def line_webhook():
 
     for event in events:
         event_type = event.get("type")
+        line_user_id = event.get("source", {}).get("userId")
 
         if event_type == "postback":
             handle_postback(event)
@@ -143,7 +169,7 @@ def line_webhook():
         print("使用者輸入：", text)
 
         if reply_token:
-            handle_text_message(text, reply_token)
+            handle_text_message(text, reply_token, line_user_id)
 
     return "OK"
 
