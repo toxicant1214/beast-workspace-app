@@ -34,11 +34,16 @@ def get_workflow(line_user_id):
         .table("line_workflows")
         .select("*")
         .eq("line_user_id", line_user_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
 
-    return response.data
+    rows = response.data or []
+
+    if not rows:
+        return None
+
+    return rows[0]
 
 
 def update_workflow(line_user_id, current_step=None, payload=None):
