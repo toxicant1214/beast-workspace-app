@@ -1,6 +1,8 @@
 import os
+
 import requests
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -62,6 +64,65 @@ def reply_message(reply_token, text):
     )
 
     print("LINE reply:", response.status_code, response.text)
+    response.raise_for_status()
+
+
+def reply_date_options(reply_token):
+    """回覆截止日期快捷選項。"""
+
+    url = "https://api.line.me/v2/bot/message/reply"
+
+    data = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "template",
+                "altText": "請選擇截止日期",
+                "template": {
+                    "type": "buttons",
+                    "text": "📅 請選擇截止日期",
+                    "actions": [
+                        {
+                            "type": "postback",
+                            "label": "今天",
+                            "data": "action=set_task_date&date_option=today",
+                            "displayText": "截止日期：今天",
+                        },
+                        {
+                            "type": "postback",
+                            "label": "明天",
+                            "data": "action=set_task_date&date_option=tomorrow",
+                            "displayText": "截止日期：明天",
+                        },
+                        {
+                            "type": "postback",
+                            "label": "後天",
+                            "data": (
+                                "action=set_task_date"
+                                "&date_option=day_after_tomorrow"
+                            ),
+                            "displayText": "截止日期：後天",
+                        },
+                        {
+                            "type": "postback",
+                            "label": "自訂日期",
+                            "data": "action=set_task_date&date_option=custom",
+                            "displayText": "自訂截止日期",
+                        },
+                    ],
+                },
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print("LINE date options:", response.status_code, response.text)
     response.raise_for_status()
 
 
@@ -135,7 +196,10 @@ def reply_task_cards(reply_token, tasks):
                             "action": {
                                 "type": "postback",
                                 "label": "✅ 標記完成",
-                                "data": f"action=complete_task&task_id={task_id}",
+                                "data": (
+                                    f"action=complete_task"
+                                    f"&task_id={task_id}"
+                                ),
                                 "displayText": f"完成：{title}",
                             },
                         }

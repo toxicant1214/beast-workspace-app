@@ -8,7 +8,11 @@ from urllib.parse import parse_qs
 from dotenv import load_dotenv
 from flask import Flask, abort, request
 
-from services.line_service import reply_message, reply_task_cards
+from services.line_service import (
+    reply_date_options,
+    reply_message,
+    reply_task_cards,
+)
 from services.task_service import complete_task, get_active_tasks
 from services.workflow_service import (
     get_workflow,
@@ -68,10 +72,7 @@ def handle_text_message(text, reply_token, line_user_id):
             payload=payload,
         )
 
-        reply_message(
-            reply_token,
-            f"✅ 任務名稱：{text}\n\n📅 請輸入截止日期，例如：2026/07/20",
-        )
+        reply_date_options(reply_token)
         return
 
     if text in ["待辦", "查看待辦", "我的待辦"]:
@@ -150,6 +151,8 @@ def line_webhook():
     for event in events:
         event_type = event.get("type")
         line_user_id = event.get("source", {}).get("userId")
+        print("===== EVENT =====")
+        print(json.dumps(event, indent=2, ensure_ascii=False))
 
         if event_type == "postback":
             handle_postback(event)
