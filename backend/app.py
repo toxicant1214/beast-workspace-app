@@ -42,7 +42,7 @@ def handle_text_message(text, reply_token, line_user_id):
     text = text.strip()
     if text == "新增待辦":
         start_workflow(
-            line_user_id="line_user_id,",
+            line_user_id=line_user_id,
             flow_type="personal_task",
             first_step="title",
         )
