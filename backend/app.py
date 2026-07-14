@@ -233,43 +233,44 @@ def handle_text_message(text, reply_token, line_user_id):
             reply_priority_options(reply_token)
             return
 
-    if text in ["待辦", "查看待辦", "我的待辦"]:
-        tasks = get_active_tasks()
+        if text in ["待辦", "查看待辦", "我的待辦"]:
+          tasks = get_active_tasks()
         reply_task_cards(reply_token, tasks)
         return
+
+    if text in ["今天", "明天", "本週"]:
         taipei_today = datetime.now(TAIPEI_TZ).date()
 
-    if text == "今天":
-        tasks = get_tasks_between(
-            taipei_today,
-            taipei_today,
-        )
-        reply_task_cards(reply_token, tasks)
-        return
+        if text == "今天":
+            tasks = get_tasks_between(
+                taipei_today,
+                taipei_today,
+            )
+            reply_task_cards(reply_token, tasks)
+            return
 
-    if text == "明天":
-        tomorrow = taipei_today + timedelta(days=1)
+        if text == "明天":
+            tomorrow = taipei_today + timedelta(days=1)
 
-        tasks = get_tasks_between(
-            tomorrow,
-            tomorrow,
-        )
-        reply_task_cards(reply_token, tasks)
-        return
+            tasks = get_tasks_between(
+                tomorrow,
+                tomorrow,
+            )
+            reply_task_cards(reply_token, tasks)
+            return
 
-    if text == "本週":
-        days_until_sunday = 6 - taipei_today.weekday()
-        sunday = taipei_today + timedelta(
-            days=days_until_sunday
-        )
+        if text == "本週":
+            days_until_sunday = 6 - taipei_today.weekday()
+            sunday = taipei_today + timedelta(
+                days=days_until_sunday,
+            )
 
-        tasks = get_tasks_between(
-            taipei_today,
-            sunday,
-        )
-        reply_task_cards(reply_token, tasks)
-        return
-
+            tasks = get_tasks_between(
+                taipei_today,
+                sunday,
+            )
+            reply_task_cards(reply_token, tasks)
+            return
     if text.lower() in ["hello", "hi"] or text in ["哈囉", "你好"]:
         reply_message(
             reply_token,
