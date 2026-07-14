@@ -194,19 +194,28 @@ def reply_priority_options(reply_token):
                         {
                             "type": "postback",
                             "label": "🟢 一般",
-                            "data": "action=set_task_priority&priority=normal",
+                            "data": (
+                                "action=set_task_priority"
+                                "&priority=normal"
+                            ),
                             "displayText": "重要程度：一般",
                         },
                         {
                             "type": "postback",
                             "label": "🟠 重要",
-                            "data": "action=set_task_priority&priority=high",
+                            "data": (
+                                "action=set_task_priority"
+                                "&priority=high"
+                            ),
                             "displayText": "重要程度：重要",
                         },
                         {
                             "type": "postback",
                             "label": "🔴 非常重要",
-                            "data": "action=set_task_priority&priority=urgent",
+                            "data": (
+                                "action=set_task_priority"
+                                "&priority=urgent"
+                            ),
                             "displayText": "重要程度：非常重要",
                         },
                     ],
@@ -223,6 +232,118 @@ def reply_priority_options(reply_token):
     )
 
     print("LINE priority options:", response.status_code, response.text)
+    response.raise_for_status()
+
+
+def reply_reminder_options(reply_token, selected=None):
+    """回覆可複選的待辦提醒設定。"""
+
+    selected = selected or []
+
+    def option_label(value, text):
+        mark = "✅" if value in selected else "⬜"
+        return f"{mark} {text}"
+
+    url = "https://api.line.me/v2/bot/message/reply"
+
+    data = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "template",
+                "altText": "請設定待辦提醒",
+                "template": {
+                    "type": "buttons",
+                    "text": "提醒設定（可複選）",
+                    "actions": [
+                        {
+                            "type": "postback",
+                            "label": option_label(
+                                "same_day",
+                                "當天提醒",
+                            ),
+                            "data": (
+                                "action=toggle_task_reminder"
+                                "&reminder=same_day"
+                            ),
+                            "displayText": "切換：當天提醒",
+                        },
+                        {
+                            "type": "postback",
+                            "label": option_label(
+                                "1_day",
+                                "一天前提醒",
+                            ),
+                            "data": (
+                                "action=toggle_task_reminder"
+                                "&reminder=1_day"
+                            ),
+                            "displayText": "切換：一天前提醒",
+                        },
+                        {
+                            "type": "postback",
+                            "label": option_label(
+                                "2_days",
+                                "兩天前提醒",
+                            ),
+                            "data": (
+                                "action=toggle_task_reminder"
+                                "&reminder=2_days"
+                            ),
+                            "displayText": "切換：兩天前提醒",
+                        },
+                        {
+                            "type": "postback",
+                            "label": option_label(
+                                "1_week",
+                                "一週前提醒",
+                            ),
+                            "data": (
+                                "action=toggle_task_reminder"
+                                "&reminder=1_week"
+                            ),
+                            "displayText": "切換：一週前提醒",
+                        },
+                    ],
+                },
+            },
+            {
+                "type": "template",
+                "altText": "完成提醒設定",
+                "template": {
+                    "type": "confirm",
+                    "text": "提醒選好了嗎？",
+                    "actions": [
+                        {
+                            "type": "postback",
+                            "label": "完成選擇",
+                            "data": "action=finish_task_reminders",
+                            "displayText": "完成提醒設定",
+                        },
+                        {
+                            "type": "postback",
+                            "label": "不設定提醒",
+                            "data": "action=skip_task_reminders",
+                            "displayText": "不設定提醒",
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print(
+        "LINE reminder options:",
+        response.status_code,
+        response.text,
+    )
     response.raise_for_status()
 
 

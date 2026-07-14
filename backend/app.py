@@ -14,6 +14,7 @@ from services.line_service import (
     reply_date_options,
     reply_message,
     reply_priority_options,
+    reply_reminder_options,
     reply_task_cards,
     reply_time_options,
 )
@@ -89,13 +90,17 @@ def handle_text_message(text, reply_token, line_user_id):
     if text.lower() in ["hello", "hi"] or text in ["哈囉", "你好"]:
         reply_message(
             reply_token,
-            "👋 哈囉 Lin！\n\n輸入「待辦」即可查看目前未完成事項。",
+            "👋 哈囉 Lin！\n\n"
+            "輸入「待辦」可以查看未完成事項，"
+            "輸入「新增待辦」可以建立新任務。",
         )
         return
 
     reply_message(
         reply_token,
-        "目前可以輸入：\n\n📋 待辦\n📝 新增待辦",
+        "目前可以輸入：\n\n"
+        "📋 待辦\n"
+        "📝 新增待辦",
     )
 
 
@@ -112,7 +117,7 @@ def handle_postback(event):
     time_option = values.get("time_option", [""])[0]
     priority_option = values.get("priority", [""])[0]
 
-    # 處理新增待辦的日期選擇
+    # 日期選擇
     if action == "set_task_date":
         workflow = get_workflow(line_user_id)
 
@@ -156,10 +161,13 @@ def handle_postback(event):
                 )
             return
 
-        taipei_now = datetime.now(ZoneInfo("Asia/Taipei"))
+        taipei_now = datetime.now(
+            ZoneInfo("Asia/Taipei")
+        )
 
         selected_date = (
-            taipei_now + timedelta(days=date_offsets[date_option])
+            taipei_now
+            + timedelta(days=date_offsets[date_option])
         ).date()
 
         payload = workflow.get("payload") or {}
@@ -176,7 +184,7 @@ def handle_postback(event):
 
         return
 
-    # 處理是否設定截止時間
+    # 是否設定截止時間
     if action == "set_task_time_option":
         workflow = get_workflow(line_user_id)
 
@@ -233,8 +241,7 @@ def handle_postback(event):
 
         return
 
-    # 處理既有的完成待辦按鈕
-        # 處理待辦重要程度
+    # 重要程度
     if action == "set_task_priority":
         workflow = get_workflow(line_user_id)
 
@@ -266,6 +273,7 @@ def handle_postback(event):
 
         payload = workflow.get("payload") or {}
         payload["priority"] = priority_option
+        payload["reminder_offsets"] = []
 
         update_workflow(
             line_user_id=line_user_id,
@@ -274,14 +282,14 @@ def handle_postback(event):
         )
 
         if reply_token:
-            reply_message(
+            reply_reminder_options(
                 reply_token,
-                f"✅ 重要程度：{valid_priorities[priority_option]}\n\n"
-                "下一步：設定提醒。",
+                selected=[],
             )
 
         return
-    
+
+    # 完成既有待辦
     if action == "complete_task" and task_id:
         tasks = get_active_tasks()
 
@@ -339,10 +347,18 @@ def line_webhook():
 
     for event in events:
         event_type = event.get("type")
-        line_user_id = event.get("source", {}).get("userId")
+        line_user_id = (
+            event.get("source", {}).get("userId")
+        )
 
         print("===== EVENT =====")
-        print(json.dumps(event, indent=2, ensure_ascii=False))
+        print(
+            json.dumps(
+                event,
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
 
         if event_type == "postback":
             handle_postback(event)
