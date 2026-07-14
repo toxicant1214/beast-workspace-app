@@ -110,6 +110,7 @@ def handle_postback(event):
     task_id = values.get("task_id", [""])[0]
     date_option = values.get("date_option", [""])[0]
     time_option = values.get("time_option", [""])[0]
+    priority_option = values.get("priority", [""])[0]
 
     # 處理新增待辦的日期選擇
     if action == "set_task_date":
@@ -233,6 +234,54 @@ def handle_postback(event):
         return
 
     # 處理既有的完成待辦按鈕
+        # 處理待辦重要程度
+    if action == "set_task_priority":
+        workflow = get_workflow(line_user_id)
+
+        if (
+            not workflow
+            or workflow.get("flow_type") != "personal_task"
+            or workflow.get("current_step") != "priority"
+        ):
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "目前沒有正在設定重要程度的待辦。",
+                )
+            return
+
+        valid_priorities = {
+            "normal": "一般",
+            "high": "重要",
+            "urgent": "非常重要",
+        }
+
+        if priority_option not in valid_priorities:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "無法辨識這個重要程度。",
+                )
+            return
+
+        payload = workflow.get("payload") or {}
+        payload["priority"] = priority_option
+
+        update_workflow(
+            line_user_id=line_user_id,
+            current_step="reminders",
+            payload=payload,
+        )
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                f"✅ 重要程度：{valid_priorities[priority_option]}\n\n"
+                "下一步：設定提醒。",
+            )
+
+        return
+    
     if action == "complete_task" and task_id:
         tasks = get_active_tasks()
 
