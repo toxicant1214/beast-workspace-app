@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo
 
@@ -16,10 +16,16 @@ from services.line_service import (
     reply_priority_options,
     reply_reminder_options,
     reply_task_cards,
+    reply_task_confirmation,
     reply_time_options,
 )
-from services.task_service import complete_task, get_active_tasks
+from services.task_service import (
+    complete_task,
+    create_task,
+    get_active_tasks,
+)
 from services.workflow_service import (
+    clear_workflow,
     get_workflow,
     start_workflow,
     update_workflow,
@@ -30,6 +36,7 @@ load_dotenv()
 app = Flask(__name__)
 
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 
 def verify_signature(body, signature):
@@ -47,6 +54,44 @@ def verify_signature(body, signature):
     return hmac.compare_digest(expected_signature, signature)
 
 
+def parse_custom_date(text):
+    """接受 YYYY/MM/DD 或 YYYY-MM-DD。"""
+
+    normalized = text.strip().replace("/", "-")
+    return datetime.strptime(normalized, "%Y-%m-%d").date()
+
+
+def parse_custom_time(text):
+    """接受 HH:MM 的 24 小時制時間。"""
+
+    return datetime.strptime(text.strip(), "%H:%M").time()
+
+
+def build_deadline_at(payload):
+    """把日期與時間組合成含台灣時區的 ISO 日期時間。"""
+
+    deadline_date = datetime.strptime(
+        payload["deadline_date"],
+        "%Y-%m-%d",
+    ).date()
+
+    if payload.get("has_time"):
+        deadline_time = datetime.strptime(
+            payload["deadline_time"],
+            "%H:%M",
+        ).time()
+    else:
+        deadline_time = time(23, 59)
+
+    deadline = datetime.combine(
+        deadline_date,
+        deadline_time,
+        tzinfo=TAIPEI_TZ,
+    )
+
+    return deadline.isoformat()
+
+
 def build_task_summary(payload):
     priority_labels = {
         "normal": "一般",
@@ -55,47 +100,59 @@ def build_task_summary(payload):
     }
 
     reminder_labels = {
-        "same_day": "當天提醒",
-        "1_day": "一天前提醒",
-        "2_days": "兩天前提醒",
-        "1_week": "一週前提醒",
+        "same_day": "當天",
+        "1_day": "一天前",
+        "2_days": "兩天前",
+        "1_week": "一週前",
     }
 
     title = payload.get("title", "未命名任務")
+    if len(title) > 45:
+        title = f"{title[:45]}…"
+
     deadline_date = payload.get("deadline_date", "未設定")
-    has_time = payload.get("has_time", False)
     deadline_time = payload.get("deadline_time")
-    priority = priority_labels.get(
+    has_time = payload.get("has_time", False)
+
+    if has_time and deadline_time:
+        deadline_text = f"{deadline_date} {deadline_time}"
+    else:
+        deadline_text = f"{deadline_date}（不指定時間）"
+
+    priority_text = priority_labels.get(
         payload.get("priority"),
         "一般",
     )
 
     reminders = payload.get("reminder_offsets") or []
-    reminder_text = "不設定提醒"
-
     if reminders:
         reminder_text = "、".join(
             reminder_labels.get(item, item)
             for item in reminders
         )
-
-    if has_time and deadline_time:
-        deadline_text = f"{deadline_date} {deadline_time}"
     else:
-        deadline_text = deadline_date
+        reminder_text = "不設定"
 
     return (
-        "📋 請確認待辦內容\n\n"
-        f"任務名稱：{title}\n"
-        f"截止時間：{deadline_text}\n"
-        f"重要程度：{priority}\n"
-        f"提醒設定：{reminder_text}\n\n"
-        "下一步將正式新增到 Workspace。"
+        f"任務：{title}\n"
+        f"截止：{deadline_text}\n"
+        f"程度：{priority_text}\n"
+        f"提醒：{reminder_text}"
     )
 
 
 def handle_text_message(text, reply_token, line_user_id):
     text = text.strip()
+
+    if text == "取消新增":
+        workflow = get_workflow(line_user_id)
+
+        if workflow:
+            clear_workflow(line_user_id)
+            reply_message(reply_token, "已取消本次新增待辦。")
+        else:
+            reply_message(reply_token, "目前沒有正在新增的待辦。")
+        return
 
     if text == "新增待辦":
         start_workflow(
@@ -106,7 +163,8 @@ def handle_text_message(text, reply_token, line_user_id):
 
         reply_message(
             reply_token,
-            "📝 開始新增待辦\n\n請輸入任務名稱。",
+            "📝 開始新增待辦\n\n請輸入任務名稱。\n"
+            "輸入「取消新增」可隨時取消。",
         )
         return
 
@@ -115,19 +173,64 @@ def handle_text_message(text, reply_token, line_user_id):
     if (
         workflow
         and workflow.get("flow_type") == "personal_task"
-        and workflow.get("current_step") == "title"
     ):
+        current_step = workflow.get("current_step")
         payload = workflow.get("payload") or {}
-        payload["title"] = text
 
-        update_workflow(
-            line_user_id=line_user_id,
-            current_step="deadline_date",
-            payload=payload,
-        )
+        if current_step == "title":
+            payload["title"] = text
 
-        reply_date_options(reply_token)
-        return
+            update_workflow(
+                line_user_id=line_user_id,
+                current_step="deadline_date",
+                payload=payload,
+            )
+
+            reply_date_options(reply_token)
+            return
+
+        if current_step == "custom_deadline_date":
+            try:
+                selected_date = parse_custom_date(text)
+            except ValueError:
+                reply_message(
+                    reply_token,
+                    "日期格式不正確，請輸入例如：2026/07/20",
+                )
+                return
+
+            payload["deadline_date"] = selected_date.isoformat()
+
+            update_workflow(
+                line_user_id=line_user_id,
+                current_step="has_time",
+                payload=payload,
+            )
+
+            reply_time_options(reply_token)
+            return
+
+        if current_step == "custom_deadline_time":
+            try:
+                selected_time = parse_custom_time(text)
+            except ValueError:
+                reply_message(
+                    reply_token,
+                    "時間格式不正確，請使用 24 小時制，例如：18:30",
+                )
+                return
+
+            payload["has_time"] = True
+            payload["deadline_time"] = selected_time.strftime("%H:%M")
+
+            update_workflow(
+                line_user_id=line_user_id,
+                current_step="priority",
+                payload=payload,
+            )
+
+            reply_priority_options(reply_token)
+            return
 
     if text in ["待辦", "查看待辦", "我的待辦"]:
         tasks = get_active_tasks()
@@ -138,8 +241,8 @@ def handle_text_message(text, reply_token, line_user_id):
         reply_message(
             reply_token,
             "👋 哈囉 Lin！\n\n"
-            "輸入「待辦」可以查看未完成事項，"
-            "輸入「新增待辦」可以建立新任務。",
+            "輸入「待辦」查看未完成事項，"
+            "輸入「新增待辦」建立新任務。",
         )
         return
 
@@ -181,11 +284,13 @@ def handle_postback(event):
                 )
             return
 
+        payload = workflow.get("payload") or {}
+
         if date_option == "custom":
             update_workflow(
                 line_user_id=line_user_id,
                 current_step="custom_deadline_date",
-                payload=workflow.get("payload") or {},
+                payload=payload,
             )
 
             if reply_token:
@@ -209,16 +314,11 @@ def handle_postback(event):
                 )
             return
 
-        taipei_now = datetime.now(
-            ZoneInfo("Asia/Taipei")
-        )
-
         selected_date = (
-            taipei_now
+            datetime.now(TAIPEI_TZ)
             + timedelta(days=date_offsets[date_option])
         ).date()
 
-        payload = workflow.get("payload") or {}
         payload["deadline_date"] = selected_date.isoformat()
 
         update_workflow(
@@ -229,7 +329,6 @@ def handle_postback(event):
 
         if reply_token:
             reply_time_options(reply_token)
-
         return
 
     # 是否設定截止時間
@@ -248,9 +347,11 @@ def handle_postback(event):
                 )
             return
 
+        payload = workflow.get("payload") or {}
+
         if time_option == "no_time":
-            payload = workflow.get("payload") or {}
             payload["has_time"] = False
+            payload.pop("deadline_time", None)
 
             update_workflow(
                 line_user_id=line_user_id,
@@ -260,11 +361,9 @@ def handle_postback(event):
 
             if reply_token:
                 reply_priority_options(reply_token)
-
             return
 
         if time_option == "custom_time":
-            payload = workflow.get("payload") or {}
             payload["has_time"] = True
 
             update_workflow(
@@ -278,7 +377,6 @@ def handle_postback(event):
                     reply_token,
                     "🕒 請輸入截止時間，例如：18:30",
                 )
-
             return
 
         if reply_token:
@@ -286,7 +384,6 @@ def handle_postback(event):
                 reply_token,
                 "無法辨識這個時間選項。",
             )
-
         return
 
     # 重要程度
@@ -306,9 +403,9 @@ def handle_postback(event):
             return
 
         valid_priorities = {
-            "normal": "一般",
-            "high": "重要",
-            "urgent": "非常重要",
+            "normal",
+            "high",
+            "urgent",
         }
 
         if priority_option not in valid_priorities:
@@ -334,10 +431,9 @@ def handle_postback(event):
                 reply_token,
                 selected=[],
             )
-
         return
 
-    # 切換單一提醒選項
+    # 切換提醒
     if action == "toggle_task_reminder":
         workflow = get_workflow(line_user_id)
 
@@ -369,7 +465,9 @@ def handle_postback(event):
             return
 
         payload = workflow.get("payload") or {}
-        selected = payload.get("reminder_offsets") or []
+        selected = list(
+            payload.get("reminder_offsets") or []
+        )
 
         if reminder_option in selected:
             selected.remove(reminder_option)
@@ -389,11 +487,13 @@ def handle_postback(event):
                 reply_token,
                 selected=selected,
             )
-
         return
 
     # 完成提醒選擇
-    if action == "finish_task_reminders":
+    if action in {
+        "finish_task_reminders",
+        "skip_task_reminders",
+    }:
         workflow = get_workflow(line_user_id)
 
         if (
@@ -410,6 +510,9 @@ def handle_postback(event):
 
         payload = workflow.get("payload") or {}
 
+        if action == "skip_task_reminders":
+            payload["reminder_offsets"] = []
+
         update_workflow(
             line_user_id=line_user_id,
             current_step="confirm",
@@ -417,44 +520,70 @@ def handle_postback(event):
         )
 
         if reply_token:
-            reply_message(
+            reply_task_confirmation(
                 reply_token,
                 build_task_summary(payload),
             )
-
         return
 
-    # 不設定提醒
-    if action == "skip_task_reminders":
+    # 正式新增待辦
+    if action == "confirm_create_task":
         workflow = get_workflow(line_user_id)
 
         if (
             not workflow
             or workflow.get("flow_type") != "personal_task"
-            or workflow.get("current_step") != "reminders"
+            or workflow.get("current_step") != "confirm"
         ):
             if reply_token:
                 reply_message(
                     reply_token,
-                    "目前沒有正在設定提醒的待辦。",
+                    "目前沒有等待確認的待辦。",
                 )
             return
 
         payload = workflow.get("payload") or {}
-        payload["reminder_offsets"] = []
 
-        update_workflow(
-            line_user_id=line_user_id,
-            current_step="confirm",
-            payload=payload,
-        )
+        try:
+            deadline_at = build_deadline_at(payload)
+
+            create_task(
+                title=payload["title"],
+                deadline_at=deadline_at,
+                has_time=bool(payload.get("has_time")),
+                priority=payload.get("priority", "normal"),
+                reminder_offsets=(
+                    payload.get("reminder_offsets") or []
+                ),
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            print("建立待辦失敗：", error)
+
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "待辦資料不完整，請重新輸入「新增待辦」。",
+                )
+            return
+
+        clear_workflow(line_user_id)
 
         if reply_token:
             reply_message(
                 reply_token,
-                build_task_summary(payload),
+                f"✅ 已新增待辦：{payload.get('title', '未命名任務')}",
             )
+        return
 
+    # 取消新增
+    if action == "cancel_create_task":
+        clear_workflow(line_user_id)
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                "已取消新增待辦。",
+            )
         return
 
     # 完成既有待辦
@@ -486,7 +615,6 @@ def handle_postback(event):
                 f"✅ 已完成："
                 f"{selected_task.get('title', '未命名任務')}",
             )
-
         return
 
     if reply_token:
