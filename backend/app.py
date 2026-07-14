@@ -10,6 +10,7 @@ from flask import Flask, abort, request
 
 from services.line_service import reply_message, reply_task_cards
 from services.task_service import complete_task, get_active_tasks
+from services.workflow_service import start_workflow
 
 load_dotenv()
 
@@ -35,6 +36,18 @@ def verify_signature(body, signature):
 
 def handle_text_message(text, reply_token):
     text = text.strip()
+    if text == "新增待辦":
+        start_workflow(
+            line_user_id="lin",
+            flow_type="personal_task",
+            first_step="title",
+        )
+
+        reply_message(
+            reply_token,
+            "📝 開始新增待辦\n\n請輸入任務名稱。",
+        )
+        return
 
     if text in ["待辦", "查看待辦", "我的待辦"]:
         tasks = get_active_tasks()
