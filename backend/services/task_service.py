@@ -25,6 +25,41 @@ def get_active_tasks():
 
     return response.data or []
 
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+
+def get_tasks_between(start_date, end_date):
+    """查詢指定日期區間內未完成待辦"""
+
+    start_iso = (
+        datetime.combine(
+            start_date,
+            datetime.min.time(),
+            tzinfo=ZoneInfo("Asia/Taipei"),
+        ).isoformat()
+    )
+
+    end_iso = (
+        datetime.combine(
+            end_date,
+            datetime.max.time(),
+            tzinfo=ZoneInfo("Asia/Taipei"),
+        ).isoformat()
+    )
+
+    response = (
+        supabase
+        .table("todo_items")
+        .select("*")
+        .eq("is_done", False)
+        .gte("deadline_at", start_iso)
+        .lte("deadline_at", end_iso)
+        .order("deadline_at")
+        .execute()
+    )
+
+    return response.data or []
 
 def create_task(
     title,
