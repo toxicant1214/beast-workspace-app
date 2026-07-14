@@ -12,6 +12,7 @@ from flask import Flask, abort, request
 
 from services.line_service import (
     reply_date_options,
+    reply_delete_confirmation,
     reply_message,
     reply_priority_options,
     reply_reminder_options,
@@ -22,6 +23,7 @@ from services.line_service import (
 from services.task_service import (
     complete_task,
     create_task,
+    delete_task,
     get_active_tasks,
     get_tasks_between,
 )
@@ -363,6 +365,7 @@ def handle_postback(event):
 
         if reply_token:
             reply_time_options(reply_token)
+
         return
 
     # 是否設定截止時間
@@ -395,6 +398,7 @@ def handle_postback(event):
 
             if reply_token:
                 reply_priority_options(reply_token)
+
             return
 
         if time_option == "custom_time":
@@ -411,6 +415,7 @@ def handle_postback(event):
                     reply_token,
                     "🕒 請輸入截止時間，例如：18:30",
                 )
+
             return
 
         if reply_token:
@@ -418,6 +423,7 @@ def handle_postback(event):
                 reply_token,
                 "無法辨識這個時間選項。",
             )
+
         return
 
     # 重要程度
@@ -465,6 +471,7 @@ def handle_postback(event):
                 reply_token,
                 selected=[],
             )
+
         return
 
     # 切換提醒
@@ -521,9 +528,10 @@ def handle_postback(event):
                 reply_token,
                 selected=selected,
             )
+
         return
 
-    # 完成提醒選擇
+    # 完成或略過提醒設定
     if action in {
         "finish_task_reminders",
         "skip_task_reminders",
@@ -558,6 +566,7 @@ def handle_postback(event):
                 reply_token,
                 build_task_summary(payload),
             )
+
         return
 
     # 正式新增待辦
@@ -605,11 +614,13 @@ def handle_postback(event):
         if reply_token:
             reply_message(
                 reply_token,
-                f"✅ 已新增待辦：{payload.get('title', '未命名任務')}",
+                f"✅ 已新增待辦："
+                f"{payload.get('title', '未命名任務')}",
             )
+
         return
 
-    # 取消新增
+    # 取消新增待辦
     if action == "cancel_create_task":
         clear_workflow(line_user_id)
 
@@ -618,6 +629,79 @@ def handle_postback(event):
                 reply_token,
                 "已取消新增待辦。",
             )
+
+        return
+
+    # 要求刪除：先顯示二次確認
+    if action == "request_delete_task" and task_id:
+        tasks = get_active_tasks()
+
+        selected_task = next(
+            (
+                task
+                for task in tasks
+                if str(task.get("id")) == task_id
+            ),
+            None,
+        )
+
+        if not selected_task:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "這筆待辦可能已經完成、刪除或不存在。",
+                )
+            return
+
+        if reply_token:
+            reply_delete_confirmation(
+                reply_token,
+                task_id,
+                selected_task.get("title", "未命名任務"),
+            )
+
+        return
+
+    # 取消刪除
+    if action == "cancel_delete_task":
+        if reply_token:
+            reply_message(
+                reply_token,
+                "好的，沒有刪除任何待辦。",
+            )
+
+        return
+
+    # 確認刪除
+    if action == "confirm_delete_task" and task_id:
+        tasks = get_active_tasks()
+
+        selected_task = next(
+            (
+                task
+                for task in tasks
+                if str(task.get("id")) == task_id
+            ),
+            None,
+        )
+
+        if not selected_task:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "這筆待辦可能已經刪除或不存在。",
+                )
+            return
+
+        delete_task(task_id)
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                f"🗑️ 已刪除："
+                f"{selected_task.get('title', '未命名任務')}",
+            )
+
         return
 
     # 完成既有待辦
@@ -649,6 +733,7 @@ def handle_postback(event):
                 f"✅ 已完成："
                 f"{selected_task.get('title', '未命名任務')}",
             )
+
         return
 
     if reply_token:
