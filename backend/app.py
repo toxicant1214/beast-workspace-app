@@ -233,8 +233,8 @@ def handle_text_message(text, reply_token, line_user_id):
             reply_priority_options(reply_token)
             return
 
-        if text in ["待辦", "查看待辦", "我的待辦"]:
-          tasks = get_active_tasks()
+    if text in ["待辦", "查看待辦", "我的待辦"]:
+        tasks = get_active_tasks()
         reply_task_cards(reply_token, tasks)
         return
 
