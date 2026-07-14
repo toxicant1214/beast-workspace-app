@@ -382,7 +382,63 @@ def reply_task_confirmation(reply_token, summary_text):
     )
     response.raise_for_status()
 
+def reply_delete_confirmation(
+    reply_token,
+    task_id,
+    title,
+):
+    """刪除待辦前的二次確認。"""
 
+    url = "https://api.line.me/v2/bot/message/reply"
+
+    data = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "template",
+                "altText": "確認刪除待辦",
+                "template": {
+                    "type": "confirm",
+                    "text": (
+                        f"⚠️ 確定要刪除「{title}」嗎？\n"
+                        "這個動作無法復原。"
+                    ),
+                    "actions": [
+                        {
+                            "type": "postback",
+                            "label": "我按錯了",
+                            "data": "action=cancel_delete_task",
+                            "displayText": "取消刪除",
+                        },
+                        {
+                            "type": "postback",
+                            "label": "確定刪除",
+                            "data": (
+                                f"action=confirm_delete_task"
+                                f"&task_id={task_id}"
+                            ),
+                            "displayText": f"確定刪除：{title}",
+                        },
+                    ],
+                },
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print(
+        "LINE delete confirmation:",
+        response.status_code,
+        response.text,
+    )
+    response.raise_for_status()
+    
 def reply_task_cards(reply_token, tasks):
     """回覆可直接點擊完成的待辦卡片。"""
 
@@ -446,21 +502,36 @@ def reply_task_cards(reply_token, tasks):
                     "type": "box",
                     "layout": "vertical",
                     "contents": [
-                        {
-                            "type": "button",
-                            "style": "primary",
-                            "height": "sm",
-                            "action": {
-                                "type": "postback",
-                                "label": "✅ 標記完成",
-                                "data": (
-                                    f"action=complete_task"
-                                    f"&task_id={task_id}"
-                                ),
-                                "displayText": f"完成：{title}",
-                            },
-                        }
-                    ],
+    {
+        "type": "button",
+        "style": "primary",
+        "height": "sm",
+        "action": {
+            "type": "postback",
+            "label": "✅ 標記完成",
+            "data": (
+                f"action=complete_task"
+                f"&task_id={task_id}"
+            ),
+            "displayText": f"完成：{title}",
+        },
+    },
+    {
+        "type": "button",
+        "style": "secondary",
+        "height": "sm",
+        "margin": "sm",
+        "action": {
+            "type": "postback",
+            "label": "🗑️ 刪除",
+            "data": (
+                f"action=request_delete_task"
+                f"&task_id={task_id}"
+            ),
+            "displayText": f"刪除：{title}",
+        },
+    },
+],
                 },
             }
         )
