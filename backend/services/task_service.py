@@ -3,6 +3,7 @@ import os
 
 from dotenv import load_dotenv
 from supabase import create_client
+from zoneinfo import ZoneInfo
 
 
 load_dotenv()
@@ -14,6 +15,8 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 def get_active_tasks():
+    """取得所有尚未完成的待辦。"""
+
     response = (
         supabase
         .table("todo_items")
@@ -25,28 +28,21 @@ def get_active_tasks():
 
     return response.data or []
 
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-
 
 def get_tasks_between(start_date, end_date):
-    """查詢指定日期區間內未完成待辦"""
+    """查詢指定日期區間內尚未完成的待辦。"""
 
-    start_iso = (
-        datetime.combine(
-            start_date,
-            datetime.min.time(),
-            tzinfo=ZoneInfo("Asia/Taipei"),
-        ).isoformat()
-    )
+    start_iso = datetime.combine(
+        start_date,
+        datetime.min.time(),
+        tzinfo=ZoneInfo("Asia/Taipei"),
+    ).isoformat()
 
-    end_iso = (
-        datetime.combine(
-            end_date,
-            datetime.max.time(),
-            tzinfo=ZoneInfo("Asia/Taipei"),
-        ).isoformat()
-    )
+    end_iso = datetime.combine(
+        end_date,
+        datetime.max.time(),
+        tzinfo=ZoneInfo("Asia/Taipei"),
+    ).isoformat()
 
     response = (
         supabase
@@ -61,6 +57,7 @@ def get_tasks_between(start_date, end_date):
 
     return response.data or []
 
+
 def create_task(
     title,
     deadline_at,
@@ -68,6 +65,8 @@ def create_task(
     priority,
     reminder_offsets,
 ):
+    """新增一筆個人待辦。"""
+
     response = (
         supabase
         .table("todo_items")
@@ -87,6 +86,8 @@ def create_task(
 
 
 def complete_task(task_id):
+    """將指定待辦標記為完成。"""
+
     response = (
         supabase
         .table("todo_items")
@@ -96,6 +97,20 @@ def complete_task(task_id):
                 timezone.utc
             ).isoformat(),
         })
+        .eq("id", task_id)
+        .execute()
+    )
+
+    return response.data
+
+
+def delete_task(task_id):
+    """永久刪除指定待辦。"""
+
+    response = (
+        supabase
+        .table("todo_items")
+        .delete()
         .eq("id", task_id)
         .execute()
     )
