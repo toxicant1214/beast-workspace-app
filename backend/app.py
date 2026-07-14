@@ -164,15 +164,12 @@ def handle_postback(event):
             line_user_id=line_user_id,
             current_step="has_time",
             payload=payload,
-        )
+         )
 
         if reply_token:
-            reply_message(
-                reply_token,
-                f"📅 截止日期：{selected_date.strftime('%Y/%m/%d')}\n\n"
-                "🕒 請輸入「設定時間」或「不設定時間」。",
-            )
+            reply_time_options(reply_token)
         return
+
 
     # 處理既有的完成待辦按鈕
     if action == "complete_task" and task_id:
