@@ -105,6 +105,8 @@ def handle_postback(event):
     action = values.get("action", [""])[0]
     task_id = values.get("task_id", [""])[0]
     date_option = values.get("date_option", [""])[0]
+
+    # 處理新增待辦的日期選擇
     if action == "set_task_date":
         workflow = get_workflow(line_user_id)
 
@@ -134,8 +136,6 @@ def handle_postback(event):
                 )
             return
 
-        taipei_now = datetime.now(ZoneInfo("Asia/Taipei"))
-
         date_offsets = {
             "today": 0,
             "tomorrow": 1,
@@ -144,8 +144,13 @@ def handle_postback(event):
 
         if date_option not in date_offsets:
             if reply_token:
-                reply_message(reply_token, "無法辨識這個日期選項。")
+                reply_message(
+                    reply_token,
+                    "無法辨識這個日期選項。",
+                )
             return
+
+        taipei_now = datetime.now(ZoneInfo("Asia/Taipei"))
 
         selected_date = (
             taipei_now + timedelta(days=date_offsets[date_option])
@@ -168,33 +173,39 @@ def handle_postback(event):
             )
         return
 
-    if action != "complete_task" or not task_id:
-        if reply_token:
-            reply_message(reply_token, "無法辨識這個操作。")
-        return
+    # 處理既有的完成待辦按鈕
+    if action == "complete_task" and task_id:
+        tasks = get_active_tasks()
 
-    tasks = get_active_tasks()
+        selected_task = next(
+            (
+                task
+                for task in tasks
+                if str(task.get("id")) == task_id
+            ),
+            None,
+        )
 
-    selected_task = next(
-        (task for task in tasks if str(task.get("id")) == task_id),
-        None,
-    )
+        if not selected_task:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "這筆待辦可能已經完成或被刪除了。",
+                )
+            return
 
-    if not selected_task:
+        complete_task(task_id)
+
         if reply_token:
             reply_message(
                 reply_token,
-                "這筆待辦可能已經完成或被刪除了。",
+                f"✅ 已完成："
+                f"{selected_task.get('title', '未命名任務')}",
             )
         return
 
-    complete_task(task_id)
-
     if reply_token:
-        reply_message(
-            reply_token,
-            f"✅ 已完成：{selected_task.get('title', '未命名任務')}",
-        )
+        reply_message(reply_token, "無法辨識這個操作。")
 
 
 @app.route("/", methods=["GET"])
