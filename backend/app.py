@@ -47,6 +47,53 @@ def verify_signature(body, signature):
     return hmac.compare_digest(expected_signature, signature)
 
 
+def build_task_summary(payload):
+    priority_labels = {
+        "normal": "一般",
+        "high": "重要",
+        "urgent": "非常重要",
+    }
+
+    reminder_labels = {
+        "same_day": "當天提醒",
+        "1_day": "一天前提醒",
+        "2_days": "兩天前提醒",
+        "1_week": "一週前提醒",
+    }
+
+    title = payload.get("title", "未命名任務")
+    deadline_date = payload.get("deadline_date", "未設定")
+    has_time = payload.get("has_time", False)
+    deadline_time = payload.get("deadline_time")
+    priority = priority_labels.get(
+        payload.get("priority"),
+        "一般",
+    )
+
+    reminders = payload.get("reminder_offsets") or []
+    reminder_text = "不設定提醒"
+
+    if reminders:
+        reminder_text = "、".join(
+            reminder_labels.get(item, item)
+            for item in reminders
+        )
+
+    if has_time and deadline_time:
+        deadline_text = f"{deadline_date} {deadline_time}"
+    else:
+        deadline_text = deadline_date
+
+    return (
+        "📋 請確認待辦內容\n\n"
+        f"任務名稱：{title}\n"
+        f"截止時間：{deadline_text}\n"
+        f"重要程度：{priority}\n"
+        f"提醒設定：{reminder_text}\n\n"
+        "下一步將正式新增到 Workspace。"
+    )
+
+
 def handle_text_message(text, reply_token, line_user_id):
     text = text.strip()
 
@@ -116,6 +163,7 @@ def handle_postback(event):
     date_option = values.get("date_option", [""])[0]
     time_option = values.get("time_option", [""])[0]
     priority_option = values.get("priority", [""])[0]
+    reminder_option = values.get("reminder", [""])[0]
 
     # 日期選擇
     if action == "set_task_date":
@@ -285,6 +333,126 @@ def handle_postback(event):
             reply_reminder_options(
                 reply_token,
                 selected=[],
+            )
+
+        return
+
+    # 切換單一提醒選項
+    if action == "toggle_task_reminder":
+        workflow = get_workflow(line_user_id)
+
+        if (
+            not workflow
+            or workflow.get("flow_type") != "personal_task"
+            or workflow.get("current_step") != "reminders"
+        ):
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "目前沒有正在設定提醒的待辦。",
+                )
+            return
+
+        valid_reminders = {
+            "same_day",
+            "1_day",
+            "2_days",
+            "1_week",
+        }
+
+        if reminder_option not in valid_reminders:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "無法辨識這個提醒選項。",
+                )
+            return
+
+        payload = workflow.get("payload") or {}
+        selected = payload.get("reminder_offsets") or []
+
+        if reminder_option in selected:
+            selected.remove(reminder_option)
+        else:
+            selected.append(reminder_option)
+
+        payload["reminder_offsets"] = selected
+
+        update_workflow(
+            line_user_id=line_user_id,
+            current_step="reminders",
+            payload=payload,
+        )
+
+        if reply_token:
+            reply_reminder_options(
+                reply_token,
+                selected=selected,
+            )
+
+        return
+
+    # 完成提醒選擇
+    if action == "finish_task_reminders":
+        workflow = get_workflow(line_user_id)
+
+        if (
+            not workflow
+            or workflow.get("flow_type") != "personal_task"
+            or workflow.get("current_step") != "reminders"
+        ):
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "目前沒有正在設定提醒的待辦。",
+                )
+            return
+
+        payload = workflow.get("payload") or {}
+
+        update_workflow(
+            line_user_id=line_user_id,
+            current_step="confirm",
+            payload=payload,
+        )
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                build_task_summary(payload),
+            )
+
+        return
+
+    # 不設定提醒
+    if action == "skip_task_reminders":
+        workflow = get_workflow(line_user_id)
+
+        if (
+            not workflow
+            or workflow.get("flow_type") != "personal_task"
+            or workflow.get("current_step") != "reminders"
+        ):
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "目前沒有正在設定提醒的待辦。",
+                )
+            return
+
+        payload = workflow.get("payload") or {}
+        payload["reminder_offsets"] = []
+
+        update_workflow(
+            line_user_id=line_user_id,
+            current_step="confirm",
+            payload=payload,
+        )
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                build_task_summary(payload),
             )
 
         return
