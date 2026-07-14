@@ -258,10 +258,7 @@ def reply_reminder_options(reply_token, selected=None):
                     "actions": [
                         {
                             "type": "postback",
-                            "label": option_label(
-                                "same_day",
-                                "當天提醒",
-                            ),
+                            "label": option_label("same_day", "當天提醒"),
                             "data": (
                                 "action=toggle_task_reminder"
                                 "&reminder=same_day"
@@ -270,10 +267,7 @@ def reply_reminder_options(reply_token, selected=None):
                         },
                         {
                             "type": "postback",
-                            "label": option_label(
-                                "1_day",
-                                "一天前提醒",
-                            ),
+                            "label": option_label("1_day", "一天前提醒"),
                             "data": (
                                 "action=toggle_task_reminder"
                                 "&reminder=1_day"
@@ -282,10 +276,7 @@ def reply_reminder_options(reply_token, selected=None):
                         },
                         {
                             "type": "postback",
-                            "label": option_label(
-                                "2_days",
-                                "兩天前提醒",
-                            ),
+                            "label": option_label("2_days", "兩天前提醒"),
                             "data": (
                                 "action=toggle_task_reminder"
                                 "&reminder=2_days"
@@ -294,10 +285,7 @@ def reply_reminder_options(reply_token, selected=None):
                         },
                         {
                             "type": "postback",
-                            "label": option_label(
-                                "1_week",
-                                "一週前提醒",
-                            ),
+                            "label": option_label("1_week", "一週前提醒"),
                             "data": (
                                 "action=toggle_task_reminder"
                                 "&reminder=1_week"
@@ -341,6 +329,54 @@ def reply_reminder_options(reply_token, selected=None):
 
     print(
         "LINE reminder options:",
+        response.status_code,
+        response.text,
+    )
+    response.raise_for_status()
+
+
+def reply_task_confirmation(reply_token, summary_text):
+    """顯示待辦摘要，讓使用者確認或取消新增。"""
+
+    url = "https://api.line.me/v2/bot/message/reply"
+
+    data = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "template",
+                "altText": "請確認待辦內容",
+                "template": {
+                    "type": "buttons",
+                    "text": summary_text,
+                    "actions": [
+                        {
+                            "type": "postback",
+                            "label": "✅ 確認新增",
+                            "data": "action=confirm_create_task",
+                            "displayText": "確認新增待辦",
+                        },
+                        {
+                            "type": "postback",
+                            "label": "❌ 取消新增",
+                            "data": "action=cancel_create_task",
+                            "displayText": "取消新增待辦",
+                        },
+                    ],
+                },
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print(
+        "LINE task confirmation:",
         response.status_code,
         response.text,
     )
