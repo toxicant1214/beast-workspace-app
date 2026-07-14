@@ -126,6 +126,56 @@ def reply_date_options(reply_token):
     response.raise_for_status()
 
 
+def reply_time_options(reply_token):
+    """詢問待辦是否需要指定截止時間。"""
+
+    url = "https://api.line.me/v2/bot/message/reply"
+
+    data = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "template",
+                "altText": "是否設定截止時間",
+                "template": {
+                    "type": "confirm",
+                    "text": "🕒 是否要設定截止時間？",
+                    "actions": [
+                        {
+                            "type": "postback",
+                            "label": "不設定時間",
+                            "data": (
+                                "action=set_task_time_option"
+                                "&time_option=no_time"
+                            ),
+                            "displayText": "不設定截止時間",
+                        },
+                        {
+                            "type": "postback",
+                            "label": "設定時間",
+                            "data": (
+                                "action=set_task_time_option"
+                                "&time_option=custom_time"
+                            ),
+                            "displayText": "設定截止時間",
+                        },
+                    ],
+                },
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print("LINE time options:", response.status_code, response.text)
+    response.raise_for_status()
+
+
 def reply_priority_options(reply_token):
     """回覆待辦重要程度選項。"""
 

@@ -95,7 +95,7 @@ def handle_text_message(text, reply_token, line_user_id):
 
     reply_message(
         reply_token,
-        "目前可以輸入：\n\n📋 待辦",
+        "目前可以輸入：\n\n📋 待辦\n📝 新增待辦",
     )
 
 
@@ -202,10 +202,8 @@ def handle_postback(event):
             )
 
             if reply_token:
-                reply_message(
-                    reply_token,
-                    "✅ 不設定截止時間。\n\n下一步：請選擇重要程度。",
-                )
+                reply_priority_options(reply_token)
+
             return
 
         if time_option == "custom_time":
@@ -223,6 +221,7 @@ def handle_postback(event):
                     reply_token,
                     "🕒 請輸入截止時間，例如：18:30",
                 )
+
             return
 
         if reply_token:
@@ -230,6 +229,7 @@ def handle_postback(event):
                 reply_token,
                 "無法辨識這個時間選項。",
             )
+
         return
 
     # 處理既有的完成待辦按鈕
@@ -261,6 +261,7 @@ def handle_postback(event):
                 f"✅ 已完成："
                 f"{selected_task.get('title', '未命名任務')}",
             )
+
         return
 
     if reply_token:
