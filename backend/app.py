@@ -4,8 +4,8 @@ import hmac
 import json
 import os
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from urllib.parse import parse_qs
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from flask import Flask, abort, request
@@ -47,6 +47,7 @@ def verify_signature(body, signature):
 
 def handle_text_message(text, reply_token, line_user_id):
     text = text.strip()
+
     if text == "新增待辦":
         start_workflow(
             line_user_id=line_user_id,
@@ -59,6 +60,7 @@ def handle_text_message(text, reply_token, line_user_id):
             "📝 開始新增待辦\n\n請輸入任務名稱。",
         )
         return
+
     workflow = get_workflow(line_user_id)
 
     if (
@@ -106,6 +108,7 @@ def handle_postback(event):
     action = values.get("action", [""])[0]
     task_id = values.get("task_id", [""])[0]
     date_option = values.get("date_option", [""])[0]
+    time_option = values.get("time_option", [""])[0]
 
     # 處理新增待辦的日期選擇
     if action == "set_task_date":
@@ -164,12 +167,69 @@ def handle_postback(event):
             line_user_id=line_user_id,
             current_step="has_time",
             payload=payload,
-         )
+        )
 
         if reply_token:
             reply_time_options(reply_token)
+
         return
 
+    # 處理是否設定截止時間
+    if action == "set_task_time_option":
+        workflow = get_workflow(line_user_id)
+
+        if (
+            not workflow
+            or workflow.get("flow_type") != "personal_task"
+            or workflow.get("current_step") != "has_time"
+        ):
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "目前沒有正在設定時間的待辦。",
+                )
+            return
+
+        if time_option == "no_time":
+            payload = workflow.get("payload") or {}
+            payload["has_time"] = False
+
+            update_workflow(
+                line_user_id=line_user_id,
+                current_step="priority",
+                payload=payload,
+            )
+
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "✅ 不設定截止時間。\n\n下一步：請選擇重要程度。",
+                )
+            return
+
+        if time_option == "custom_time":
+            payload = workflow.get("payload") or {}
+            payload["has_time"] = True
+
+            update_workflow(
+                line_user_id=line_user_id,
+                current_step="custom_deadline_time",
+                payload=payload,
+            )
+
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "🕒 請輸入截止時間，例如：18:30",
+                )
+            return
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                "無法辨識這個時間選項。",
+            )
+        return
 
     # 處理既有的完成待辦按鈕
     if action == "complete_task" and task_id:
@@ -203,7 +263,10 @@ def handle_postback(event):
         return
 
     if reply_token:
-        reply_message(reply_token, "無法辨識這個操作。")
+        reply_message(
+            reply_token,
+            "無法辨識這個操作。",
+        )
 
 
 @app.route("/", methods=["GET"])
@@ -226,6 +289,7 @@ def line_webhook():
     for event in events:
         event_type = event.get("type")
         line_user_id = event.get("source", {}).get("userId")
+
         print("===== EVENT =====")
         print(json.dumps(event, indent=2, ensure_ascii=False))
 
@@ -247,7 +311,11 @@ def line_webhook():
         print("使用者輸入：", text)
 
         if reply_token:
-            handle_text_message(text, reply_token, line_user_id)
+            handle_text_message(
+                text,
+                reply_token,
+                line_user_id,
+            )
 
     return "OK"
 
