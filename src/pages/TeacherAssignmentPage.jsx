@@ -9,6 +9,10 @@ import {
   undoConfirmTeacherAssignment,
   undoTeacherAssignmentCompleted,
 } from "../services/teacherAssignmentService";
+import {
+  hasActionPermission,
+  isAdmin,
+} from "../services/permissionService";
 import "./TeacherAssignmentPage.css";
 
 const createEmptyForm = () => ({
@@ -40,7 +44,7 @@ function getPriorityLabel(priority) {
   return "一般";
 }
 
-function TeacherAssignmentPage() {
+function TeacherAssignmentPage({ currentTeacher }) {
   const [assignments, setAssignments] = useState([]);
   const [teachers, setTeachers] = useState([]);
 
@@ -52,16 +56,68 @@ function TeacherAssignmentPage() {
   const [processingId, setProcessingId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
+  const adminMode = isAdmin(currentTeacher);
+  const canViewAll =
+    adminMode ||
+    currentTeacher?.permissions?.teacher_assignments?.view_scope === "all";
+  const canCreate =
+    adminMode ||
+    hasActionPermission(currentTeacher, "teacher_assignments", "create");
+  const canDelete =
+    adminMode ||
+    hasActionPermission(currentTeacher, "teacher_assignments", "delete");
+  const canAdminConfirm =
+    adminMode ||
+    hasActionPermission(
+      currentTeacher,
+      "teacher_assignments",
+      "admin_confirm"
+    );
+  const canCompleteOwn =
+    adminMode ||
+    hasActionPermission(
+      currentTeacher,
+      "teacher_assignments",
+      "confirm_own"
+    );
+
+  const visibleAssignments = useMemo(() => {
+    if (canViewAll) {
+      return assignments;
+    }
+
+    if (!currentTeacher?.id) {
+      return [];
+    }
+
+    return assignments
+      .map((assignment) => {
+        const ownMembers = (
+          assignment.teacher_assignment_members ?? []
+        ).filter((member) => member.teacher_id === currentTeacher.id);
+
+        if (ownMembers.length === 0) {
+          return null;
+        }
+
+        return {
+          ...assignment,
+          teacher_assignment_members: ownMembers,
+        };
+      })
+      .filter(Boolean);
+  }, [assignments, canViewAll, currentTeacher?.id]);
+
   const activeAssignmentCount = useMemo(
     () =>
-      assignments.filter((assignment) => assignment.status === "active")
+      visibleAssignments.filter((assignment) => assignment.status === "active")
         .length,
-    [assignments]
+    [visibleAssignments]
   );
 
   const waitingConfirmationCount = useMemo(
     () =>
-      assignments.reduce((total, assignment) => {
+      visibleAssignments.reduce((total, assignment) => {
         const members = assignment.teacher_assignment_members ?? [];
 
         return (
@@ -72,12 +128,12 @@ function TeacherAssignmentPage() {
           ).length
         );
       }, 0),
-    [assignments]
+    [visibleAssignments]
   );
 
   const incompleteMemberCount = useMemo(
     () =>
-      assignments.reduce((total, assignment) => {
+      visibleAssignments.reduce((total, assignment) => {
         const members = assignment.teacher_assignment_members ?? [];
 
         return (
@@ -85,7 +141,7 @@ function TeacherAssignmentPage() {
           members.filter((member) => !member.admin_confirmed).length
         );
       }, 0),
-    [assignments]
+    [visibleAssignments]
   );
 
   useEffect(() => {
@@ -99,7 +155,7 @@ function TeacherAssignmentPage() {
 
       const [assignmentData, teacherData] = await Promise.all([
         getTeacherAssignments(),
-        getActiveTeachers(),
+        canCreate ? getActiveTeachers() : Promise.resolve([]),
       ]);
 
       setAssignments(assignmentData);
@@ -113,6 +169,11 @@ function TeacherAssignmentPage() {
   }
 
   function openCreateForm() {
+    if (!canCreate) {
+      setErrorMessage("你沒有新增老師任務的權限。");
+      return;
+    }
+
     setFormData(createEmptyForm());
     setErrorMessage("");
     setIsFormOpen(true);
@@ -153,6 +214,11 @@ function TeacherAssignmentPage() {
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (!canCreate) {
+      setErrorMessage("你沒有新增老師任務的權限。");
+      return;
+    }
+
     if (!formData.title.trim()) {
       setErrorMessage("請輸入任務名稱。");
       return;
@@ -187,6 +253,13 @@ function TeacherAssignmentPage() {
   }
 
   async function handleTeacherComplete(member) {
+    const isOwnAssignment = member.teacher_id === currentTeacher?.id;
+
+    if (!adminMode && (!canCompleteOwn || !isOwnAssignment)) {
+      setErrorMessage("你只能回報自己的任務完成狀態。");
+      return;
+    }
+
     try {
       setProcessingId(member.id);
       setErrorMessage("");
@@ -207,6 +280,11 @@ function TeacherAssignmentPage() {
   }
 
   async function handleAdminConfirm(member) {
+    if (!canAdminConfirm) {
+      setErrorMessage("你沒有主管確認權限。");
+      return;
+    }
+
     if (!member.teacher_completed) {
       setErrorMessage("老師尚未回報完成，暫時無法確認。");
       return;
@@ -232,6 +310,11 @@ function TeacherAssignmentPage() {
   }
 
   async function handleDeleteAssignment(assignment) {
+    if (!canDelete) {
+      setErrorMessage("你沒有刪除老師任務的權限。");
+      return;
+    }
+
     const confirmed = window.confirm(
       `確定要永久刪除任務「${assignment.title}」嗎？\n\n老師的回報與確認紀錄也會一起刪除，此動作無法復原。`
     );
@@ -265,17 +348,21 @@ function TeacherAssignmentPage() {
           <h1>老師任務</h1>
 
           <p className="teacher-assignment-page__description">
-            指派老師工作、查看老師完成回報，並由主管進行最後確認。
+            {adminMode
+              ? "指派老師工作、查看老師完成回報，並由主管進行最後確認。"
+              : "查看指派給你的工作，完成後可直接回報。"}
           </p>
         </div>
 
-        <button
-          type="button"
-          className="teacher-assignment-page__add-button"
-          onClick={openCreateForm}
-        >
-          ＋ 新增任務
-        </button>
+        {canCreate && (
+          <button
+            type="button"
+            className="teacher-assignment-page__add-button"
+            onClick={openCreateForm}
+          >
+            ＋ 新增任務
+          </button>
+        )}
       </section>
 
       <section className="teacher-assignment-summary">
@@ -302,7 +389,11 @@ function TeacherAssignmentPage() {
         <div className="teacher-assignment-list__toolbar">
           <div>
             <h2>任務列表</h2>
-            <p>老師完成回報後，仍需由主管確認。</p>
+            <p>
+              {adminMode
+                ? "老師完成回報後，仍需由主管確認。"
+                : "這裡只會顯示指派給你的任務。"}
+            </p>
           </div>
 
           <button
@@ -325,14 +416,20 @@ function TeacherAssignmentPage() {
           <div className="teacher-assignment-page__empty">
             正在讀取老師任務…
           </div>
-        ) : assignments.length === 0 ? (
+        ) : visibleAssignments.length === 0 ? (
           <div className="teacher-assignment-page__empty">
-            <strong>目前尚未建立老師任務</strong>
-            <p>按右上角「新增任務」，開始指派第一項工作。</p>
+            <strong>
+              {adminMode ? "目前尚未建立老師任務" : "目前沒有指派給你的任務"}
+            </strong>
+            <p>
+              {adminMode
+                ? "按右上角「新增任務」，開始指派第一項工作。"
+                : "有新任務時，會顯示在這裡。"}
+            </p>
           </div>
         ) : (
           <div className="teacher-assignment-grid">
-            {assignments.map((assignment) => {
+            {visibleAssignments.map((assignment) => {
               const members =
                 assignment.teacher_assignment_members ?? [];
 
@@ -356,16 +453,18 @@ function TeacherAssignmentPage() {
                       <h2>{assignment.title}</h2>
                     </div>
 
-                    <button
-                      type="button"
-                      className="teacher-assignment-card__delete"
-                      onClick={() =>
-                        handleDeleteAssignment(assignment)
-                      }
-                      disabled={processingId === assignment.id}
-                    >
-                      刪除
-                    </button>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        className="teacher-assignment-card__delete"
+                        onClick={() =>
+                          handleDeleteAssignment(assignment)
+                        }
+                        disabled={processingId === assignment.id}
+                      >
+                        刪除
+                      </button>
+                    )}
                   </div>
 
                   {assignment.description && (
@@ -410,6 +509,10 @@ function TeacherAssignmentPage() {
                       const teacher = member.teachers;
                       const isProcessing =
                         processingId === member.id;
+                      const isOwnAssignment =
+                        member.teacher_id === currentTeacher?.id;
+                      const mayComplete =
+                        adminMode || (canCompleteOwn && isOwnAssignment);
 
                       return (
                         <div
@@ -450,45 +553,51 @@ function TeacherAssignmentPage() {
                           </div>
 
                           <div className="teacher-assignment-member__actions">
-                            <button
-                              type="button"
-                              className={
-                                member.teacher_completed
-                                  ? "teacher-complete-button is-completed"
-                                  : "teacher-complete-button"
-                              }
-                              onClick={() =>
-                                handleTeacherComplete(member)
-                              }
-                              disabled={
-                                isProcessing ||
-                                member.admin_confirmed
-                              }
-                            >
-                              {member.teacher_completed
-                                ? "取消回報"
-                                : "老師完成"}
-                            </button>
+                            {mayComplete && (
+                              <button
+                                type="button"
+                                className={
+                                  member.teacher_completed
+                                    ? "teacher-complete-button is-completed"
+                                    : "teacher-complete-button"
+                                }
+                                onClick={() =>
+                                  handleTeacherComplete(member)
+                                }
+                                disabled={
+                                  isProcessing ||
+                                  member.admin_confirmed
+                                }
+                              >
+                                {member.teacher_completed
+                                  ? "取消回報"
+                                  : adminMode
+                                    ? "老師完成"
+                                    : "我已完成"}
+                              </button>
+                            )}
 
-                            <button
-                              type="button"
-                              className={
-                                member.admin_confirmed
-                                  ? "admin-confirm-button is-confirmed"
-                                  : "admin-confirm-button"
-                              }
-                              onClick={() =>
-                                handleAdminConfirm(member)
-                              }
-                              disabled={
-                                isProcessing ||
-                                !member.teacher_completed
-                              }
-                            >
-                              {member.admin_confirmed
-                                ? "取消確認"
-                                : "主管確認"}
-                            </button>
+                            {canAdminConfirm && (
+                              <button
+                                type="button"
+                                className={
+                                  member.admin_confirmed
+                                    ? "admin-confirm-button is-confirmed"
+                                    : "admin-confirm-button"
+                                }
+                                onClick={() =>
+                                  handleAdminConfirm(member)
+                                }
+                                disabled={
+                                  isProcessing ||
+                                  !member.teacher_completed
+                                }
+                              >
+                                {member.admin_confirmed
+                                  ? "取消確認"
+                                  : "主管確認"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -501,7 +610,7 @@ function TeacherAssignmentPage() {
         )}
       </section>
 
-      {isFormOpen && (
+      {canCreate && isFormOpen && (
         <div
           className="teacher-assignment-modal"
           role="presentation"

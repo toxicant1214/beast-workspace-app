@@ -223,7 +223,7 @@ function Workspace() {
     if (activePage === "任務中心") return <TaskPage />;
     if (activePage === "學生資料") return <StudentPage />;
     if (activePage === "老師管理") return <TeacherPage />;
-    if (activePage === "老師任務") return <TeacherAssignmentPage />;
+    if (activePage === "老師任務") return <TeacherAssignmentPage currentTeacher={currentTeacher} />;
     if (activePage === "班級管理") return <ClassPage />;
     if (activePage === "課程管理") return <CoursePage />;
     if (activePage === "營隊管理") return <CampPage />;
