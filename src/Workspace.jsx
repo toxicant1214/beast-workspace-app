@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import DashboardPage from "./pages/DashboardPage";
 import TaskPage from "./pages/TaskPage";
@@ -17,6 +17,7 @@ import LineReminderPage from "./pages/LineReminderPage";
 import ScoreAnalysisPage from "./pages/ScoreAnalysisPage";
 import LoginPage from "./pages/LoginPage";
 import { supabase } from "./lib/supabase";
+import { hasPagePermission } from "./services/permissionService";
 import "./App.css";
 
 function Workspace() {
@@ -31,23 +32,39 @@ function Workspace() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
 
-  const pages = [
-    "首頁",
-    "任務中心",
-    "學生資料",
-    "老師管理",
-    "老師任務",
-    "班級管理",
-    "課程管理",
-    "營隊管理",
-    "行事曆",
-    "接送管理",
-    "學習報告書",
-    "營隊排班",
-    "清潔分配",
-    "LINE 提醒",
-    "成績分析",
+  const pageOptions = [
+    { label: "首頁", key: "dashboard" },
+    { label: "任務中心", key: "personal_tasks", adminOnly: true },
+    { label: "學生資料", key: "students" },
+    { label: "老師管理", key: "teachers", adminOnly: true },
+    { label: "老師任務", key: "teacher_assignments" },
+    { label: "班級管理", key: "classes" },
+    { label: "課程管理", key: "courses" },
+    { label: "營隊管理", key: "camps" },
+    { label: "行事曆", key: "calendar" },
+    { label: "接送管理", key: "pickup" },
+    { label: "學習報告書", key: "learning_reports" },
+    { label: "營隊排班", key: "camp_schedule" },
+    { label: "清潔分配", key: "cleaning" },
+    { label: "LINE 提醒", key: "line_reminders", adminOnly: true },
+    { label: "成績分析", key: "score_analysis" },
   ];
+
+  const pages = useMemo(() => {
+    return pageOptions
+      .filter((page) => {
+        if (currentTeacher?.role === "admin") {
+          return true;
+        }
+
+        if (page.adminOnly) {
+          return false;
+        }
+
+        return hasPagePermission(currentTeacher, page.key);
+      })
+      .map((page) => page.label);
+  }, [currentTeacher]);
 
   useEffect(() => {
     let isMounted = true;
@@ -104,7 +121,9 @@ function Workspace() {
 
         const { data, error } = await supabase
           .from("teachers")
-          .select("id, chinese_name, english_name, role, auth_user_id")
+          .select(
+            "id, chinese_name, english_name, role, auth_user_id, permissions"
+          )
           .eq("auth_user_id", session.user.id)
           .maybeSingle();
 
@@ -143,6 +162,16 @@ function Workspace() {
       isMounted = false;
     };
   }, [session]);
+
+  useEffect(() => {
+    if (!currentTeacher || pages.length === 0) {
+      return;
+    }
+
+    if (!pages.includes(activePage)) {
+      setActivePage(pages[0]);
+    }
+  }, [currentTeacher, pages, activePage]);
 
   async function handleSignOut() {
     try {
