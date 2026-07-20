@@ -4,6 +4,7 @@ import DashboardPage from "./pages/DashboardPage";
 import TaskPage from "./pages/TaskPage";
 import StudentPage from "./pages/StudentPage";
 import TeacherPage from "./pages/TeacherPage";
+import TeacherAssignmentPage from "./pages/TeacherAssignmentPage";
 import ClassPage from "./pages/ClassPage";
 import CoursePage from "./pages/CoursePage";
 import CampPage from "./pages/CampPage";
@@ -24,6 +25,7 @@ function Workspace() {
     "任務中心",
     "學生資料",
     "老師管理",
+    "老師任務",
     "班級管理",
     "課程管理",
     "營隊管理",
@@ -41,6 +43,7 @@ function Workspace() {
     if (activePage === "任務中心") return <TaskPage />;
     if (activePage === "學生資料") return <StudentPage />;
     if (activePage === "老師管理") return <TeacherPage />;
+    if (activePage === "老師任務") return <TeacherAssignmentPage />;
     if (activePage === "班級管理") return <ClassPage />;
     if (activePage === "課程管理") return <CoursePage />;
     if (activePage === "營隊管理") return <CampPage />;
