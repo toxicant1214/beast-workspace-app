@@ -30,6 +30,7 @@ function TeacherPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const activeTeachers = useMemo(
     () => teachers.filter((teacher) => teacher.status === "active"),
@@ -71,6 +72,7 @@ function TeacherPage() {
     setEditingTeacherId(null);
     setFormData(createEmptyForm());
     setErrorMessage("");
+    setSuccessMessage("");
     setIsFormOpen(true);
   }
 
@@ -89,6 +91,7 @@ function TeacherPage() {
     });
 
     setErrorMessage("");
+    setSuccessMessage("");
     setIsFormOpen(true);
   }
 
@@ -120,18 +123,30 @@ function TeacherPage() {
       return;
     }
 
+    if (!editingTeacherId && !formData.email.trim()) {
+      setErrorMessage("請輸入老師之後要用來登入的 Email。");
+      return;
+    }
+
     try {
       setSaving(true);
       setErrorMessage("");
+      setSuccessMessage("");
 
       if (editingTeacherId) {
         await updateTeacher(editingTeacherId, formData);
+        await loadTeachers();
+        closeForm();
       } else {
         await createTeacher(formData);
+        await loadTeachers();
+        setSuccessMessage(
+          `已建立「${formData.chinese_name.trim()}」的登入帳號，邀請信已寄到 ${formData.email.trim()}。`
+        );
+        setIsFormOpen(false);
+        setEditingTeacherId(null);
+        setFormData(createEmptyForm());
       }
-
-      await loadTeachers();
-      closeForm();
     } catch (error) {
       console.error(error);
 
@@ -209,7 +224,7 @@ function TeacherPage() {
           <p className="teacher-page__eyebrow">Teacher Management</p>
           <h1>老師管理</h1>
           <p className="teacher-page__description">
-            管理老師基本資料與任職狀態。停用老師仍會保留過去的任務與完成紀錄。
+            管理老師基本資料、登入帳號與任職狀態。新增老師時會自動建立帳號並寄出設定密碼邀請信。
           </p>
         </div>
 
@@ -281,6 +296,12 @@ function TeacherPage() {
             {loading ? "讀取中…" : "重新整理"}
           </button>
         </div>
+
+        {successMessage && !isFormOpen && (
+          <div className="teacher-page__success">
+            {successMessage}
+          </div>
+        )}
 
         {errorMessage && !isFormOpen && (
           <div className="teacher-page__error">
@@ -522,15 +543,26 @@ function TeacherPage() {
                 </label>
 
                 <label className="teacher-form__field teacher-form__field--wide">
-                  <span>電子信箱</span>
+                  <span>
+                    登入 Email
+                    {!editingTeacherId && <b>必填</b>}
+                  </span>
 
                   <input
                     type="email"
                     name="email"
                     value={formData.email}
                     onChange={handleInputChange}
-                    placeholder="例如：teacher@example.com"
+                    placeholder="老師之後登入 Workspace 使用的信箱"
+                    autoComplete="email"
+                    readOnly={Boolean(editingTeacherId)}
                   />
+
+                  {editingTeacherId && (
+                    <small>
+                      登入 Email 已與 Supabase Auth 綁定；為避免帳號失聯，這裡暫不直接修改。
+                    </small>
+                  )}
                 </label>
 
                 <label className="teacher-form__field">
@@ -582,7 +614,7 @@ function TeacherPage() {
                     ? "儲存中…"
                     : editingTeacherId
                     ? "儲存修改"
-                    : "新增老師"}
+                    : "建立帳號並寄送邀請"}
                 </button>
               </div>
             </form>

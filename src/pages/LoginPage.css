@@ -142,3 +142,32 @@
     font-size: 28px;
   }
 }
+
+/* 加到 src/pages/LoginPage.css 最下方 */
+.login-form__success {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(54, 132, 92, 0.1);
+  color: #2f6f4f;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* 加到 src/pages/TeacherPage.css 最下方 */
+.teacher-page__success {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(54, 132, 92, 0.1);
+  color: #2f6f4f;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.teacher-form__field small {
+  display: block;
+  margin-top: 7px;
+  color: #8b8177;
+  font-size: 12px;
+  line-height: 1.5;
+}

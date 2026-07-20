@@ -20,10 +20,25 @@ import { supabase } from "./lib/supabase";
 import { hasPagePermission } from "./services/permissionService";
 import "./App.css";
 
+function isTeacherInviteUrl() {
+  const url = new URL(window.location.href);
+  return url.searchParams.get("setup") === "teacher";
+}
+
+function clearInviteUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("setup");
+  url.hash = "";
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
+}
+
 function Workspace() {
   const [activePage, setActivePage] = useState("首頁");
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [isSettingInvitePassword, setIsSettingInvitePassword] = useState(
+    isTeacherInviteUrl
+  );
 
   const [currentTeacher, setCurrentTeacher] = useState(null);
   const [loadingCurrentTeacher, setLoadingCurrentTeacher] = useState(false);
@@ -93,6 +108,10 @@ function Workspace() {
       setSession(nextSession);
       setCheckingSession(false);
 
+      if (isTeacherInviteUrl()) {
+        setIsSettingInvitePassword(true);
+      }
+
       if (!nextSession) {
         setActivePage("首頁");
         setCurrentTeacher(null);
@@ -107,7 +126,7 @@ function Workspace() {
   }, []);
 
   useEffect(() => {
-    if (!session?.user?.id) {
+    if (!session?.user?.id || isSettingInvitePassword) {
       setCurrentTeacher(null);
       return;
     }
@@ -122,7 +141,7 @@ function Workspace() {
         const { data, error } = await supabase
           .from("teachers")
           .select(
-            "id, chinese_name, english_name, role, auth_user_id, permissions"
+            "id, chinese_name, english_name, email, role, status, auth_user_id, permissions"
           )
           .eq("auth_user_id", session.user.id)
           .maybeSingle();
@@ -138,6 +157,12 @@ function Workspace() {
         if (!data) {
           setCurrentTeacher(null);
           setCurrentTeacherError("找不到這個登入帳號對應的老師資料。");
+          return;
+        }
+
+        if (data.status !== "active") {
+          setCurrentTeacher(null);
+          setCurrentTeacherError("這個老師帳號目前已停用，請聯絡管理員。");
           return;
         }
 
@@ -161,7 +186,7 @@ function Workspace() {
     return () => {
       isMounted = false;
     };
-  }, [session]);
+  }, [session, isSettingInvitePassword]);
 
   useEffect(() => {
     if (!currentTeacher || pages.length === 0) {
@@ -186,35 +211,26 @@ function Workspace() {
     } catch (error) {
       console.error("登出失敗：", error);
       setSignOutError("登出失敗，請稍後再試。");
+    } finally {
       setIsSigningOut(false);
     }
   }
 
+  function handlePasswordSet() {
+    clearInviteUrl();
+    setIsSettingInvitePassword(false);
+  }
+
   function getRoleLabel(role) {
-    if (role === "admin") {
-      return "管理員";
-    }
-
-    if (role === "teacher") {
-      return "老師";
-    }
-
+    if (role === "admin") return "管理員";
+    if (role === "teacher") return "老師";
     return "使用者";
   }
 
   function getDisplayName() {
-    if (loadingCurrentTeacher) {
-      return "讀取中…";
-    }
-
-    if (currentTeacher?.chinese_name) {
-      return currentTeacher.chinese_name;
-    }
-
-    if (currentTeacher?.english_name) {
-      return currentTeacher.english_name;
-    }
-
+    if (loadingCurrentTeacher) return "讀取中…";
+    if (currentTeacher?.chinese_name) return currentTeacher.chinese_name;
+    if (currentTeacher?.english_name) return currentTeacher.english_name;
     return session?.user?.email || "使用者";
   }
 
@@ -223,7 +239,9 @@ function Workspace() {
     if (activePage === "任務中心") return <TaskPage />;
     if (activePage === "學生資料") return <StudentPage />;
     if (activePage === "老師管理") return <TeacherPage />;
-    if (activePage === "老師任務") return <TeacherAssignmentPage currentTeacher={currentTeacher} />;
+    if (activePage === "老師任務") {
+      return <TeacherAssignmentPage currentTeacher={currentTeacher} />;
+    }
     if (activePage === "班級管理") return <ClassPage />;
     if (activePage === "課程管理") return <CoursePage />;
     if (activePage === "營隊管理") return <CampPage />;
@@ -246,8 +264,39 @@ function Workspace() {
     );
   }
 
+  if (isSettingInvitePassword) {
+    if (!session) {
+      return (
+        <main className="workspace-auth-loading">
+          <p>邀請連結無效或已過期，請聯絡管理員重新寄送邀請。</p>
+        </main>
+      );
+    }
+
+    return <LoginPage mode="set-password" onPasswordSet={handlePasswordSet} />;
+  }
+
   if (!session) {
     return <LoginPage />;
+  }
+
+  if (loadingCurrentTeacher) {
+    return (
+      <main className="workspace-auth-loading">
+        <p>正在讀取登入者資料…</p>
+      </main>
+    );
+  }
+
+  if (!currentTeacher) {
+    return (
+      <main className="workspace-auth-loading">
+        <p>{currentTeacherError || "無法讀取登入者資料。"}</p>
+        <button type="button" onClick={handleSignOut} disabled={isSigningOut}>
+          {isSigningOut ? "登出中…" : "返回登入"}
+        </button>
+      </main>
+    );
   }
 
   return (
@@ -262,9 +311,7 @@ function Workspace() {
         <header className="workspace-topbar">
           <div className="workspace-user">
             <div className="workspace-user__text">
-              <span className="workspace-user__name">
-                {getDisplayName()}
-              </span>
+              <span className="workspace-user__name">{getDisplayName()}</span>
 
               <span className="workspace-user__role">
                 {getRoleLabel(currentTeacher?.role)}
@@ -281,10 +328,8 @@ function Workspace() {
             </button>
           </div>
 
-          {(currentTeacherError || signOutError) && (
-            <p className="workspace-signout-error">
-              {currentTeacherError || signOutError}
-            </p>
+          {signOutError && (
+            <p className="workspace-signout-error">{signOutError}</p>
           )}
         </header>
 
