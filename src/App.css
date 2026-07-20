@@ -689,60 +689,67 @@ tbody tr:hover td {
 .sidebar nav {
   flex: 1;
 }
-
-.sidebar-footer {
-  margin-top: auto;
-  padding-top: 18px;
-  border-top: 1px solid rgba(120, 110, 100, 0.18);
+.workspace-topbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 54px;
+  margin-bottom: 14px;
 }
 
-.sidebar-user {
+.workspace-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workspace-user__text {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-bottom: 12px;
-  padding: 0 10px;
+  align-items: flex-end;
+  gap: 2px;
 }
 
-.sidebar-user__name {
+.workspace-user__name {
   color: #4d4842;
   font-size: 14px;
   font-weight: 700;
 }
 
-.sidebar-user__role {
+.workspace-user__role {
   color: #968b80;
   font-size: 12px;
 }
 
-.sidebar-signout {
-  width: 100%;
-  padding: 11px 14px;
+.workspace-signout {
+  padding: 9px 15px;
   border: 1px solid #d9d0c7;
   border-radius: 10px;
-  background: transparent;
+  background: #ffffff;
   color: #756c63;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    color 0.15s ease;
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
-.sidebar-signout:hover:not(:disabled) {
-  background: #f1ece6;
+.workspace-signout:hover:not(:disabled) {
+  border-color: #bdb2a7;
+  background: #f4f0eb;
   color: #4f4943;
 }
 
-.sidebar-signout:disabled {
+.workspace-signout:disabled {
   cursor: default;
   opacity: 0.55;
 }
 
-.sidebar-signout-error {
-  margin: 0 0 10px;
+.workspace-signout-error {
+  margin: 6px 0 0;
   color: #b2554d;
   font-size: 12px;
-  line-height: 1.5;
+  text-align: right;
 }

@@ -23,6 +23,8 @@ function Workspace() {
   const [activePage, setActivePage] = useState("首頁");
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
 
   const pages = [
     "首頁",
@@ -80,6 +82,23 @@ function Workspace() {
     };
   }, []);
 
+  async function handleSignOut() {
+    try {
+      setIsSigningOut(true);
+      setSignOutError("");
+
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      console.error("登出失敗：", error);
+      setSignOutError("登出失敗，請稍後再試。");
+      setIsSigningOut(false);
+    }
+  }
+
   function renderPage() {
     if (activePage === "首頁") return <DashboardPage />;
     if (activePage === "任務中心") return <TaskPage />;
@@ -120,7 +139,31 @@ function Workspace() {
         setActivePage={setActivePage}
       />
 
-      <main className="main">{renderPage()}</main>
+      <main className="main">
+        <header className="workspace-topbar">
+          <div className="workspace-user">
+            <div className="workspace-user__text">
+              <span className="workspace-user__name">Lin</span>
+              <span className="workspace-user__role">管理員</span>
+            </div>
+
+            <button
+              type="button"
+              className="workspace-signout"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+            >
+              {isSigningOut ? "登出中…" : "登出"}
+            </button>
+          </div>
+
+          {signOutError && (
+            <p className="workspace-signout-error">{signOutError}</p>
+          )}
+        </header>
+
+        {renderPage()}
+      </main>
     </div>
   );
 }
