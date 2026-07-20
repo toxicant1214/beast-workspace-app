@@ -16,17 +16,33 @@ function cleanTeacherData(data) {
   };
 }
 
-async function getFunctionErrorMessage(error, fallbackMessage) {
-  try {
-    if (error?.context?.json) {
-      const body = await error.context.json();
-      return body?.error || body?.message || fallbackMessage;
+async function invokeTeacherFunction(body, fallbackMessage) {
+  const { data, error } = await supabase.functions.invoke("invite-teacher", {
+    body,
+  });
+
+  if (error) {
+    console.error("invite-teacher Edge Function 呼叫失敗：", error);
+
+    let message = fallbackMessage;
+
+    try {
+      if (error.context?.json) {
+        const responseBody = await error.context.json();
+        message = responseBody?.error || responseBody?.message || message;
+      }
+    } catch (parseError) {
+      console.error("解析 Edge Function 錯誤內容失敗：", parseError);
     }
-  } catch (parseError) {
-    console.error("解析 Edge Function 錯誤失敗：", parseError);
+
+    throw new Error(error.message || message);
   }
 
-  return error?.message || fallbackMessage;
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
+  return data;
 }
 
 export async function getTeachers({ includeInactive = true } = {}) {
@@ -54,60 +70,69 @@ export async function getActiveTeachers() {
   return getTeachers({ includeInactive: false });
 }
 
-/**
- * 新增老師、建立 Supabase Auth 帳號、自動綁定 auth_user_id，
- * 並寄出老師自行設定密碼的邀請信。
- */
 export async function createTeacher(teacherData) {
-  const payload = cleanTeacherData(teacherData);
+  const teacher = cleanTeacherData(teacherData);
 
-  if (!payload.chinese_name) {
-    throw new Error("請輸入老師中文姓名");
+  if (!teacher.chinese_name) {
+    throw new Error("請輸入老師中文姓名。");
   }
 
-  if (!payload.email) {
-    throw new Error("請輸入老師之後要用來登入的 Email");
+  if (!teacher.email) {
+    throw new Error("請輸入老師之後要用來登入的 Email。");
   }
 
-  const redirectTo = `${window.location.origin}/?setup=teacher`;
-
-  const { data, error } = await supabase.functions.invoke("invite-teacher", {
-    body: {
-      action: "invite",
-      teacher: payload,
-      redirectTo,
+  const data = await invokeTeacherFunction(
+    {
+      action: "invite-new",
+      teacher,
+      redirectTo: `${window.location.origin}/?setup=teacher`,
     },
-  });
+    "新增老師與寄送邀請失敗，請稍後再試。"
+  );
 
-  if (error) {
-    console.error("新增老師與寄送邀請失敗：", error);
-    throw new Error(
-      await getFunctionErrorMessage(
-        error,
-        "新增老師與寄送邀請失敗，請稍後再試。"
-      )
-    );
+  return data.teacher;
+}
+
+export async function inviteExistingTeacher(teacherId, teacherData) {
+  if (!teacherId) {
+    throw new Error("缺少老師 ID。");
   }
 
-  if (!data?.teacher) {
-    throw new Error(data?.error || "系統未回傳新老師資料");
+  const teacher = cleanTeacherData(teacherData);
+
+  if (!teacher.chinese_name) {
+    throw new Error("請輸入老師中文姓名。");
   }
+
+  if (!teacher.email) {
+    throw new Error("請輸入老師登入 Email。");
+  }
+
+  const data = await invokeTeacherFunction(
+    {
+      action: "invite-existing",
+      teacherId,
+      teacher,
+      redirectTo: `${window.location.origin}/?setup=teacher`,
+    },
+    "更新既有老師並寄送邀請失敗，請稍後再試。"
+  );
 
   return data.teacher;
 }
 
 export async function updateTeacher(teacherId, teacherData) {
   if (!teacherId) {
-    throw new Error("缺少老師 ID");
+    throw new Error("缺少老師 ID。");
   }
 
   const payload = cleanTeacherData(teacherData);
 
   if (!payload.chinese_name) {
-    throw new Error("請輸入老師中文姓名");
+    throw new Error("請輸入老師中文姓名。");
   }
 
-  // 登入 Email 已綁定 Auth；一般資料編輯時不直接改 Email。
+  // 已建立 Auth 帳號時，不讓一般資料編輯直接改動登入 Email。
   delete payload.email;
 
   const { data, error } = await supabase
@@ -119,7 +144,7 @@ export async function updateTeacher(teacherId, teacherData) {
 
   if (error) {
     console.error("修改老師資料失敗：", error);
-    throw error;
+    throw new Error(error.message || "修改老師資料失敗。");
   }
 
   return data;
@@ -127,51 +152,58 @@ export async function updateTeacher(teacherId, teacherData) {
 
 export async function setTeacherStatus(teacherId, status) {
   if (!teacherId) {
-    throw new Error("缺少老師 ID");
+    throw new Error("缺少老師 ID。");
   }
 
   if (!["active", "inactive"].includes(status)) {
-    throw new Error("老師狀態不正確");
+    throw new Error("老師狀態不正確。");
   }
 
-  const { data, error } = await supabase.functions.invoke("invite-teacher", {
-    body: {
+  const data = await invokeTeacherFunction(
+    {
       action: "set-status",
       teacherId,
       status,
     },
-  });
+    "更新老師狀態失敗，請稍後再試。"
+  );
 
-  if (error) {
-    console.error("更新老師狀態失敗：", error);
-    throw new Error(
-      await getFunctionErrorMessage(error, "更新老師狀態失敗，請稍後再試。")
-    );
-  }
-
-  return data?.teacher;
+  return data.teacher;
 }
 
-/**
- * 永久刪除測試老師，並同步刪除對應的 Supabase Auth 帳號。
- */
 export async function deleteTeacher(teacherId) {
   if (!teacherId) {
-    throw new Error("缺少老師 ID");
+    throw new Error("缺少老師 ID。");
   }
 
-  const { error } = await supabase.functions.invoke("invite-teacher", {
-    body: {
+  await invokeTeacherFunction(
+    {
       action: "delete",
       teacherId,
     },
-  });
+    "刪除老師失敗，請稍後再試。"
+  );
+
+  return true;
+}
+
+export async function sendTeacherPasswordReset(email) {
+  const normalizedEmail = email?.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    throw new Error("缺少老師登入 Email。");
+  }
+
+  const { error } = await supabase.auth.resetPasswordForEmail(
+    normalizedEmail,
+    {
+      redirectTo: `${window.location.origin}/?setup=teacher`,
+    }
+  );
 
   if (error) {
-    console.error("刪除老師失敗：", error);
-    throw new Error(
-      await getFunctionErrorMessage(error, "刪除老師失敗，請稍後再試。")
-    );
+    console.error("寄送密碼設定信失敗：", error);
+    throw new Error(error.message || "寄送密碼設定信失敗。");
   }
 
   return true;

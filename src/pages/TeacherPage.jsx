@@ -3,6 +3,8 @@ import {
   createTeacher,
   deleteTeacher,
   getTeachers,
+  inviteExistingTeacher,
+  sendTeacherPasswordReset,
   setTeacherStatus,
   updateTeacher,
 } from "../services/teacherService";
@@ -31,6 +33,7 @@ function TeacherPage() {
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [processingTeacherId, setProcessingTeacherId] = useState(null);
 
   const activeTeachers = useMemo(
     () => teachers.filter((teacher) => teacher.status === "active"),
@@ -45,6 +48,16 @@ function TeacherPage() {
   const displayedTeachers = showInactive
     ? inactiveTeachers
     : activeTeachers;
+
+  const editingTeacher = useMemo(
+    () =>
+      editingTeacherId
+        ? teachers.find((teacher) => teacher.id === editingTeacherId) ?? null
+        : null,
+    [teachers, editingTeacherId]
+  );
+
+  const editingTeacherHasAccount = Boolean(editingTeacher?.auth_user_id);
 
   useEffect(() => {
     loadTeachers();
@@ -118,12 +131,15 @@ function TeacherPage() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!formData.chinese_name.trim()) {
+    const chineseName = formData.chinese_name.trim();
+    const email = formData.email.trim();
+
+    if (!chineseName) {
       setErrorMessage("請輸入老師中文姓名。");
       return;
     }
 
-    if (!editingTeacherId && !formData.email.trim()) {
+    if (!editingTeacherId && !email) {
       setErrorMessage("請輸入老師之後要用來登入的 Email。");
       return;
     }
@@ -133,20 +149,41 @@ function TeacherPage() {
       setErrorMessage("");
       setSuccessMessage("");
 
-      if (editingTeacherId) {
-        await updateTeacher(editingTeacherId, formData);
-        await loadTeachers();
-        closeForm();
-      } else {
+      if (!editingTeacherId) {
         await createTeacher(formData);
         await loadTeachers();
+
         setSuccessMessage(
-          `已建立「${formData.chinese_name.trim()}」的登入帳號，邀請信已寄到 ${formData.email.trim()}。`
+          `已建立「${chineseName}」的登入帳號，邀請信已寄到 ${email}。`
         );
+
         setIsFormOpen(false);
         setEditingTeacherId(null);
         setFormData(createEmptyForm());
+        return;
       }
+
+      if (!editingTeacherHasAccount && email) {
+        await inviteExistingTeacher(editingTeacherId, formData);
+        await loadTeachers();
+
+        setSuccessMessage(
+          `已更新「${chineseName}」的資料，並將登入邀請寄到 ${email}。`
+        );
+
+        setIsFormOpen(false);
+        setEditingTeacherId(null);
+        setFormData(createEmptyForm());
+        return;
+      }
+
+      await updateTeacher(editingTeacherId, formData);
+      await loadTeachers();
+
+      setSuccessMessage(`已儲存「${chineseName}」的老師資料。`);
+      setIsFormOpen(false);
+      setEditingTeacherId(null);
+      setFormData(createEmptyForm());
     } catch (error) {
       console.error(error);
 
@@ -199,23 +236,71 @@ function TeacherPage() {
   }
 
   async function handleDeleteTeacher(teacher) {
-  const confirmed = window.confirm(
-    `⚠️ 確定要永久刪除「${teacher.chinese_name}」嗎？\n\n此動作無法復原。\n\n建議只有刪除測試資料才使用。`
-  );
+    const confirmed = window.confirm(
+      `⚠️ 確定要永久刪除「${teacher.chinese_name}」嗎？\n\n` +
+        `${
+          teacher.auth_user_id
+            ? "這會同時刪除老師資料與登入帳號。"
+            : "這位老師尚未建立登入帳號，會直接刪除老師資料。"
+        }\n\n此動作無法復原。`
+    );
 
-  if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
-  try {
-    setErrorMessage("");
+    try {
+      setProcessingTeacherId(teacher.id);
+      setErrorMessage("");
+      setSuccessMessage("");
 
-    await deleteTeacher(teacher.id);
+      await deleteTeacher(teacher.id);
+      await loadTeachers();
 
-    await loadTeachers();
-  } catch (error) {
-    console.error(error);
-    setErrorMessage("刪除老師失敗，請稍後再試。");
+      setSuccessMessage(`已永久刪除「${teacher.chinese_name}」。`);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(
+        error?.message || "刪除老師失敗，請稍後再試。"
+      );
+    } finally {
+      setProcessingTeacherId(null);
+    }
   }
-}
+
+  async function handleSendPasswordReset(teacher) {
+    if (!teacher.email) {
+      setErrorMessage("這位老師沒有可使用的登入 Email。");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `確定要寄送密碼設定／重設信給「${teacher.chinese_name}」嗎？\n\n寄送至：${teacher.email}`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setProcessingTeacherId(teacher.id);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      await sendTeacherPasswordReset(teacher.email);
+
+      setSuccessMessage(
+        `密碼設定信已寄到 ${teacher.email}。`
+      );
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(
+        error?.message || "密碼設定信寄送失敗，請稍後再試。"
+      );
+    } finally {
+      setProcessingTeacherId(null);
+    }
+  }
 
   return (
     <main className="teacher-page">
@@ -385,6 +470,15 @@ function TeacherPage() {
                   </div>
 
                   <div>
+                    <span>登入帳號</span>
+                    <strong>
+                      {teacher.auth_user_id
+                        ? "已建立"
+                        : "尚未建立"}
+                    </strong>
+                  </div>
+
+                  <div>
                     <span>到職日期</span>
                     <strong>
                       {teacher.hire_date || "尚未填寫"}
@@ -425,12 +519,28 @@ function TeacherPage() {
     </button>
   )}
 
+  {teacher.auth_user_id && teacher.email && (
+    <button
+      type="button"
+      className="teacher-card__edit-button"
+      onClick={() => handleSendPasswordReset(teacher)}
+      disabled={processingTeacherId === teacher.id}
+    >
+      {processingTeacherId === teacher.id
+        ? "處理中…"
+        : "寄送密碼設定信"}
+    </button>
+  )}
+
   <button
     type="button"
     className="teacher-card__delete-button"
     onClick={() => handleDeleteTeacher(teacher)}
+    disabled={processingTeacherId === teacher.id}
   >
-    刪除
+    {processingTeacherId === teacher.id
+      ? "處理中…"
+      : "刪除"}
   </button>
 </div>
               </article>
@@ -545,7 +655,7 @@ function TeacherPage() {
                 <label className="teacher-form__field teacher-form__field--wide">
                   <span>
                     登入 Email
-                    {!editingTeacherId && <b>必填</b>}
+                    {!editingTeacherHasAccount && <b>必填</b>}
                   </span>
 
                   <input
@@ -555,12 +665,20 @@ function TeacherPage() {
                     onChange={handleInputChange}
                     placeholder="老師之後登入 Workspace 使用的信箱"
                     autoComplete="email"
-                    readOnly={Boolean(editingTeacherId)}
+                    readOnly={editingTeacherHasAccount}
                   />
 
-                  {editingTeacherId && (
+                  {editingTeacherHasAccount ? (
                     <small>
-                      登入 Email 已與 Supabase Auth 綁定；為避免帳號失聯，這裡暫不直接修改。
+                      這位老師已建立登入帳號。為避免 Supabase Auth 與老師資料的 Email 不一致，這裡暫不直接修改。
+                    </small>
+                  ) : editingTeacherId ? (
+                    <small>
+                      這位老師尚未建立登入帳號。填入 Email 後儲存，系統會更新原本資料並寄送邀請，不會新增第二位老師。
+                    </small>
+                  ) : (
+                    <small>
+                      新增老師時會同時建立登入帳號並寄送設定密碼邀請。
                     </small>
                   )}
                 </label>
@@ -611,10 +729,12 @@ function TeacherPage() {
                   disabled={saving}
                 >
                   {saving
-                    ? "儲存中…"
-                    : editingTeacherId
-                    ? "儲存修改"
-                    : "建立帳號並寄送邀請"}
+                    ? "處理中…"
+                    : !editingTeacherId
+                    ? "建立帳號並寄送邀請"
+                    : !editingTeacherHasAccount && formData.email.trim()
+                    ? "儲存並寄送登入邀請"
+                    : "儲存修改"}
                 </button>
               </div>
             </form>
