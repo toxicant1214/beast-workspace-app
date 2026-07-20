@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import DashboardPage from "./pages/DashboardPage";
 import TaskPage from "./pages/TaskPage";
@@ -15,10 +15,14 @@ import CampSchedulePage from "./pages/CampSchedulePage";
 import CleaningPage from "./pages/CleaningPage";
 import LineReminderPage from "./pages/LineReminderPage";
 import ScoreAnalysisPage from "./pages/ScoreAnalysisPage";
+import LoginPage from "./pages/LoginPage";
+import { supabase } from "./lib/supabase";
 import "./App.css";
 
 function Workspace() {
   const [activePage, setActivePage] = useState("首頁");
+  const [session, setSession] = useState(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   const pages = [
     "首頁",
@@ -38,6 +42,44 @@ function Workspace() {
     "成績分析",
   ];
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSession() {
+      const {
+        data: { session: currentSession },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("讀取登入狀態失敗：", error);
+      }
+
+      if (isMounted) {
+        setSession(currentSession);
+        setCheckingSession(false);
+      }
+    }
+
+    loadSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setCheckingSession(false);
+
+      if (!nextSession) {
+        setActivePage("首頁");
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   function renderPage() {
     if (activePage === "首頁") return <DashboardPage />;
     if (activePage === "任務中心") return <TaskPage />;
@@ -56,6 +98,18 @@ function Workspace() {
     if (activePage === "成績分析") return <ScoreAnalysisPage />;
 
     return <DashboardPage />;
+  }
+
+  if (checkingSession) {
+    return (
+      <main className="workspace-auth-loading">
+        <p>正在確認登入狀態…</p>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return <LoginPage />;
   }
 
   return (
