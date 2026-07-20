@@ -538,11 +538,3 @@
 .teacher-card__delete-button:hover {
   background: #b53d3d;
 }
-/* 防止左側選單目前頁面被其他樣式撐高 */
-.sidebar nav button,
-.sidebar nav button.active {
-  flex: 0 0 auto;
-  width: 100%;
-  min-height: 48px;
-  height: auto;
-}
