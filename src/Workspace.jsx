@@ -19,6 +19,7 @@ import LoginPage from "./pages/LoginPage";
 import { supabase } from "./lib/supabase";
 import { hasPagePermission } from "./services/permissionService";
 import "./App.css";
+import TeacherDashboard from "./pages/TeacherDashboard";
 
 function isTeacherInviteUrl() {
   const url = new URL(window.location.href);
@@ -235,7 +236,13 @@ function Workspace() {
   }
 
   function renderPage() {
-    if (activePage === "首頁") return <DashboardPage />;
+    if (activePage === "首頁") {
+  if (currentTeacher?.role === "teacher") {
+    return <TeacherDashboard />;
+  }
+
+  return <DashboardPage />;
+}
     if (activePage === "任務中心") return <TaskPage />;
     if (activePage === "學生資料") return <StudentPage />;
     if (activePage === "老師管理") return <TeacherPage />;
