@@ -138,3 +138,27 @@ export async function setTeacherStatus(teacherId, status) {
 
   return data;
 }
+
+/**
+ * 永久刪除老師
+ *
+ * 主要用於刪除測試資料。
+ * 正式老師建議使用停用功能，保留歷史紀錄。
+ */
+export async function deleteTeacher(teacherId) {
+  if (!teacherId) {
+    throw new Error("缺少老師 ID");
+  }
+
+  const { error } = await supabase
+    .from(TEACHER_TABLE)
+    .delete()
+    .eq("id", teacherId);
+
+  if (error) {
+    console.error("刪除老師失敗：", error);
+    throw error;
+  }
+
+  return true;
+}

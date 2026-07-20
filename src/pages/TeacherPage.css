@@ -530,3 +530,11 @@
     flex-direction: column;
   }
 }
+.teacher-card__delete-button {
+  background: #c94d4d;
+  color: white;
+}
+
+.teacher-card__delete-button:hover {
+  background: #b53d3d;
+}

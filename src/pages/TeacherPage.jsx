@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   createTeacher,
+  deleteTeacher,
   getTeachers,
   setTeacherStatus,
   updateTeacher,
@@ -182,6 +183,25 @@ function TeacherPage() {
     }
   }
 
+  async function handleDeleteTeacher(teacher) {
+  const confirmed = window.confirm(
+    `⚠️ 確定要永久刪除「${teacher.chinese_name}」嗎？\n\n此動作無法復原。\n\n建議只有刪除測試資料才使用。`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setErrorMessage("");
+
+    await deleteTeacher(teacher.id);
+
+    await loadTeachers();
+  } catch (error) {
+    console.error(error);
+    setErrorMessage("刪除老師失敗，請稍後再試。");
+  }
+}
+
   return (
     <main className="teacher-page">
       <section className="teacher-page__header">
@@ -358,36 +378,40 @@ function TeacherPage() {
                 )}
 
                 <div className="teacher-card__actions">
-                  <button
-                    type="button"
-                    className="teacher-card__edit-button"
-                    onClick={() => openEditForm(teacher)}
-                  >
-                    編輯資料
-                  </button>
+  <button
+    type="button"
+    className="teacher-card__edit-button"
+    onClick={() => openEditForm(teacher)}
+  >
+    編輯資料
+  </button>
 
-                  {teacher.status === "active" ? (
-                    <button
-                      type="button"
-                      className="teacher-card__deactivate-button"
-                      onClick={() =>
-                        handleDeactivateTeacher(teacher)
-                      }
-                    >
-                      停用老師
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="teacher-card__restore-button"
-                      onClick={() =>
-                        handleRestoreTeacher(teacher)
-                      }
-                    >
-                      恢復在職
-                    </button>
-                  )}
-                </div>
+  {teacher.status === "active" ? (
+    <button
+      type="button"
+      className="teacher-card__deactivate-button"
+      onClick={() => handleDeactivateTeacher(teacher)}
+    >
+      停用老師
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="teacher-card__restore-button"
+      onClick={() => handleRestoreTeacher(teacher)}
+    >
+      恢復在職
+    </button>
+  )}
+
+  <button
+    type="button"
+    className="teacher-card__delete-button"
+    onClick={() => handleDeleteTeacher(teacher)}
+  >
+    刪除
+  </button>
+</div>
               </article>
             ))}
           </div>
