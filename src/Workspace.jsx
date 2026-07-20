@@ -23,6 +23,11 @@ function Workspace() {
   const [activePage, setActivePage] = useState("首頁");
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+
+  const [currentTeacher, setCurrentTeacher] = useState(null);
+  const [loadingCurrentTeacher, setLoadingCurrentTeacher] = useState(false);
+  const [currentTeacherError, setCurrentTeacherError] = useState("");
+
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
 
@@ -73,6 +78,8 @@ function Workspace() {
 
       if (!nextSession) {
         setActivePage("首頁");
+        setCurrentTeacher(null);
+        setCurrentTeacherError("");
       }
     });
 
@@ -81,6 +88,61 @@ function Workspace() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setCurrentTeacher(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadCurrentTeacher() {
+      try {
+        setLoadingCurrentTeacher(true);
+        setCurrentTeacherError("");
+
+        const { data, error } = await supabase
+          .from("teachers")
+          .select("id, chinese_name, english_name, role, auth_user_id")
+          .eq("auth_user_id", session.user.id)
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!data) {
+          setCurrentTeacher(null);
+          setCurrentTeacherError("找不到這個登入帳號對應的老師資料。");
+          return;
+        }
+
+        setCurrentTeacher(data);
+      } catch (error) {
+        console.error("讀取登入者資料失敗：", error);
+
+        if (isMounted) {
+          setCurrentTeacher(null);
+          setCurrentTeacherError("登入者資料讀取失敗。");
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingCurrentTeacher(false);
+        }
+      }
+    }
+
+    loadCurrentTeacher();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session]);
 
   async function handleSignOut() {
     try {
@@ -97,6 +159,34 @@ function Workspace() {
       setSignOutError("登出失敗，請稍後再試。");
       setIsSigningOut(false);
     }
+  }
+
+  function getRoleLabel(role) {
+    if (role === "admin") {
+      return "管理員";
+    }
+
+    if (role === "teacher") {
+      return "老師";
+    }
+
+    return "使用者";
+  }
+
+  function getDisplayName() {
+    if (loadingCurrentTeacher) {
+      return "讀取中…";
+    }
+
+    if (currentTeacher?.chinese_name) {
+      return currentTeacher.chinese_name;
+    }
+
+    if (currentTeacher?.english_name) {
+      return currentTeacher.english_name;
+    }
+
+    return session?.user?.email || "使用者";
   }
 
   function renderPage() {
@@ -143,8 +233,13 @@ function Workspace() {
         <header className="workspace-topbar">
           <div className="workspace-user">
             <div className="workspace-user__text">
-              <span className="workspace-user__name">Lin</span>
-              <span className="workspace-user__role">管理員</span>
+              <span className="workspace-user__name">
+                {getDisplayName()}
+              </span>
+
+              <span className="workspace-user__role">
+                {getRoleLabel(currentTeacher?.role)}
+              </span>
             </div>
 
             <button
@@ -157,8 +252,10 @@ function Workspace() {
             </button>
           </div>
 
-          {signOutError && (
-            <p className="workspace-signout-error">{signOutError}</p>
+          {(currentTeacherError || signOutError) && (
+            <p className="workspace-signout-error">
+              {currentTeacherError || signOutError}
+            </p>
           )}
         </header>
 
