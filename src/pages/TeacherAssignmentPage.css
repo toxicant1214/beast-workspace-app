@@ -738,3 +738,78 @@
   align-items: center;
   gap: 12px;
 }
+/* ===== 老師完成歷程 ===== */
+
+.teacher-assignment-member__info {
+  cursor: pointer !important;
+  user-select: none;
+}
+
+.teacher-assignment-member__info * {
+  cursor: pointer !important;
+}
+
+.teacher-assignment-member__info strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.2s;
+}
+
+.teacher-assignment-member__info:hover strong {
+  color: #3b82f6;
+}
+
+.teacher-assignment-member__history {
+  margin-top: 14px;
+  margin-left: 56px;
+  padding: 14px 16px;
+  border-left: 3px solid #dbeafe;
+  background: #f8fbff;
+  border-radius: 10px;
+}
+
+.teacher-assignment-member__history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.teacher-assignment-member__history-item:not(:last-child) {
+  border-bottom: 1px dashed #d8e3ef;
+}
+
+.teacher-assignment-member__history-item span {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.teacher-assignment-member__history-item strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.teacher-assignment-member__history-item small {
+  display: block;
+  margin-top: 2px;
+  color: #16a34a;
+  font-size: 12px;
+}
+.teacher-assignment-member__history {
+  animation: historyFade 0.22s ease;
+}
+
+@keyframes historyFade {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

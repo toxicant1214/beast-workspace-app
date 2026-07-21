@@ -674,29 +674,16 @@ const overdueAssignmentCount = useMemo(
 
                       return (
                         <div
-                          className="teacher-assignment-member"
-                          key={member.id}
-                        >
+  className="teacher-assignment-member"
+  key={member.id}
+  onClick={() => toggleMemberHistory(member.id)}
+>
                           <div className="teacher-assignment-member__identity">
                             <div className="teacher-assignment-member__avatar">
                               {teacher?.chinese_name?.slice(0, 1) || "師"}
                             </div>
 
-                            <div
-                              className="teacher-assignment-member__info"
-                              onClick={() => toggleMemberHistory(member.id)}
-                              onKeyDown={(event) => {
-                                if (
-                                  event.key === "Enter" ||
-                                  event.key === " "
-                                ) {
-                                  event.preventDefault();
-                                  toggleMemberHistory(member.id);
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                            >
+                            <div className="teacher-assignment-member__info">
                               <strong>
                                 {isHistoryExpanded ? "▼ " : "▶ "}
                                 {teacher?.chinese_name || "未知老師"}
@@ -724,7 +711,10 @@ const overdueAssignmentCount = useMemo(
                             )}
                           </div>
 
-                          <div className="teacher-assignment-member__actions">
+                          <div
+  className="teacher-assignment-member__actions"
+  onClick={(event) => event.stopPropagation()}
+>
                             {mayComplete && (
                               <button
                                 type="button"
