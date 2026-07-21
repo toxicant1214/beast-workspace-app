@@ -16,8 +16,8 @@ def get_headers():
     }
 
 
-def send_line_message(text):
-    """廣播給全部好友，用於每日晨報。"""
+def broadcast_line_message(text):
+    """廣播給全部好友，只能用於全體公告。"""
 
     url = "https://api.line.me/v2/bot/message/broadcast"
 
@@ -38,6 +38,40 @@ def send_line_message(text):
     )
 
     print("LINE broadcast:", response.status_code, response.text)
+    response.raise_for_status()
+
+
+def send_line_message_to_user(line_user_id, text):
+    """主動推播給指定 LINE 使用者。"""
+
+    if not line_user_id:
+        raise ValueError("缺少 LINE User ID")
+
+    url = "https://api.line.me/v2/bot/message/push"
+
+    data = {
+        "to": line_user_id,
+        "messages": [
+            {
+                "type": "text",
+                "text": text,
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print(
+        "LINE push:",
+        line_user_id,
+        response.status_code,
+        response.text,
+    )
     response.raise_for_status()
 
 
@@ -438,7 +472,7 @@ def reply_delete_confirmation(
         response.text,
     )
     response.raise_for_status()
-    
+
 def reply_task_cards(reply_token, tasks):
     """回覆可直接點擊完成的待辦卡片。"""
 

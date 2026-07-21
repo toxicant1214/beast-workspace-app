@@ -154,6 +154,7 @@ def build_task_summary(payload):
 
 def handle_text_message(text, reply_token, line_user_id):
     text = text.strip()
+    bound_teacher = get_teacher_by_line_user_id(line_user_id)
 
     if text == "取消新增":
         workflow = get_workflow(line_user_id)
@@ -328,6 +329,14 @@ def handle_text_message(text, reply_token, line_user_id):
         return
 
     if text == "新增待辦":
+        if bound_teacher:
+            reply_message(
+                reply_token,
+                "🔒 個人待辦僅限主管使用。\n\n"
+                "老師請輸入「任務」查看自己的指派工作。",
+            )
+            return
+
         start_workflow(
             line_user_id=line_user_id,
             flow_type="personal_task",
@@ -342,6 +351,19 @@ def handle_text_message(text, reply_token, line_user_id):
         return
 
     workflow = get_workflow(line_user_id)
+
+    if (
+        bound_teacher
+        and workflow
+        and workflow.get("flow_type") == "personal_task"
+    ):
+        clear_workflow(line_user_id)
+        reply_message(
+            reply_token,
+            "🔒 個人待辦僅限主管使用。\n\n"
+            "老師請輸入「任務」查看自己的指派工作。",
+        )
+        return
 
     if (
         workflow
@@ -406,11 +428,27 @@ def handle_text_message(text, reply_token, line_user_id):
             return
 
     if text in ["待辦", "查看待辦", "我的待辦"]:
+        if bound_teacher:
+            reply_message(
+                reply_token,
+                "🔒 個人待辦僅限主管查看。\n\n"
+                "老師請輸入「任務」查看自己的指派工作。",
+            )
+            return
+
         tasks = get_active_tasks()
         reply_task_cards(reply_token, tasks)
         return
 
     if text in ["今天", "明天", "本週"]:
+        if bound_teacher:
+            reply_message(
+                reply_token,
+                "🔒 個人待辦僅限主管查看。\n\n"
+                "老師請輸入「任務」查看自己的指派工作。",
+            )
+            return
+
         taipei_today = datetime.now(TAIPEI_TZ).date()
 
         if text == "今天":
@@ -444,11 +482,32 @@ def handle_text_message(text, reply_token, line_user_id):
             reply_task_cards(reply_token, tasks)
             return
     if text.lower() in ["hello", "hi"] or text in ["哈囉", "你好"]:
+        if bound_teacher:
+            teacher_name = (
+                bound_teacher.get("chinese_name")
+                or bound_teacher.get("english_name")
+                or "老師"
+            )
+            reply_message(
+                reply_token,
+                f"👋 您好，{teacher_name}！\n\n"
+                "輸入「任務」查看自己的指派工作。",
+            )
+            return
+
         reply_message(
             reply_token,
             "👋 哈囉 Lin！\n\n"
             "輸入「待辦」查看未完成事項，"
             "輸入「新增待辦」建立新任務。",
+        )
+        return
+
+    if bound_teacher:
+        reply_message(
+            reply_token,
+            "目前可以輸入：\n\n"
+            "📋 任務",
         )
         return
 
@@ -473,6 +532,35 @@ def handle_postback(event):
     time_option = values.get("time_option", [""])[0]
     priority_option = values.get("priority", [""])[0]
     reminder_option = values.get("reminder", [""])[0]
+
+    personal_task_actions = {
+        "set_task_date",
+        "set_task_time_option",
+        "set_task_priority",
+        "toggle_task_reminder",
+        "finish_task_reminders",
+        "skip_task_reminders",
+        "confirm_create_task",
+        "cancel_create_task",
+        "request_delete_task",
+        "cancel_delete_task",
+        "confirm_delete_task",
+        "complete_task",
+    }
+
+    if action in personal_task_actions:
+        bound_teacher = get_teacher_by_line_user_id(line_user_id)
+
+        if bound_teacher:
+            clear_workflow(line_user_id)
+
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "🔒 個人待辦僅限主管操作。\n\n"
+                    "老師請輸入「任務」查看自己的指派工作。",
+                )
+            return
 
     # 日期選擇
     if action == "set_task_date":
