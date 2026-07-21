@@ -35,7 +35,7 @@ export async function getTeacherAssignments() {
     console.error("取得老師任務失敗：", error);
     throw error;
   }
-
+  console.log(data);
   return data ?? [];
 }
 
