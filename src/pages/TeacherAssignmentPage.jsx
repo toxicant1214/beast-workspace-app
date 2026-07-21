@@ -69,6 +69,7 @@ function TeacherAssignmentPage({ currentTeacher }) {
   const [processingId, setProcessingId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [teacherKeyword, setTeacherKeyword] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const adminMode = isAdmin(currentTeacher);
   const canViewAll =
     adminMode ||
@@ -124,24 +125,54 @@ function TeacherAssignmentPage({ currentTeacher }) {
   const filteredAssignments = useMemo(() => {
   const keyword = teacherKeyword.trim().toLowerCase();
 
-  if (!adminMode || !keyword) {
-    return visibleAssignments;
-  }
+  return visibleAssignments.filter((assignment) => {
+    const members = assignment.teacher_assignment_members ?? [];
 
-  return visibleAssignments.filter((assignment) =>
-    (assignment.teacher_assignment_members ?? []).some((member) => {
-      const teacher = member.teachers;
+    const matchesTeacher =
+      !adminMode ||
+      !keyword ||
+      members.some((member) => {
+        const teacher = member.teachers;
 
-      return [
-        teacher?.chinese_name,
-        teacher?.english_name,
-        teacher?.position,
-      ]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(keyword));
-    })
-  );
-}, [visibleAssignments, teacherKeyword, adminMode]);
+        return [
+          teacher?.chinese_name,
+          teacher?.english_name,
+          teacher?.position,
+        ]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(keyword));
+      });
+
+    const isOverdue = isAssignmentOverdue(assignment);
+
+    const isCompleted =
+      members.length > 0 &&
+      members.every((member) => member.admin_confirmed);
+
+    const isWaitingConfirm =
+      members.some((member) => member.is_done) &&
+      members.some((member) => !member.admin_confirmed);
+
+    const isInProgress =
+      !isOverdue &&
+      !isCompleted &&
+      !isWaitingConfirm;
+
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "in_progress" && isInProgress) ||
+      (statusFilter === "waiting_confirm" && isWaitingConfirm) ||
+      (statusFilter === "completed" && isCompleted) ||
+      (statusFilter === "overdue" && isOverdue);
+
+    return matchesTeacher && matchesStatus;
+  });
+}, [
+  visibleAssignments,
+  teacherKeyword,
+  statusFilter,
+  adminMode,
+]);
   const activeAssignmentCount = useMemo(
     () =>
       visibleAssignments.filter((assignment) => assignment.status === "active")
@@ -443,13 +474,24 @@ const overdueAssignmentCount = useMemo(
           </div>
           {adminMode && (
   <div className="teacher-assignment-list__search">
-    <input
-      type="search"
-      value={teacherKeyword}
-      onChange={(event) => setTeacherKeyword(event.target.value)}
-      placeholder="搜尋老師姓名、英文名或職稱"
-    />
-  </div>
+  <input
+    type="search"
+    value={teacherKeyword}
+    onChange={(event) => setTeacherKeyword(event.target.value)}
+    placeholder="搜尋老師姓名、英文名或職稱"
+  />
+
+  <select
+    value={statusFilter}
+    onChange={(event) => setStatusFilter(event.target.value)}
+  >
+    <option value="all">全部任務</option>
+    <option value="in_progress">進行中</option>
+    <option value="waiting_confirm">待主管確認</option>
+    <option value="completed">已完成</option>
+    <option value="overdue">已逾期</option>
+  </select>
+</div>
 )}
           <button
             type="button"

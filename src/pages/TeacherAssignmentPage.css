@@ -733,3 +733,8 @@
     padding: 20px;
   }
 }
+.teacher-assignment-list__search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
