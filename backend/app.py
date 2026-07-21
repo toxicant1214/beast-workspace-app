@@ -154,12 +154,7 @@ def build_task_summary(payload):
 
 def handle_text_message(text, reply_token, line_user_id):
     text = text.strip()
-    if text == "我的LINE ID":
-        reply_message(
-            reply_token,
-            f"你的 LINE User ID：\n{line_user_id}",
-        )
-        return
+    
     bound_teacher = get_teacher_by_line_user_id(line_user_id)
 
     if text == "取消新增":
