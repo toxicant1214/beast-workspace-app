@@ -38,6 +38,47 @@ function formatDeadline(value) {
   }).format(new Date(value));
 }
 
+function formatHistoryTime(value) {
+  if (!value) {
+    return "尚未完成";
+  }
+
+  return new Intl.DateTimeFormat("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
+function getCompletionTiming(completedAt, deadline) {
+  if (!completedAt || !deadline) {
+    return "";
+  }
+
+  const difference =
+    new Date(completedAt).getTime() - new Date(deadline).getTime();
+
+  if (difference <= 0) {
+    return "準時完成";
+  }
+
+  const totalHours = Math.floor(difference / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+
+  if (days > 0 && hours > 0) {
+    return `逾期 ${days} 天 ${hours} 小時`;
+  }
+
+  if (days > 0) {
+    return `逾期 ${days} 天`;
+  }
+
+  return `逾期 ${Math.max(totalHours, 1)} 小時`;
+}
+
 function isAssignmentOverdue(assignment) {
   if (!assignment.deadline) {
     return false;
@@ -68,6 +109,7 @@ function TeacherAssignmentPage({ currentTeacher }) {
   const [saving, setSaving] = useState(false);
   const [processingId, setProcessingId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [expandedMemberIds, setExpandedMemberIds] = useState([]);
   const [teacherKeyword, setTeacherKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const adminMode = isAdmin(currentTeacher);
@@ -269,6 +311,13 @@ const overdueAssignmentCount = useMemo(
     }));
   }
 
+  function toggleMemberHistory(memberId) {
+  setExpandedMemberIds((previous) =>
+    previous.includes(memberId)
+      ? previous.filter((id) => id !== memberId)
+      : [...previous, memberId]
+  );
+}
   function toggleTeacher(teacherId) {
     setFormData((previous) => {
       const alreadySelected = previous.teacherIds.includes(teacherId);
@@ -620,6 +669,8 @@ const overdueAssignmentCount = useMemo(
                         member.teacher_id === currentTeacher?.id;
                       const mayComplete =
                         adminMode || (canCompleteOwn && isOwnAssignment);
+                      const isHistoryExpanded =
+                        expandedMemberIds.includes(member.id);
 
                       return (
                         <div
@@ -628,15 +679,29 @@ const overdueAssignmentCount = useMemo(
                         >
                           <div className="teacher-assignment-member__identity">
                             <div className="teacher-assignment-member__avatar">
-                              {teacher?.chinese_name?.slice(0, 1) ||
-                                "師"}
+                              {teacher?.chinese_name?.slice(0, 1) || "師"}
                             </div>
 
-                            <div>
+                            <div
+                              className="teacher-assignment-member__info"
+                              onClick={() => toggleMemberHistory(member.id)}
+                              onKeyDown={(event) => {
+                                if (
+                                  event.key === "Enter" ||
+                                  event.key === " "
+                                ) {
+                                  event.preventDefault();
+                                  toggleMemberHistory(member.id);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                            >
                               <strong>
-                                {teacher?.chinese_name ||
-                                  "未知老師"}
+                                {isHistoryExpanded ? "▼ " : "▶ "}
+                                {teacher?.chinese_name || "未知老師"}
                               </strong>
+
                               <span>
                                 {teacher?.position || "未設定職務"}
                               </span>
@@ -706,6 +771,54 @@ const overdueAssignmentCount = useMemo(
                               </button>
                             )}
                           </div>
+
+                          {adminMode && isHistoryExpanded && (
+                            <div className="teacher-assignment-member__history">
+                              <div className="teacher-assignment-member__history-item">
+                                <span>任務建立</span>
+                                <strong>
+                                  {formatHistoryTime(
+                                    assignment.created_at
+                                  )}
+                                </strong>
+                              </div>
+
+                              <div className="teacher-assignment-member__history-item">
+                                <span>指派老師</span>
+                                <strong>
+                                  {formatHistoryTime(member.created_at)}
+                                </strong>
+                              </div>
+
+                              <div className="teacher-assignment-member__history-item">
+                                <span>老師完成</span>
+                                <strong>
+                                  {formatHistoryTime(
+                                    member.teacher_completed_at
+                                  )}
+                                </strong>
+
+                                {member.teacher_completed_at &&
+                                  assignment.deadline && (
+                                    <small>
+                                      {getCompletionTiming(
+                                        member.teacher_completed_at,
+                                        assignment.deadline
+                                      )}
+                                    </small>
+                                  )}
+                              </div>
+
+                              <div className="teacher-assignment-member__history-item">
+                                <span>主管確認</span>
+                                <strong>
+                                  {formatHistoryTime(
+                                    member.admin_confirmed_at
+                                  )}
+                                </strong>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
