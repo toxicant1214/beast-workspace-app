@@ -18,6 +18,7 @@ from services.line_service import (
     reply_reminder_options,
     reply_task_cards,
     reply_task_confirmation,
+    reply_teacher_assignment_cards,
     reply_time_options,
 )
 from services.task_service import (
@@ -268,6 +269,19 @@ def handle_text_message(text, reply_token, line_user_id):
                 "綁定 綁定碼",
             )
             return
+
+        teacher_name = (
+            teacher.get("chinese_name")
+            or teacher.get("english_name")
+            or "老師"
+        )
+
+        reply_teacher_assignment_cards(
+            reply_token=reply_token,
+            teacher_name=teacher_name,
+            assignments=assignments,
+        )
+        return
 
         teacher_name = (
             teacher.get("chinese_name")

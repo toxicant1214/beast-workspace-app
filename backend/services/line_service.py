@@ -595,3 +595,152 @@ def reply_task_cards(reply_token, tasks):
 
     print("LINE task cards:", response.status_code, response.text)
     response.raise_for_status()
+def reply_teacher_assignment_cards(
+    reply_token,
+    teacher_name,
+    assignments,
+):
+    """回覆老師尚未完成的任務 Flex Cards。"""
+
+    if not assignments:
+        reply_message(
+            reply_token,
+            f"{teacher_name}，目前沒有尚未完成的老師任務。",
+        )
+        return
+
+    bubbles = []
+
+    for member in assignments[:10]:
+        assignment = member.get("teacher_assignments") or {}
+
+        member_id = str(member.get("id") or "")
+        title = assignment.get("title") or "未命名任務"
+        description = assignment.get("description")
+        deadline = assignment.get("deadline")
+        priority = assignment.get("priority", "normal")
+
+        if priority == "urgent":
+            priority_text = "非常重要"
+        elif priority == "high":
+            priority_text = "重要"
+        else:
+            priority_text = "一般"
+
+        if deadline:
+            deadline_text = str(deadline).replace("T", " ")[:16]
+        else:
+            deadline_text = "未設定"
+
+        body_contents = [
+            {
+                "type": "text",
+                "text": title,
+                "weight": "bold",
+                "size": "lg",
+                "wrap": True,
+            },
+            {
+                "type": "text",
+                "text": f"截止：{deadline_text}",
+                "size": "sm",
+                "color": "#777777",
+                "wrap": True,
+            },
+            {
+                "type": "text",
+                "text": f"重要程度：{priority_text}",
+                "size": "sm",
+                "color": "#777777",
+                "wrap": True,
+            },
+            {
+                "type": "text",
+                "text": "狀態：尚未回報",
+                "size": "sm",
+                "color": "#777777",
+                "wrap": True,
+            },
+        ]
+
+        if description:
+            body_contents.append(
+                {
+                    "type": "separator",
+                    "margin": "md",
+                }
+            )
+
+            body_contents.append(
+                {
+                    "type": "text",
+                    "text": description,
+                    "size": "sm",
+                    "color": "#555555",
+                    "wrap": True,
+                    "margin": "md",
+                }
+            )
+
+        bubbles.append(
+            {
+                "type": "bubble",
+                "size": "kilo",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "md",
+                    "contents": body_contents,
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "height": "sm",
+                            "action": {
+                                "type": "postback",
+                                "label": "✅ 完成任務",
+                                "data": (
+                                    "action=complete_teacher_assignment"
+                                    f"&member_id={member_id}"
+                                ),
+                                "displayText": f"完成任務：{title}",
+                            },
+                        }
+                    ],
+                },
+            }
+        )
+
+    url = "https://api.line.me/v2/bot/message/reply"
+
+    data = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "flex",
+                "altText": f"{teacher_name}的老師任務",
+                "contents": {
+                    "type": "carousel",
+                    "contents": bubbles,
+                },
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print(
+        "LINE teacher assignment cards:",
+        response.status_code,
+        response.text,
+    )
+    response.raise_for_status()
