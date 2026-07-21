@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from flask import Flask, abort, request
 
 from services.line_service import (
+    push_teacher_completion_card,
     reply_date_options,
     reply_delete_confirmation,
     reply_message,
@@ -18,6 +19,7 @@ from services.line_service import (
     reply_reminder_options,
     reply_task_cards,
     reply_task_confirmation,
+    reply_teacher_assignment_cards,
     reply_time_options,
 )
 from services.task_service import (
@@ -33,6 +35,7 @@ from services.teacher_service import (
     get_valid_teacher_binding_code,
 )
 from services.teacher_assignment_service import (
+    complete_teacher_assignment_by_line_user_id,
     get_teacher_assignments_by_line_user_id,
 )
 from services.workflow_service import (
@@ -47,6 +50,7 @@ load_dotenv()
 app = Flask(__name__)
 
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
+ADMIN_LINE_USER_ID = os.getenv("ADMIN_LINE_USER_ID")
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 
@@ -154,6 +158,8 @@ def build_task_summary(payload):
 
 def handle_text_message(text, reply_token, line_user_id):
     text = text.strip()
+    
+    bound_teacher = get_teacher_by_line_user_id(line_user_id)
 
     if text == "取消新增":
         workflow = get_workflow(line_user_id)
@@ -273,61 +279,22 @@ def handle_text_message(text, reply_token, line_user_id):
             or "老師"
         )
 
-        if not assignments:
-            reply_message(
-                reply_token,
-                f"{teacher_name}，目前沒有尚未完成的老師任務。",
-            )
-            return
-
-        priority_labels = {
-            "normal": "一般",
-            "high": "重要",
-            "urgent": "非常重要",
-        }
-
-        lines = [
-            f"{teacher_name}的老師任務",
-            "",
-        ]
-
-        for index, member in enumerate(assignments, start=1):
-            assignment = member.get("teacher_assignments") or {}
-
-            title = assignment.get("title") or "未命名任務"
-            description = assignment.get("description")
-            deadline = assignment.get("deadline")
-            priority = priority_labels.get(
-                assignment.get("priority"),
-                "一般",
-            )
-
-            if member.get("teacher_completed"):
-                status = "等待主管確認"
-            else:
-                status = "尚未回報"
-
-            lines.append(f"{index}. {title}")
-            lines.append(f"重要程度：{priority}")
-            lines.append(f"狀態：{status}")
-
-            if deadline:
-                lines.append(f"截止時間：{deadline}")
-            else:
-                lines.append("截止時間：未設定")
-
-            if description:
-                lines.append(f"任務內容：{description}")
-
-            lines.append("")
-
-        reply_message(
-            reply_token,
-            "\n".join(lines).strip(),
+        reply_teacher_assignment_cards(
+            reply_token=reply_token,
+            teacher_name=teacher_name,
+            assignments=assignments,
         )
         return
 
     if text == "新增待辦":
+        if bound_teacher:
+            reply_message(
+                reply_token,
+                "🔒 個人待辦僅限主管使用。\n\n"
+                "老師請輸入「任務」查看自己的指派工作。",
+            )
+            return
+
         start_workflow(
             line_user_id=line_user_id,
             flow_type="personal_task",
@@ -342,6 +309,19 @@ def handle_text_message(text, reply_token, line_user_id):
         return
 
     workflow = get_workflow(line_user_id)
+
+    if (
+        bound_teacher
+        and workflow
+        and workflow.get("flow_type") == "personal_task"
+    ):
+        clear_workflow(line_user_id)
+        reply_message(
+            reply_token,
+            "🔒 個人待辦僅限主管使用。\n\n"
+            "老師請輸入「任務」查看自己的指派工作。",
+        )
+        return
 
     if (
         workflow
@@ -406,11 +386,27 @@ def handle_text_message(text, reply_token, line_user_id):
             return
 
     if text in ["待辦", "查看待辦", "我的待辦"]:
+        if bound_teacher:
+            reply_message(
+                reply_token,
+                "🔒 個人待辦僅限主管查看。\n\n"
+                "老師請輸入「任務」查看自己的指派工作。",
+            )
+            return
+
         tasks = get_active_tasks()
         reply_task_cards(reply_token, tasks)
         return
 
     if text in ["今天", "明天", "本週"]:
+        if bound_teacher:
+            reply_message(
+                reply_token,
+                "🔒 個人待辦僅限主管查看。\n\n"
+                "老師請輸入「任務」查看自己的指派工作。",
+            )
+            return
+
         taipei_today = datetime.now(TAIPEI_TZ).date()
 
         if text == "今天":
@@ -444,11 +440,32 @@ def handle_text_message(text, reply_token, line_user_id):
             reply_task_cards(reply_token, tasks)
             return
     if text.lower() in ["hello", "hi"] or text in ["哈囉", "你好"]:
+        if bound_teacher:
+            teacher_name = (
+                bound_teacher.get("chinese_name")
+                or bound_teacher.get("english_name")
+                or "老師"
+            )
+            reply_message(
+                reply_token,
+                f"👋 您好，{teacher_name}！\n\n"
+                "輸入「任務」查看自己的指派工作。",
+            )
+            return
+
         reply_message(
             reply_token,
             "👋 哈囉 Lin！\n\n"
             "輸入「待辦」查看未完成事項，"
             "輸入「新增待辦」建立新任務。",
+        )
+        return
+
+    if bound_teacher:
+        reply_message(
+            reply_token,
+            "目前可以輸入：\n\n"
+            "📋 任務",
         )
         return
 
@@ -469,10 +486,40 @@ def handle_postback(event):
 
     action = values.get("action", [""])[0]
     task_id = values.get("task_id", [""])[0]
+    member_id = values.get("member_id", [""])[0]
     date_option = values.get("date_option", [""])[0]
     time_option = values.get("time_option", [""])[0]
     priority_option = values.get("priority", [""])[0]
     reminder_option = values.get("reminder", [""])[0]
+
+    personal_task_actions = {
+        "set_task_date",
+        "set_task_time_option",
+        "set_task_priority",
+        "toggle_task_reminder",
+        "finish_task_reminders",
+        "skip_task_reminders",
+        "confirm_create_task",
+        "cancel_create_task",
+        "request_delete_task",
+        "cancel_delete_task",
+        "confirm_delete_task",
+        "complete_task",
+    }
+
+    if action in personal_task_actions:
+        bound_teacher = get_teacher_by_line_user_id(line_user_id)
+
+        if bound_teacher:
+            clear_workflow(line_user_id)
+
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "🔒 個人待辦僅限主管操作。\n\n"
+                    "老師請輸入「任務」查看自己的指派工作。",
+                )
+            return
 
     # 日期選擇
     if action == "set_task_date":
@@ -871,6 +918,68 @@ def handle_postback(event):
                 f"🗑️ 已刪除："
                 f"{selected_task.get('title', '未命名任務')}",
             )
+
+        return
+    # 老師透過 LINE 回報完成自己的任務
+    if action == "complete_teacher_assignment" and member_id:
+        result = complete_teacher_assignment_by_line_user_id(
+            member_id=member_id,
+            line_user_id=line_user_id,
+        )
+
+        if not result:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "這筆任務不存在，或你沒有權限完成。",
+                )
+            return
+
+        title = result.get("title") or "未命名任務"
+
+        if result.get("already_completed"):
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    f"✅「{title}」已經回報完成，"
+                    "目前正在等待主管確認。",
+                )
+            return
+
+        teacher = get_teacher_by_line_user_id(line_user_id)
+
+        teacher_name = "老師"
+
+        if teacher:
+            teacher_name = (
+                teacher.get("chinese_name")
+                or teacher.get("english_name")
+                or "老師"
+            )
+
+        completed_at_text = datetime.now(
+            TAIPEI_TZ
+        ).strftime("%Y/%m/%d %H:%M")
+
+        # 老師端先回覆成功，避免主管推播失敗影響老師操作
+        if reply_token:
+            reply_message(
+                reply_token,
+                f"✅ 已回報完成：{title}\n\n"
+                "目前狀態為等待主管確認。",
+            )
+
+        # 即時推播主管確認卡片
+        try:
+            push_teacher_completion_card(
+                admin_line_user_id=ADMIN_LINE_USER_ID,
+                teacher_name=teacher_name,
+                member_id=member_id,
+                title=title,
+                completed_at_text=completed_at_text,
+            )
+        except Exception as error:
+            print("推播主管任務完成通知失敗：", error)
 
         return
 
