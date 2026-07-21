@@ -744,14 +744,16 @@ def reply_teacher_assignment_cards(
         response.text,
     )
     response.raise_for_status()
-    def push_teacher_completion_card(
+
+
+def push_teacher_completion_card(
     admin_line_user_id,
     teacher_name,
     member_id,
     title,
     completed_at_text,
 ):
-     """老師回報完成後，立即推播主管確認卡片。"""
+    """老師回報完成後，立即推播主管確認卡片。"""
 
     if not admin_line_user_id:
         raise ValueError("缺少主管 LINE User ID")
@@ -827,7 +829,8 @@ def reply_teacher_assignment_cards(
                                     "type": "postback",
                                     "label": "✅ 主管確認",
                                     "data": (
-                                        "action=admin_confirm_teacher_assignment"
+                                        "action="
+                                        "admin_confirm_teacher_assignment"
                                         f"&member_id={member_id}"
                                     ),
                                     "displayText": f"主管確認：{title}",
