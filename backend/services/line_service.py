@@ -744,3 +744,113 @@ def reply_teacher_assignment_cards(
         response.text,
     )
     response.raise_for_status()
+    def push_teacher_completion_card(
+    admin_line_user_id,
+    teacher_name,
+    member_id,
+    title,
+    completed_at_text,
+):
+     """老師回報完成後，立即推播主管確認卡片。"""
+
+    if not admin_line_user_id:
+        raise ValueError("缺少主管 LINE User ID")
+
+    url = "https://api.line.me/v2/bot/message/push"
+
+    data = {
+        "to": admin_line_user_id,
+        "messages": [
+            {
+                "type": "flex",
+                "altText": f"{teacher_name} 已回報完成任務",
+                "contents": {
+                    "type": "bubble",
+                    "size": "kilo",
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "spacing": "md",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "✅ 老師已回報完成",
+                                "weight": "bold",
+                                "size": "lg",
+                                "wrap": True,
+                            },
+                            {
+                                "type": "separator",
+                                "margin": "md",
+                            },
+                            {
+                                "type": "text",
+                                "text": f"老師：{teacher_name}",
+                                "size": "sm",
+                                "color": "#555555",
+                                "wrap": True,
+                                "margin": "md",
+                            },
+                            {
+                                "type": "text",
+                                "text": f"任務：{title}",
+                                "size": "sm",
+                                "color": "#555555",
+                                "wrap": True,
+                            },
+                            {
+                                "type": "text",
+                                "text": f"完成時間：{completed_at_text}",
+                                "size": "sm",
+                                "color": "#555555",
+                                "wrap": True,
+                            },
+                            {
+                                "type": "text",
+                                "text": "狀態：等待主管確認",
+                                "size": "sm",
+                                "color": "#B7791F",
+                                "weight": "bold",
+                                "wrap": True,
+                            },
+                        ],
+                    },
+                    "footer": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "button",
+                                "style": "primary",
+                                "height": "sm",
+                                "action": {
+                                    "type": "postback",
+                                    "label": "✅ 主管確認",
+                                    "data": (
+                                        "action=admin_confirm_teacher_assignment"
+                                        f"&member_id={member_id}"
+                                    ),
+                                    "displayText": f"主管確認：{title}",
+                                },
+                            }
+                        ],
+                    },
+                },
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print(
+        "LINE teacher completion push:",
+        admin_line_user_id,
+        response.status_code,
+        response.text,
+    )
+    response.raise_for_status()

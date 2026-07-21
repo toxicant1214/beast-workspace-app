@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from flask import Flask, abort, request
 
 from services.line_service import (
+    push_teacher_completion_card,
     reply_date_options,
     reply_delete_confirmation,
     reply_message,
@@ -49,6 +50,7 @@ load_dotenv()
 app = Flask(__name__)
 
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
+ADMIN_LINE_USER_ID = os.getenv("ADMIN_LINE_USER_ID")
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 
@@ -978,7 +980,7 @@ def handle_postback(event):
             )
 
         return
-    # 老師透過 LINE 回報完成自己的任務
+        # 老師透過 LINE 回報完成自己的任務
     if action == "complete_teacher_assignment" and member_id:
         result = complete_teacher_assignment_by_line_user_id(
             member_id=member_id,
@@ -992,6 +994,54 @@ def handle_postback(event):
                     "這筆任務不存在，或你沒有權限完成。",
                 )
             return
+
+        title = result.get("title") or "未命名任務"
+
+        if result.get("already_completed"):
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    f"✅「{title}」已經回報完成，"
+                    "目前正在等待主管確認。",
+                )
+            return
+
+        teacher = get_teacher_by_line_user_id(line_user_id)
+
+        teacher_name = "老師"
+
+        if teacher:
+            teacher_name = (
+                teacher.get("chinese_name")
+                or teacher.get("english_name")
+                or "老師"
+            )
+
+        completed_at_text = datetime.now(
+            TAIPEI_TZ
+        ).strftime("%Y/%m/%d %H:%M")
+
+        # 老師端先回覆成功，避免主管推播失敗影響老師操作
+        if reply_token:
+            reply_message(
+                reply_token,
+                f"✅ 已回報完成：{title}\n\n"
+                "目前狀態為等待主管確認。",
+            )
+
+        # 即時推播主管確認卡片
+        try:
+            push_teacher_completion_card(
+                admin_line_user_id=ADMIN_LINE_USER_ID,
+                teacher_name=teacher_name,
+                member_id=member_id,
+                title=title,
+                completed_at_text=completed_at_text,
+            )
+        except Exception as error:
+            print("推播主管任務完成通知失敗：", error)
+
+        return
 
         title = result.get("title") or "未命名任務"
 
