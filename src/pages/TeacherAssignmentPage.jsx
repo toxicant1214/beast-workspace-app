@@ -68,7 +68,7 @@ function TeacherAssignmentPage({ currentTeacher }) {
   const [saving, setSaving] = useState(false);
   const [processingId, setProcessingId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-
+  const [teacherKeyword, setTeacherKeyword] = useState("");
   const adminMode = isAdmin(currentTeacher);
   const canViewAll =
     adminMode ||
@@ -121,6 +121,27 @@ function TeacherAssignmentPage({ currentTeacher }) {
       .filter(Boolean);
   }, [assignments, canViewAll, currentTeacher?.id]);
 
+  const filteredAssignments = useMemo(() => {
+  const keyword = teacherKeyword.trim().toLowerCase();
+
+  if (!adminMode || !keyword) {
+    return visibleAssignments;
+  }
+
+  return visibleAssignments.filter((assignment) =>
+    (assignment.teacher_assignment_members ?? []).some((member) => {
+      const teacher = member.teachers;
+
+      return [
+        teacher?.chinese_name,
+        teacher?.english_name,
+        teacher?.position,
+      ]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(keyword));
+    })
+  );
+}, [visibleAssignments, teacherKeyword, adminMode]);
   const activeAssignmentCount = useMemo(
     () =>
       visibleAssignments.filter((assignment) => assignment.status === "active")
@@ -420,7 +441,16 @@ const overdueAssignmentCount = useMemo(
                 : "這裡只會顯示指派給你的任務。"}
             </p>
           </div>
-
+          {adminMode && (
+  <div className="teacher-assignment-list__search">
+    <input
+      type="search"
+      value={teacherKeyword}
+      onChange={(event) => setTeacherKeyword(event.target.value)}
+      placeholder="搜尋老師姓名、英文名或職稱"
+    />
+  </div>
+)}
           <button
             type="button"
             className="teacher-assignment-page__refresh-button"
@@ -454,7 +484,7 @@ const overdueAssignmentCount = useMemo(
           </div>
         ) : (
           <div className="teacher-assignment-grid">
-            {visibleAssignments.map((assignment) => {
+            {filteredAssignments.map((assignment) => {
   const members =
     assignment.teacher_assignment_members ?? [];
 
