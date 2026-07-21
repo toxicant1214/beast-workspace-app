@@ -781,23 +781,28 @@ const overdueAssignmentCount = useMemo(
                               </div>
 
                               <div className="teacher-assignment-member__history-item">
-                                <span>老師完成</span>
-                                <strong>
-                                  {formatHistoryTime(
-                                    member.teacher_completed_at
-                                  )}
-                                </strong>
+  <span>老師完成</span>
 
-                                {member.teacher_completed_at &&
-                                  assignment.deadline && (
-                                    <small>
-                                      {getCompletionTiming(
-                                        member.teacher_completed_at,
-                                        assignment.deadline
-                                      )}
-                                    </small>
-                                  )}
-                              </div>
+  <div className="teacher-assignment-member__history-result">
+    {member.teacher_completed_at &&
+      assignment.deadline && (
+        <small>
+          （
+          {getCompletionTiming(
+            member.teacher_completed_at,
+            assignment.deadline
+          )}
+          ）
+        </small>
+      )}
+
+    <strong>
+      {formatHistoryTime(
+        member.teacher_completed_at
+      )}
+    </strong>
+  </div>
+</div>
 
                               <div className="teacher-assignment-member__history-item">
                                 <span>主管確認</span>

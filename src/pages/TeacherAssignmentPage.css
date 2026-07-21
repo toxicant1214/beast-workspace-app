@@ -813,3 +813,22 @@
     transform: translateY(0);
   }
 }
+.teacher-assignment-member__history-result {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  text-align: right;
+}
+
+.teacher-assignment-member__history-result small {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.teacher-assignment-member__history-result strong {
+  min-width: 110px;
+  text-align: right;
+  white-space: nowrap;
+}
