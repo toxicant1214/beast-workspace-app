@@ -27,6 +27,11 @@ from services.task_service import (
     get_active_tasks,
     get_tasks_between,
 )
+from services.teacher_service import (
+    bind_teacher_line_user,
+    get_teacher_by_email,
+    get_teacher_by_line_user_id,
+)
 from services.workflow_service import (
     clear_workflow,
     get_workflow,
@@ -157,6 +162,36 @@ def handle_text_message(text, reply_token, line_user_id):
             reply_message(reply_token, "目前沒有正在新增的待辦。")
         return
 
+        if text == "綁定":
+           existing_teacher = get_teacher_by_line_user_id(line_user_id)
+
+        if existing_teacher:
+            teacher_name = (
+                existing_teacher.get("chinese_name")
+                or existing_teacher.get("english_name")
+                or "老師"
+            )
+
+            reply_message(
+                reply_token,
+                f"✅ 這個 LINE 已經綁定「{teacher_name}」。",
+            )
+            return
+
+        start_workflow(
+            line_user_id=line_user_id,
+            flow_type="teacher_bind",
+            first_step="email",
+        )
+
+        reply_message(
+            reply_token,
+            "🔗 開始綁定老師帳號\n\n"
+            "請輸入登入 BEAST Workspace 使用的 Email。\n"
+            "輸入「取消綁定」可取消。",
+        )
+        return
+  
     if text == "新增待辦":
         start_workflow(
             line_user_id=line_user_id,

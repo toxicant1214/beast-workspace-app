@@ -13,6 +13,7 @@ import {
   hasActionPermission,
   isAdmin,
 } from "../services/permissionService";
+import LineBindingCard from "../components/LineBindingCard";
 import "./TeacherAssignmentPage.css";
 
 const createEmptyForm = () => ({
@@ -483,7 +484,9 @@ const overdueAssignmentCount = useMemo(
             ＋ 新增任務
           </button>
         )}
-      </section>
+            </section>
+
+      {!adminMode && <LineBindingCard />}
 
       <section className="teacher-assignment-summary">
         <article className="teacher-assignment-summary__card">

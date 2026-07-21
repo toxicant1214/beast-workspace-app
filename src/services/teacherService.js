@@ -208,3 +208,18 @@ export async function sendTeacherPasswordReset(email) {
 
   return true;
 }
+export async function generateTeacherLineBindingCode() {
+  const { data, error } = await supabase.rpc(
+    "generate_teacher_line_binding_code"
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error("無法產生 LINE 綁定碼");
+  }
+
+  return data[0];
+}
