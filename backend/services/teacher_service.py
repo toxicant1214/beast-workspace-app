@@ -73,3 +73,92 @@ def bind_teacher_line_user(teacher_id, line_user_id):
         return None
 
     return rows[0]
+from datetime import datetime, timezone
+
+
+def get_valid_teacher_binding_code(binding_code):
+    """查詢尚未使用、尚未過期的老師 LINE 綁定碼。"""
+
+    normalized_code = binding_code.strip().upper()
+
+    response = (
+        supabase
+        .table("teacher_line_binding_codes")
+        .select(
+            """
+            id,
+            teacher_id,
+            binding_code,
+            expires_at,
+            used_at,
+            teachers (
+                id,
+                chinese_name,
+                english_name,
+                line_user_id
+            )
+            """
+        )
+        .eq("binding_code", normalized_code)
+        .is_("used_at", "null")
+        .limit(1)
+        .execute()
+    )
+
+    rows = response.data or []
+
+    if not rows:
+        return None
+
+    binding = rows[0]
+
+    expires_at = binding.get("expires_at")
+
+    if not expires_at:
+        return None
+
+    expires_at_datetime = datetime.fromisoformat(
+        expires_at.replace("Z", "+00:00")
+    )
+
+    if expires_at_datetime <= datetime.now(timezone.utc):
+        return None
+
+    return binding
+
+
+def complete_teacher_line_binding(binding_id, teacher_id, line_user_id):
+    """完成 LINE 綁定，並將綁定碼標記為已使用。"""
+
+    teacher_response = (
+        supabase
+        .table("teachers")
+        .update({
+            "line_user_id": line_user_id,
+        })
+        .eq("id", teacher_id)
+        .execute()
+    )
+
+    teacher_rows = teacher_response.data or []
+
+    if not teacher_rows:
+        raise RuntimeError("老師 LINE 綁定寫入失敗")
+
+    code_response = (
+        supabase
+        .table("teacher_line_binding_codes")
+        .update({
+            "used_at": datetime.now(timezone.utc).isoformat(),
+        })
+        .eq("id", binding_id)
+        .is_("used_at", "null")
+        .execute()
+    )
+
+    code_rows = code_response.data or []
+
+    if not code_rows:
+        raise RuntimeError("綁定碼狀態更新失敗")
+
+    return teacher_rows[0]

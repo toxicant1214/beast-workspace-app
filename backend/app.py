@@ -28,9 +28,9 @@ from services.task_service import (
     get_tasks_between,
 )
 from services.teacher_service import (
-    bind_teacher_line_user,
-    get_teacher_by_email,
+    complete_teacher_line_binding,
     get_teacher_by_line_user_id,
+    get_valid_teacher_binding_code,
 )
 from services.workflow_service import (
     clear_workflow,
@@ -162,8 +162,33 @@ def handle_text_message(text, reply_token, line_user_id):
             reply_message(reply_token, "目前沒有正在新增的待辦。")
         return
 
-        if text == "綁定":
+    if text == "綁定":
            existing_teacher = get_teacher_by_line_user_id(line_user_id)
+
+           if existing_teacher:
+            teacher_name = (
+                existing_teacher.get("chinese_name")
+                or existing_teacher.get("english_name")
+                or "老師"
+            )
+
+            reply_message(
+                reply_token,
+                f"✅ 這個 LINE 已經綁定「{teacher_name}」。",
+            )
+            return
+
+           reply_message(
+            reply_token,
+            "🔗 LINE 帳號綁定\n\n"
+            "請先登入 BEAST Workspace，產生六碼 LINE 綁定碼。\n\n"
+            "取得後請傳送：\n"
+            "綁定 ABC123",
+        )
+           return
+
+    if text.startswith("綁定 "):
+        existing_teacher = get_teacher_by_line_user_id(line_user_id)
 
         if existing_teacher:
             teacher_name = (
@@ -178,17 +203,48 @@ def handle_text_message(text, reply_token, line_user_id):
             )
             return
 
-        start_workflow(
+        binding_code = text.replace("綁定 ", "", 1).strip().upper()
+
+        if len(binding_code) != 6:
+            reply_message(
+                reply_token,
+                "⚠️ 綁定碼格式不正確。\n\n"
+                "請傳送「綁定」加上一個空格及六碼綁定碼，例如：\n"
+                "綁定 ABC123",
+            )
+            return
+
+        binding = get_valid_teacher_binding_code(binding_code)
+
+        if not binding:
+            reply_message(
+                reply_token,
+                "❌ 找不到有效的綁定碼。\n\n"
+                "綁定碼可能已過期、已使用，或輸入錯誤。\n"
+                "請回到 BEAST Workspace 重新產生。",
+            )
+            return
+
+        teacher = complete_teacher_line_binding(
+            binding_id=binding["id"],
+            teacher_id=binding["teacher_id"],
             line_user_id=line_user_id,
-            flow_type="teacher_bind",
-            first_step="email",
+        )
+
+        teacher_name = (
+            teacher.get("chinese_name")
+            or teacher.get("english_name")
+            or "老師"
         )
 
         reply_message(
             reply_token,
-            "🔗 開始綁定老師帳號\n\n"
-            "請輸入登入 BEAST Workspace 使用的 Email。\n"
-            "輸入「取消綁定」可取消。",
+            f"🎉 LINE 綁定成功！\n\n"
+            f"您好，{teacher_name}。\n"
+            "之後您將透過 LINE 收到：\n"
+            "✅ 老師任務通知\n"
+            "✅ 截止時間提醒\n"
+            "✅ 每日工作摘要",
         )
         return
   
