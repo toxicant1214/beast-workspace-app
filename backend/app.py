@@ -34,6 +34,7 @@ from services.teacher_service import (
     get_valid_teacher_binding_code,
 )
 from services.teacher_assignment_service import (
+    complete_teacher_assignment_by_line_user_id,
     get_teacher_assignments_by_line_user_id,
 )
 from services.workflow_service import (
@@ -543,6 +544,7 @@ def handle_postback(event):
 
     action = values.get("action", [""])[0]
     task_id = values.get("task_id", [""])[0]
+    member_id = values.get("member_id", [""])[0]
     date_option = values.get("date_option", [""])[0]
     time_option = values.get("time_option", [""])[0]
     priority_option = values.get("priority", [""])[0]
@@ -976,7 +978,41 @@ def handle_postback(event):
             )
 
         return
+    # 老師透過 LINE 回報完成自己的任務
+    if action == "complete_teacher_assignment" and member_id:
+        result = complete_teacher_assignment_by_line_user_id(
+            member_id=member_id,
+            line_user_id=line_user_id,
+        )
 
+        if not result:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "這筆任務不存在，或你沒有權限完成。",
+                )
+            return
+
+        title = result.get("title") or "未命名任務"
+
+        if result.get("already_completed"):
+            message = (
+                f"✅「{title}」已經回報完成，"
+                "目前正在等待主管確認。"
+            )
+        else:
+            message = (
+                f"✅ 已回報完成：{title}\n\n"
+                "目前狀態為等待主管確認。"
+            )
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                message,
+            )
+
+        return
     # 完成既有待辦
     if action == "complete_task" and task_id:
         tasks = get_active_tasks()
