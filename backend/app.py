@@ -32,6 +32,9 @@ from services.teacher_service import (
     get_teacher_by_line_user_id,
     get_valid_teacher_binding_code,
 )
+from services.teacher_assignment_service import (
+    get_teacher_assignments_by_line_user_id,
+)
 from services.workflow_service import (
     clear_workflow,
     get_workflow,
@@ -247,7 +250,83 @@ def handle_text_message(text, reply_token, line_user_id):
             "✅ 每日工作摘要",
         )
         return
-  
+    if text == "任務":
+        result = get_teacher_assignments_by_line_user_id(
+            line_user_id
+        )
+
+        teacher = result.get("teacher")
+        assignments = result.get("assignments", [])
+
+        if not teacher:
+            reply_message(
+                reply_token,
+                "目前尚未綁定老師身分。\n\n"
+                "請先輸入：\n"
+                "綁定 綁定碼",
+            )
+            return
+
+        teacher_name = (
+            teacher.get("chinese_name")
+            or teacher.get("english_name")
+            or "老師"
+        )
+
+        if not assignments:
+            reply_message(
+                reply_token,
+                f"{teacher_name}，目前沒有尚未完成的老師任務。",
+            )
+            return
+
+        priority_labels = {
+            "normal": "一般",
+            "high": "重要",
+            "urgent": "非常重要",
+        }
+
+        lines = [
+            f"{teacher_name}的老師任務",
+            "",
+        ]
+
+        for index, member in enumerate(assignments, start=1):
+            assignment = member.get("teacher_assignments") or {}
+
+            title = assignment.get("title") or "未命名任務"
+            description = assignment.get("description")
+            deadline = assignment.get("deadline")
+            priority = priority_labels.get(
+                assignment.get("priority"),
+                "一般",
+            )
+
+            if member.get("teacher_completed"):
+                status = "等待主管確認"
+            else:
+                status = "尚未回報"
+
+            lines.append(f"{index}. {title}")
+            lines.append(f"重要程度：{priority}")
+            lines.append(f"狀態：{status}")
+
+            if deadline:
+                lines.append(f"截止時間：{deadline}")
+            else:
+                lines.append("截止時間：未設定")
+
+            if description:
+                lines.append(f"任務內容：{description}")
+
+            lines.append("")
+
+        reply_message(
+            reply_token,
+            "\n".join(lines).strip(),
+        )
+        return
+
     if text == "新增待辦":
         start_workflow(
             line_user_id=line_user_id,
