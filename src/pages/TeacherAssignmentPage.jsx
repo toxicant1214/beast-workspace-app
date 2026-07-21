@@ -38,6 +38,19 @@ function formatDeadline(value) {
   }).format(new Date(value));
 }
 
+function isAssignmentOverdue(assignment) {
+  if (!assignment.deadline) {
+    return false;
+  }
+
+  const members = assignment.teacher_assignment_members ?? [];
+  const allConfirmed =
+    members.length > 0 &&
+    members.every((member) => member.admin_confirmed);
+
+  return !allConfirmed && new Date(assignment.deadline) < new Date();
+}
+
 function getPriorityLabel(priority) {
   if (priority === "urgent") return "非常重要";
   if (priority === "high") return "重要";
@@ -430,12 +443,14 @@ function TeacherAssignmentPage({ currentTeacher }) {
         ) : (
           <div className="teacher-assignment-grid">
             {visibleAssignments.map((assignment) => {
-              const members =
-                assignment.teacher_assignment_members ?? [];
+  const members =
+    assignment.teacher_assignment_members ?? [];
 
-              const confirmedCount = members.filter(
-                (member) => member.admin_confirmed
-              ).length;
+  const overdue = isAssignmentOverdue(assignment);
+
+  const confirmedCount = members.filter(
+    (member) => member.admin_confirmed
+  ).length;
 
               return (
                 <article
@@ -443,15 +458,23 @@ function TeacherAssignmentPage({ currentTeacher }) {
                   key={assignment.id}
                 >
                   <div className="teacher-assignment-card__header">
-                    <div>
-                      <span
-                        className={`teacher-assignment-card__priority is-${assignment.priority}`}
-                      >
-                        {getPriorityLabel(assignment.priority)}
-                      </span>
+  <div>
+    <div className="teacher-assignment-card__badges">
+      <span
+        className={`teacher-assignment-card__priority is-${assignment.priority}`}
+      >
+        {getPriorityLabel(assignment.priority)}
+      </span>
 
-                      <h2>{assignment.title}</h2>
-                    </div>
+      {overdue && (
+        <span className="teacher-assignment-card__overdue">
+          已逾期
+        </span>
+      )}
+    </div>
+
+    <h2>{assignment.title}</h2>
+  </div>
 
                     {canDelete && (
                       <button

@@ -198,6 +198,23 @@
   line-height: 1.4;
 }
 
+.teacher-assignment-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.teacher-assignment-card__overdue {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #f8d8d3;
+  color: #a2473f;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .teacher-assignment-card__priority {
   display: inline-flex;
   padding: 5px 9px;
