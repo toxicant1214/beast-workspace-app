@@ -156,7 +156,13 @@ function TeacherAssignmentPage({ currentTeacher }) {
       }, 0),
     [visibleAssignments]
   );
-
+const overdueAssignmentCount = useMemo(
+  () =>
+    visibleAssignments.filter((assignment) =>
+      isAssignmentOverdue(assignment)
+    ).length,
+  [visibleAssignments]
+);
   useEffect(() => {
     loadPageData();
   }, []);
@@ -384,6 +390,12 @@ function TeacherAssignmentPage({ currentTeacher }) {
           <strong>{activeAssignmentCount}</strong>
           <small>目前建立的老師任務</small>
         </article>
+
+        <article className="teacher-assignment-summary__card">
+  <span>逾期任務</span>
+  <strong>{overdueAssignmentCount}</strong>
+  <small>已超過截止時間</small>
+</article>
 
         <article className="teacher-assignment-summary__card">
           <span>等待主管確認</span>
