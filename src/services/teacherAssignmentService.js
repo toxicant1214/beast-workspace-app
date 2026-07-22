@@ -119,24 +119,30 @@ export async function markTeacherAssignmentCompleted(memberId) {
     throw new Error("缺少任務成員 ID");
   }
 
-  const { data, error } = await supabase
-    .from(MEMBER_TABLE)
-    .update({
-      teacher_completed: true,
-      teacher_completed_at: new Date().toISOString(),
-      admin_confirmed: false,
-      admin_confirmed_at: null,
-    })
-    .eq("id", memberId)
-    .select()
-    .single();
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
-  if (error) {
-    console.error("老師回報完成失敗：", error);
-    throw error;
+  if (!apiBaseUrl) {
+    throw new Error("缺少 VITE_API_BASE_URL");
   }
 
-  return data;
+  const response = await fetch(
+    `${apiBaseUrl}/api/teacher-assignments/${memberId}/complete`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok || !result.success) {
+    console.error("老師回報完成失敗：", result);
+    throw new Error(result.message || "老師回報完成失敗");
+  }
+
+  return result.member;
 }
 
 /**
