@@ -193,8 +193,11 @@ function TeacherAssignmentPage({ currentTeacher }) {
       members.every((member) => member.admin_confirmed);
 
     const isWaitingConfirm =
-      members.some((member) => member.is_done) &&
-      members.some((member) => !member.admin_confirmed);
+  members.some(
+    (member) =>
+      member.teacher_completed &&
+      !member.admin_confirmed
+  );
 
     const isInProgress =
       !isOverdue &&
@@ -773,13 +776,6 @@ const overdueAssignmentCount = useMemo(
                                   {formatHistoryTime(
                                     assignment.created_at
                                   )}
-                                </strong>
-                              </div>
-
-                              <div className="teacher-assignment-member__history-item">
-                                <span>指派老師</span>
-                                <strong>
-                                  {formatHistoryTime(member.created_at)}
                                 </strong>
                               </div>
 
