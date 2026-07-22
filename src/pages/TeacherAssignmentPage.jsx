@@ -16,12 +16,53 @@ import {
 import LineBindingCard from "../components/LineBindingCard";
 import "./TeacherAssignmentPage.css";
 
+const REMINDER_OPTIONS = [
+  {
+    value: 10080,
+    label: "一週前",
+  },
+  {
+    value: 2880,
+    label: "兩天前",
+  },
+  {
+    value: 1440,
+    label: "一天前",
+  },
+  {
+    value: 60,
+    label: "截止前 1 小時",
+  },
+  {
+    value: 30,
+    label: "截止前 30 分鐘",
+  },
+];
+
+const CUSTOM_REMINDER_UNITS = {
+  days: {
+    label: "天前",
+    multiplier: 1440,
+  },
+  hours: {
+    label: "小時前",
+    multiplier: 60,
+  },
+  minutes: {
+    label: "分鐘前",
+    multiplier: 1,
+  },
+};
+
 const createEmptyForm = () => ({
   title: "",
   description: "",
   deadline: "",
   priority: "normal",
   teacherIds: [],
+  reminderOffsets: [],
+  customReminderValue: "",
+  customReminderUnit: "days",
 });
 
 function formatDeadline(value) {
@@ -137,6 +178,26 @@ function getPriorityLabel(priority) {
   if (priority === "urgent") return "非常重要";
   if (priority === "high") return "重要";
   return "一般";
+}
+
+function formatReminderOffset(offset) {
+  const fixedOption = REMINDER_OPTIONS.find(
+    (option) => option.value === offset
+  );
+
+  if (fixedOption) {
+    return fixedOption.label;
+  }
+
+  if (offset % 1440 === 0) {
+    return `${offset / 1440} 天前`;
+  }
+
+  if (offset % 60 === 0) {
+    return `${offset / 60} 小時前`;
+  }
+
+  return `${offset} 分鐘前`;
 }
 
 function TeacherAssignmentPage({ currentTeacher }) {
@@ -362,7 +423,7 @@ const overdueAssignmentCount = useMemo(
       : [...previous, memberId]
   );
 }
-  function toggleTeacher(teacherId) {
+    function toggleTeacher(teacherId) {
     setFormData((previous) => {
       const alreadySelected = previous.teacherIds.includes(teacherId);
 
@@ -373,6 +434,65 @@ const overdueAssignmentCount = useMemo(
           : [...previous.teacherIds, teacherId],
       };
     });
+  }
+
+  function toggleReminderOffset(offset) {
+    setFormData((previous) => {
+      const alreadySelected =
+        previous.reminderOffsets.includes(offset);
+
+      return {
+        ...previous,
+        reminderOffsets: alreadySelected
+          ? previous.reminderOffsets.filter(
+              (currentOffset) => currentOffset !== offset
+            )
+          : [...previous.reminderOffsets, offset],
+      };
+    });
+  }
+
+  function addCustomReminder() {
+    const numberValue = Number(formData.customReminderValue);
+    const selectedUnit =
+      CUSTOM_REMINDER_UNITS[formData.customReminderUnit];
+
+    if (
+      !Number.isFinite(numberValue) ||
+      numberValue <= 0 ||
+      !selectedUnit
+    ) {
+      setErrorMessage("請輸入正確的自訂提醒時間。");
+      return;
+    }
+
+    const offset = Math.round(
+      numberValue * selectedUnit.multiplier
+    );
+
+    if (offset <= 0) {
+      setErrorMessage("自訂提醒時間必須大於 0。");
+      return;
+    }
+
+    setFormData((previous) => ({
+      ...previous,
+      reminderOffsets: previous.reminderOffsets.includes(offset)
+        ? previous.reminderOffsets
+        : [...previous.reminderOffsets, offset],
+      customReminderValue: "",
+    }));
+
+    setErrorMessage("");
+  }
+
+  function removeReminderOffset(offset) {
+    setFormData((previous) => ({
+      ...previous,
+      reminderOffsets: previous.reminderOffsets.filter(
+        (currentOffset) => currentOffset !== offset
+      ),
+    }));
   }
 
   async function handleSubmit(event) {
@@ -948,7 +1068,112 @@ const overdueAssignmentCount = useMemo(
                   </select>
                 </label>
               </div>
+                            <div className="teacher-assignment-form__reminders">
+                <div className="teacher-assignment-form__section-heading">
+                  <span>截止前提醒</span>
+                  <small>可一次複選，也可以不設定</small>
+                </div>
 
+                {!formData.deadline && (
+                  <div className="teacher-assignment-form__reminder-notice">
+                    請先設定截止日期與時間，提醒才會生效。
+                  </div>
+                )}
+
+                <div className="teacher-assignment-form__reminder-grid">
+                  {REMINDER_OPTIONS.map((option) => {
+                    const selected =
+                      formData.reminderOffsets.includes(option.value);
+
+                    return (
+                      <label
+                        className={
+                          selected
+                            ? "teacher-assignment-form__reminder-option is-selected"
+                            : "teacher-assignment-form__reminder-option"
+                        }
+                        key={option.value}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() =>
+                            toggleReminderOffset(option.value)
+                          }
+                        />
+
+                        <span>{option.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="teacher-assignment-form__custom-reminder">
+                  <span>自訂提醒</span>
+
+                  <div className="teacher-assignment-form__custom-reminder-row">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      value={formData.customReminderValue}
+                      onChange={(event) =>
+                        setFormData((previous) => ({
+                          ...previous,
+                          customReminderValue: event.target.value,
+                        }))
+                      }
+                      placeholder="輸入數字"
+                    />
+
+                    <select
+                      value={formData.customReminderUnit}
+                      onChange={(event) =>
+                        setFormData((previous) => ({
+                          ...previous,
+                          customReminderUnit: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="days">天前</option>
+                      <option value="hours">小時前</option>
+                      <option value="minutes">分鐘前</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={addCustomReminder}
+                    >
+                      ＋ 加入
+                    </button>
+                  </div>
+                </div>
+
+                {formData.reminderOffsets.length > 0 && (
+                  <div className="teacher-assignment-form__selected-reminders">
+                    <span>已選擇提醒</span>
+
+                    <div>
+                      {[...formData.reminderOffsets]
+                        .sort((a, b) => b - a)
+                        .map((offset) => (
+                          <button
+                            type="button"
+                            key={offset}
+                            onClick={() =>
+                              removeReminderOffset(offset)
+                            }
+                            title="點擊移除"
+                          >
+                            {formatReminderOffset(offset)}
+                            <b>×</b>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="teacher-assignment-form__teachers">
                 <span>
                   指派老師 <b>至少選擇一位</b>
