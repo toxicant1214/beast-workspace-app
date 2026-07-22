@@ -37,6 +37,7 @@ from services.teacher_service import (
 from services.teacher_assignment_service import (
     complete_teacher_assignment_by_line_user_id,
     complete_teacher_assignment_by_member_id,
+    confirm_teacher_assignment_by_admin,
     get_teacher_assignments_by_line_user_id,
 )
 from services.workflow_service import (
@@ -983,7 +984,57 @@ def handle_postback(event):
             print("推播主管任務完成通知失敗：", error)
 
         return
+        # 主管透過 LINE 確認老師完成任務
+    if action == "admin_confirm_teacher_assignment" and member_id:
+        if not ADMIN_LINE_USER_ID or line_user_id != ADMIN_LINE_USER_ID:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "你沒有主管確認任務的權限。",
+                )
+            return
 
+        result = confirm_teacher_assignment_by_admin(member_id)
+
+        if not result:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "這筆任務不存在、已失效，或目前無法確認。",
+                )
+            return
+
+        if result.get("reason") == "teacher_not_completed":
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "老師尚未回報完成，目前無法進行主管確認。",
+                )
+            return
+
+        title = result.get("title") or "未命名任務"
+        teacher_name = result.get("teacher_name") or "老師"
+
+        if result.get("already_confirmed"):
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    f"✅ 已確認過\n\n"
+                    f"老師：{teacher_name}\n"
+                    f"任務：{title}",
+                )
+            return
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                f"✅ 主管確認完成\n\n"
+                f"老師：{teacher_name}\n"
+                f"任務：{title}\n\n"
+                "Workspace 已同步更新為正式完成。",
+            )
+
+        return
     # 完成既有待辦
     if action == "complete_task" and task_id:
         tasks = get_active_tasks()
