@@ -88,7 +88,7 @@ export async function createTeacherAssignment(assignmentData) {
     status: "active",
     reminder_offsets: reminderOffsets,
   };
-  console.log("送往 Supabase 的 assignmentPayload：", assignmentPayload);
+  alert(JSON.stringify(assignmentPayload.reminder_offsets));
 
   const { data: assignment, error: assignmentError } = await supabase
     .from(ASSIGNMENT_TABLE)
