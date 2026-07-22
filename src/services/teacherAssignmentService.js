@@ -88,13 +88,13 @@ export async function createTeacherAssignment(assignmentData) {
     status: "active",
     reminder_offsets: reminderOffsets,
   };
-  alert(JSON.stringify(assignmentPayload.reminder_offsets));
 
   const { data: assignment, error: assignmentError } = await supabase
-    .from(ASSIGNMENT_TABLE)
-    .insert(assignmentPayload)
-    .select()
-    .single();
+  .from(ASSIGNMENT_TABLE)
+  .insert([assignmentPayload])
+  .select("*")
+  .single();
+  alert(JSON.stringify(assignment));
 console.log("Supabase 新增後回傳：", assignment);
   if (assignmentError) {
     console.error("新增老師任務失敗：", assignmentError);
