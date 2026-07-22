@@ -3,6 +3,99 @@ from datetime import datetime, timezone
 from services.teacher_service import supabase
 
 
+def create_teacher_assignment(
+    title,
+    description,
+    deadline,
+    priority,
+    reminder_offsets,
+    teacher_ids,
+):
+    """建立老師任務，並新增被指派老師的成員紀錄。"""
+
+    if not title or not title.strip():
+        raise ValueError("任務名稱不可空白")
+
+    if not teacher_ids:
+        raise ValueError("至少需要選擇一位老師")
+
+    assignment_payload = {
+        "title": title.strip(),
+        "description": (
+            description.strip()
+            if description and description.strip()
+            else None
+        ),
+        "deadline": deadline,
+        "priority": priority or "normal",
+        "status": "active",
+        "reminder_offsets": reminder_offsets or [],
+    }
+
+    assignment_response = (
+        supabase
+        .table("teacher_assignments")
+        .insert([assignment_payload])
+        .execute()
+    )
+
+    assignment_rows = assignment_response.data or []
+
+    if not assignment_rows:
+        raise RuntimeError("老師任務建立失敗")
+
+    assignment = assignment_rows[0]
+    assignment_id = assignment["id"]
+
+    unique_teacher_ids = list(dict.fromkeys(teacher_ids))
+
+    member_payloads = [
+        {
+            "assignment_id": assignment_id,
+            "teacher_id": teacher_id,
+            "teacher_completed": False,
+            "teacher_completed_at": None,
+            "admin_confirmed": False,
+            "admin_confirmed_at": None,
+        }
+        for teacher_id in unique_teacher_ids
+    ]
+
+    try:
+        members_response = (
+            supabase
+            .table("teacher_assignment_members")
+            .insert(member_payloads)
+            .execute()
+        )
+    except Exception:
+        (
+            supabase
+            .table("teacher_assignments")
+            .delete()
+            .eq("id", assignment_id)
+            .execute()
+        )
+        raise
+
+    members = members_response.data or []
+
+    if not members:
+        (
+            supabase
+            .table("teacher_assignments")
+            .delete()
+            .eq("id", assignment_id)
+            .execute()
+        )
+        raise RuntimeError("老師指派成員建立失敗")
+
+    return {
+        "assignment": assignment,
+        "members": members,
+    }
+
+
 def get_teacher_assignments_by_teacher_id(teacher_id):
     """取得指定老師尚未經主管確認的有效任務。"""
 

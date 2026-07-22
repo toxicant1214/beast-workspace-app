@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from supabase import create_client
@@ -54,6 +55,28 @@ def get_teacher_by_line_user_id(line_user_id):
     return rows[0]
 
 
+def get_active_teachers():
+    """取得可被指派任務的老師清單。"""
+
+    response = (
+        supabase
+        .table("teachers")
+        .select(
+            """
+            id,
+            chinese_name,
+            english_name,
+            position,
+            line_user_id
+            """
+        )
+        .order("chinese_name")
+        .execute()
+    )
+
+    return response.data or []
+
+
 def bind_teacher_line_user(teacher_id, line_user_id):
     """把老師資料與 LINE User ID 綁定。"""
 
@@ -73,7 +96,6 @@ def bind_teacher_line_user(teacher_id, line_user_id):
         return None
 
     return rows[0]
-from datetime import datetime, timezone
 
 
 def get_valid_teacher_binding_code(binding_code):
@@ -127,7 +149,11 @@ def get_valid_teacher_binding_code(binding_code):
     return binding
 
 
-def complete_teacher_line_binding(binding_id, teacher_id, line_user_id):
+def complete_teacher_line_binding(
+    binding_id,
+    teacher_id,
+    line_user_id,
+):
     """完成 LINE 綁定，並將綁定碼標記為已使用。"""
 
     teacher_response = (

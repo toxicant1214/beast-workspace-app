@@ -101,6 +101,60 @@ def reply_message(reply_token, text):
     response.raise_for_status()
 
 
+def reply_task_type_options(reply_token):
+    """讓主管選擇要新增個人待辦或老師任務。"""
+
+    url = "https://api.line.me/v2/bot/message/reply"
+
+    data = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "template",
+                "altText": "請選擇待辦類型",
+                "template": {
+                    "type": "buttons",
+                    "text": "請選擇要新增的待辦類型",
+                    "actions": [
+                        {
+                            "type": "postback",
+                            "label": "📝 個人待辦",
+                            "data": (
+                                "action=select_task_type"
+                                "&task_type=personal_task"
+                            ),
+                            "displayText": "新增個人待辦",
+                        },
+                        {
+                            "type": "postback",
+                            "label": "👩‍🏫 老師任務",
+                            "data": (
+                                "action=select_task_type"
+                                "&task_type=teacher_assignment"
+                            ),
+                            "displayText": "新增老師任務",
+                        },
+                    ],
+                },
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print(
+        "LINE task type options:",
+        response.status_code,
+        response.text,
+    )
+    response.raise_for_status()
+
+
 def reply_date_options(reply_token):
     """回覆截止日期快捷選項。"""
 
