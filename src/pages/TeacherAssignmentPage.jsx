@@ -92,7 +92,47 @@ function isAssignmentOverdue(assignment) {
 
   return !allConfirmed && new Date(assignment.deadline) < new Date();
 }
+function getMemberStatus(member, deadline) {
+  const completionTiming = getCompletionTiming(
+    member.teacher_completed_at,
+    deadline
+  );
 
+  const completedLate = completionTiming.startsWith("逾期");
+
+  if (member.admin_confirmed) {
+    return {
+      className: completedLate
+        ? "is-confirmed is-completed-late"
+        : "is-confirmed",
+      text: completedLate ? "已正式完成・逾期完成" : "已正式完成・準時完成",
+    };
+  }
+
+  if (member.teacher_completed) {
+    return {
+      className: completedLate ? "is-completed-late" : "is-waiting",
+      text: completedLate
+        ? "逾期完成・等待主管確認"
+        : "準時完成・等待主管確認",
+    };
+  }
+
+  const isPastDeadline =
+    deadline && new Date(deadline).getTime() < new Date().getTime();
+
+  if (isPastDeadline) {
+    return {
+      className: "is-overdue",
+      text: "已逾期・尚未回報",
+    };
+  }
+
+  return {
+    className: "is-pending",
+    text: "尚未回報",
+  };
+}
 function getPriorityLabel(priority) {
   if (priority === "urgent") return "非常重要";
   if (priority === "high") return "重要";
@@ -677,7 +717,10 @@ const overdueAssignmentCount = useMemo(
                         adminMode || (canCompleteOwn && isOwnAssignment);
                       const isHistoryExpanded =
                         expandedMemberIds.includes(member.id);
-
+                      const memberStatus = getMemberStatus(
+  member,
+  assignment.deadline
+);
                       return (
                         <div
   className="teacher-assignment-member"
@@ -702,20 +745,10 @@ const overdueAssignmentCount = useMemo(
                           </div>
 
                           <div className="teacher-assignment-member__status">
-                            {member.admin_confirmed ? (
-                              <span className="is-confirmed">
-                                已正式完成
-                              </span>
-                            ) : member.teacher_completed ? (
-                              <span className="is-waiting">
-                                等待主管確認
-                              </span>
-                            ) : (
-                              <span className="is-pending">
-                                尚未回報
-                              </span>
-                            )}
-                          </div>
+  <span className={memberStatus.className}>
+    {memberStatus.text}
+  </span>
+</div>
 
                           <div
   className="teacher-assignment-member__actions"
