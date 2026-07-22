@@ -193,18 +193,56 @@ def handle_text_message(text, reply_token, line_user_id):
         return
 
     if (
-        workflow
-        and workflow.get("flow_type") == "teacher_assignment"
-    ):
-        if workflow.get("current_step") == "title":
+    workflow
+    and workflow.get("flow_type") == "teacher_assignment"
+):
+     current_step = workflow.get("current_step")
+    payload = workflow.get("payload") or {}
+
+    if current_step == "title":
+        if not text:
             reply_message(
                 reply_token,
-                "👩‍🏫 老師任務流程已啟動。\n\n"
-                "目前先完成任務類型選擇測試；"
-                "下一步會接上任務名稱與後續欄位。\n"
-                "輸入「取消新增」可結束本次流程。",
+                "任務名稱不能空白，請重新輸入。",
             )
             return
+
+        payload["title"] = text
+
+        update_workflow(
+            line_user_id=line_user_id,
+            current_step="description",
+            payload=payload,
+        )
+
+        reply_message(
+            reply_token,
+            "📝 請輸入任務說明。\n\n"
+            "不需要說明的話，請輸入「略過」。\n"
+            "輸入「取消新增」可隨時取消。",
+        )
+        return
+
+    if current_step == "description":
+        if text == "略過":
+            payload["description"] = None
+        else:
+            payload["description"] = text
+
+        update_workflow(
+            line_user_id=line_user_id,
+            current_step="deadline_date",
+            payload=payload,
+        )
+
+        reply_message(
+            reply_token,
+            "✅ 已記錄老師任務內容。\n\n"
+            f"任務名稱：{payload.get('title')}\n"
+            f"任務說明：{payload.get('description') or '無'}\n\n"
+            "下一步將設定截止日期。",
+        )
+        return
 
     if (
         workflow
