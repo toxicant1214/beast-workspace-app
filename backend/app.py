@@ -36,6 +36,7 @@ from services.teacher_service import (
 )
 from services.teacher_assignment_service import (
     complete_teacher_assignment_by_line_user_id,
+    complete_teacher_assignment_by_member_id,
     get_teacher_assignments_by_line_user_id,
 )
 from services.workflow_service import (
@@ -1020,7 +1021,56 @@ def handle_postback(event):
             reply_token,
             "無法辨識這個操作。",
         )
+@app.route(
+    "/api/teacher-assignments/<member_id>/complete",
+    methods=["POST"],
+)
+def complete_teacher_assignment_from_web(member_id):
+    result = complete_teacher_assignment_by_member_id(member_id)
 
+    if not result:
+        return {
+            "success": False,
+            "message": "任務不存在、已失效或無法完成。",
+        }, 404
+
+    if result.get("already_completed"):
+        return {
+            "success": True,
+            "already_completed": True,
+            "member": result.get("member"),
+        }
+
+    teacher = result.get("teacher") or {}
+
+    teacher_name = (
+        teacher.get("chinese_name")
+        or teacher.get("english_name")
+        or "老師"
+    )
+
+    title = result.get("title") or "未命名任務"
+
+    completed_at_text = datetime.now(
+        TAIPEI_TZ
+    ).strftime("%Y/%m/%d %H:%M")
+
+    try:
+        push_teacher_completion_card(
+            admin_line_user_id=ADMIN_LINE_USER_ID,
+            teacher_name=teacher_name,
+            member_id=member_id,
+            title=title,
+            completed_at_text=completed_at_text,
+        )
+    except Exception as error:
+        print("網頁完成任務推播主管失敗：", error)
+
+    return {
+        "success": True,
+        "already_completed": False,
+        "member": result.get("member"),
+    }
 
 @app.route("/", methods=["GET"])
 def home():

@@ -271,3 +271,85 @@ def complete_teacher_assignment_by_line_user_id(
         "member": updated_rows[0],
         "title": assignment.get("title") or "未命名任務",
     }
+def complete_teacher_assignment_by_member_id(member_id):
+    """老師從 Workspace 網頁回報完成任務。"""
+
+    member_response = (
+        supabase
+        .table("teacher_assignment_members")
+        .select(
+            """
+            id,
+            teacher_id,
+            teacher_completed,
+            teacher_completed_at,
+            admin_confirmed,
+            teachers (
+                id,
+                chinese_name,
+                english_name
+            ),
+            teacher_assignments (
+                id,
+                title,
+                status
+            )
+            """
+        )
+        .eq("id", member_id)
+        .limit(1)
+        .execute()
+    )
+
+    members = member_response.data or []
+
+    if not members:
+        return None
+
+    member = members[0]
+    assignment = member.get("teacher_assignments") or {}
+    teacher = member.get("teachers") or {}
+
+    if member.get("admin_confirmed"):
+        return None
+
+    if assignment.get("status") != "active":
+        return None
+
+    if member.get("teacher_completed"):
+        return {
+            "already_completed": True,
+            "member": member,
+            "teacher": teacher,
+            "title": assignment.get("title") or "未命名任務",
+        }
+
+    completed_at = datetime.now(timezone.utc).isoformat()
+
+    updated_response = (
+        supabase
+        .table("teacher_assignment_members")
+        .update(
+            {
+                "teacher_completed": True,
+                "teacher_completed_at": completed_at,
+                "admin_confirmed": False,
+                "admin_confirmed_at": None,
+            }
+        )
+        .eq("id", member_id)
+        .eq("teacher_completed", False)
+        .execute()
+    )
+
+    updated_rows = updated_response.data or []
+
+    if not updated_rows:
+        return None
+
+    return {
+        "already_completed": False,
+        "member": updated_rows[0],
+        "teacher": teacher,
+        "title": assignment.get("title") or "未命名任務",
+    }
