@@ -88,13 +88,14 @@ export async function createTeacherAssignment(assignmentData) {
     status: "active",
     reminder_offsets: reminderOffsets,
   };
+  console.log("送往 Supabase 的 assignmentPayload：", assignmentPayload);
 
   const { data: assignment, error: assignmentError } = await supabase
     .from(ASSIGNMENT_TABLE)
     .insert(assignmentPayload)
     .select()
     .single();
-
+console.log("Supabase 新增後回傳：", assignment);
   if (assignmentError) {
     console.error("新增老師任務失敗：", assignmentError);
     throw assignmentError;
