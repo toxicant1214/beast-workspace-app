@@ -4,3 +4,4 @@ python-dotenv
 requests
 supabase
 schedule
+flask-cors

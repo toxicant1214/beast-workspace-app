@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from flask import Flask, abort, request
-
+from flask_cors import CORS
 from services.line_service import (
     push_teacher_completion_card,
     reply_date_options,
@@ -49,7 +49,7 @@ from services.workflow_service import (
 load_dotenv()
 
 app = Flask(__name__)
-
+CORS(app)
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 ADMIN_LINE_USER_ID = os.getenv("ADMIN_LINE_USER_ID")
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
