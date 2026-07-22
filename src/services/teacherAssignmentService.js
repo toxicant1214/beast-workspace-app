@@ -48,7 +48,8 @@ export async function getTeacherAssignments() {
  *   description,
  *   deadline,
  *   priority,
- *   teacherIds
+ *   teacherIds,
+ *   reminderOffsets
  * }
  */
 export async function createTeacherAssignment(assignmentData) {
@@ -65,12 +66,27 @@ export async function createTeacherAssignment(assignmentData) {
     throw new Error("請至少指派一位老師");
   }
 
+  const reminderOffsets = Array.isArray(assignmentData.reminderOffsets)
+    ? [
+        ...new Set(
+          assignmentData.reminderOffsets
+            .map((offset) => Number(offset))
+            .filter(
+              (offset) =>
+                Number.isInteger(offset) &&
+                offset > 0
+            )
+        ),
+      ].sort((a, b) => b - a)
+    : [];
+
   const assignmentPayload = {
     title,
     description: assignmentData.description?.trim() || null,
     deadline: assignmentData.deadline || null,
     priority: assignmentData.priority || "normal",
     status: "active",
+    reminder_offsets: reminderOffsets,
   };
 
   const { data: assignment, error: assignmentError } = await supabase
