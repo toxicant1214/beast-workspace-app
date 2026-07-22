@@ -33,6 +33,7 @@ from services.teacher_assignment_service import (
 from services.workflow_service import (
     clear_workflow,
     get_workflow,
+    start_workflow,
     update_workflow,
 )
 
@@ -52,6 +53,61 @@ def handle_postback(event):
     time_option = values.get("time_option", [""])[0]
     priority_option = values.get("priority", [""])[0]
     reminder_option = values.get("reminder", [""])[0]
+    task_type = values.get("task_type", [""])[0]
+
+    # 選擇要新增的任務類型
+    if action == "select_task_type":
+        bound_teacher = get_teacher_by_line_user_id(line_user_id)
+
+        if bound_teacher:
+            clear_workflow(line_user_id)
+
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "🔒 個人待辦與老師任務僅限主管建立。\n\n"
+                    "老師請輸入「任務」查看自己的指派工作。",
+                )
+            return
+
+        if task_type == "personal_task":
+            start_workflow(
+                line_user_id=line_user_id,
+                flow_type="personal_task",
+                first_step="title",
+            )
+
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "📝 開始新增個人待辦\n\n"
+                    "請輸入任務名稱。\n"
+                    "輸入「取消新增」可隨時取消。",
+                )
+            return
+
+        if task_type == "teacher_assignment":
+            start_workflow(
+                line_user_id=line_user_id,
+                flow_type="teacher_assignment",
+                first_step="title",
+            )
+
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "👩‍🏫 開始新增老師任務\n\n"
+                    "請輸入老師任務名稱。\n"
+                    "輸入「取消新增」可隨時取消。",
+                )
+            return
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                "無法辨識這個任務類型，請重新輸入「新增待辦」。",
+            )
+        return
 
     personal_task_actions = {
         "set_task_date",

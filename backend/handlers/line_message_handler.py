@@ -7,6 +7,7 @@ from handlers.line_common import (
 )
 from services.line_service import (
     reply_date_options,
+    reply_task_type_options,
     reply_message,
     reply_priority_options,
     reply_task_cards,
@@ -167,22 +168,13 @@ def handle_text_message(text, reply_token, line_user_id):
         if bound_teacher:
             reply_message(
                 reply_token,
-                "🔒 個人待辦僅限主管使用。\n\n"
+                "🔒 個人待辦與老師任務僅限主管建立。\n\n"
                 "老師請輸入「任務」查看自己的指派工作。",
             )
             return
 
-        start_workflow(
-            line_user_id=line_user_id,
-            flow_type="personal_task",
-            first_step="title",
-        )
-
-        reply_message(
-            reply_token,
-            "📝 開始新增待辦\n\n請輸入任務名稱。\n"
-            "輸入「取消新增」可隨時取消。",
-        )
+        clear_workflow(line_user_id)
+        reply_task_type_options(reply_token)
         return
 
     workflow = get_workflow(line_user_id)
@@ -199,6 +191,20 @@ def handle_text_message(text, reply_token, line_user_id):
             "老師請輸入「任務」查看自己的指派工作。",
         )
         return
+
+    if (
+        workflow
+        and workflow.get("flow_type") == "teacher_assignment"
+    ):
+        if workflow.get("current_step") == "title":
+            reply_message(
+                reply_token,
+                "👩‍🏫 老師任務流程已啟動。\n\n"
+                "目前先完成任務類型選擇測試；"
+                "下一步會接上任務名稱與後續欄位。\n"
+                "輸入「取消新增」可結束本次流程。",
+            )
+            return
 
     if (
         workflow
