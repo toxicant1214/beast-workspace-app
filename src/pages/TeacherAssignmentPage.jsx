@@ -516,6 +516,7 @@ const overdueAssignmentCount = useMemo(
     try {
       setSaving(true);
       setErrorMessage("");
+      console.log("準備儲存的提醒：", formData.reminderOffsets);
 
       await createTeacherAssignment({
         ...formData,
