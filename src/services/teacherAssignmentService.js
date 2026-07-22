@@ -94,12 +94,11 @@ export async function createTeacherAssignment(assignmentData) {
   .insert([assignmentPayload])
   .select("*")
   .single();
-  alert(JSON.stringify(assignment));
-console.log("Supabase 新增後回傳：", assignment);
-  if (assignmentError) {
-    console.error("新增老師任務失敗：", assignmentError);
-    throw assignmentError;
-  }
+
+if (assignmentError) {
+  console.error("新增老師任務失敗：", assignmentError);
+  throw assignmentError;
+}
 
   const memberPayload = assignmentData.teacherIds.map((teacherId) => ({
     assignment_id: assignment.id,
