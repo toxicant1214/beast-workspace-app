@@ -142,15 +142,20 @@ def handle_postback(event):
     if action == "set_task_date":
         workflow = get_workflow(line_user_id)
 
+        valid_flow_types = {
+            "personal_task",
+            "teacher_assignment",
+        }
+
         if (
             not workflow
-            or workflow.get("flow_type") != "personal_task"
+            or workflow.get("flow_type") not in valid_flow_types
             or workflow.get("current_step") != "deadline_date"
         ):
             if reply_token:
                 reply_message(
                     reply_token,
-                    "目前沒有正在設定日期的待辦。",
+                    "目前沒有正在設定日期的任務。",
                 )
             return
 
@@ -206,15 +211,20 @@ def handle_postback(event):
     if action == "set_task_time_option":
         workflow = get_workflow(line_user_id)
 
+        valid_flow_types = {
+            "personal_task",
+            "teacher_assignment",
+        }
+
         if (
             not workflow
-            or workflow.get("flow_type") != "personal_task"
+            or workflow.get("flow_type") not in valid_flow_types
             or workflow.get("current_step") != "has_time"
         ):
             if reply_token:
                 reply_message(
                     reply_token,
-                    "目前沒有正在設定時間的待辦。",
+                    "目前沒有正在設定時間的任務。",
                 )
             return
 
@@ -264,15 +274,20 @@ def handle_postback(event):
     if action == "set_task_priority":
         workflow = get_workflow(line_user_id)
 
+        valid_flow_types = {
+            "personal_task",
+            "teacher_assignment",
+        }
+
         if (
             not workflow
-            or workflow.get("flow_type") != "personal_task"
+            or workflow.get("flow_type") not in valid_flow_types
             or workflow.get("current_step") != "priority"
         ):
             if reply_token:
                 reply_message(
                     reply_token,
-                    "目前沒有正在設定重要程度的待辦。",
+                    "目前沒有正在設定重要程度的任務。",
                 )
             return
 
