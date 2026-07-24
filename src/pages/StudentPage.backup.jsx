@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import StudentTable from "../components/StudentTable";
 import { supabase } from "../lib/supabase";
 import "../App.css";
 
@@ -11,6 +10,7 @@ function App() {
 
   const emptyForm = {
     student_no: "",
+    is_test: false,
     chinese_name: "",
     english_name: "",
     primary_parent_title: "媽媽",
@@ -39,29 +39,20 @@ function App() {
     setStudents(data || []);
   }
 
-  function getNextStudentNo() {
-    if (students.length === 0) return "0001";
-
-    const maxNo = Math.max(
-      ...students.map((s) => Number(s.student_no || 0)).filter(Boolean)
-    );
-
-    return String(maxNo + 1).padStart(4, "0");
-  }
-
   function openNewStudentDrawer() {
     setSelectedStudent(null);
     setForm({
       ...emptyForm,
-      student_no: getNextStudentNo(),
     });
     setIsDrawerOpen(true);
   }
 
   function openStudentDrawer(student) {
     setSelectedStudent(student);
+
     setForm({
       student_no: student.student_no || "",
+      is_test: student.is_test ?? false,
       chinese_name: student.chinese_name || "",
       english_name: student.english_name || "",
       primary_parent_title: student.primary_parent_title || "媽媽",
@@ -69,16 +60,27 @@ function App() {
       current_grade: student.current_grade || "",
       student_status: student.student_status || "ACTIVE",
     });
+
     setIsDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setIsDrawerOpen(false);
+    setSelectedStudent(null);
+    setForm({
+      ...emptyForm,
+    });
   }
 
   async function saveStudent(e) {
     e.preventDefault();
 
     if (selectedStudent) {
+      const { student_no, ...updateData } = form;
+
       const { error } = await supabase
         .from("students")
-        .update(form)
+        .update(updateData)
         .eq("id", selectedStudent.id);
 
       if (error) {
@@ -86,7 +88,11 @@ function App() {
         return;
       }
     } else {
-      const { error } = await supabase.from("students").insert([form]);
+      const { student_no, ...newStudentData } = form;
+
+      const { error } = await supabase
+        .from("students")
+        .insert([newStudentData]);
 
       if (error) {
         alert("新增失敗：" + error.message);
@@ -94,10 +100,8 @@ function App() {
       }
     }
 
-    setIsDrawerOpen(false);
-    setSelectedStudent(null);
-    setForm(emptyForm);
-    loadStudents();
+    closeDrawer();
+    await loadStudents();
   }
 
   async function deleteStudent() {
@@ -119,14 +123,12 @@ function App() {
       return;
     }
 
-    setIsDrawerOpen(false);
-    setSelectedStudent(null);
-    setForm(emptyForm);
-    loadStudents();
+    closeDrawer();
+    await loadStudents();
   }
 
   const filteredStudents = students.filter((student) => {
-    const keyword = searchText.toLowerCase();
+    const keyword = searchText.trim().toLowerCase();
 
     return (
       student.student_no?.toLowerCase().includes(keyword) ||
@@ -172,6 +174,7 @@ function App() {
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
             />
+
             <span>
               {filteredStudents.length} / {students.length} 位學生
             </span>
@@ -189,17 +192,36 @@ function App() {
             </thead>
 
             <tbody>
-              {filteredStudents.map((s) => (
-                <tr key={s.id} onClick={() => openStudentDrawer(s)}>
-                  <td>{s.student_no}</td>
-                  <td>{s.chinese_name}</td>
-                  <td>{s.english_name || "—"}</td>
-                  <td>{s.current_grade || "—"}</td>
+              {filteredStudents.map((student) => (
+                <tr
+                  key={student.id}
+                  onClick={() => openStudentDrawer(student)}
+                >
                   <td>
-                    <span className="badge">{s.student_status}</span>
+                    {student.student_no || "—"}
+
+                    {student.is_test && (
+                      <span className="testBadge">測試</span>
+                    )}
+                  </td>
+
+                  <td>{student.chinese_name}</td>
+                  <td>{student.english_name || "—"}</td>
+                  <td>{student.current_grade || "—"}</td>
+
+                  <td>
+                    <span className="badge">
+                      {student.student_status}
+                    </span>
                   </td>
                 </tr>
               ))}
+
+              {filteredStudents.length === 0 && (
+                <tr>
+                  <td colSpan="5">目前沒有符合條件的學生資料</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </section>
@@ -213,68 +235,121 @@ function App() {
                 <p className="eyebrow">
                   {selectedStudent ? "STUDENT PROFILE" : "NEW STUDENT"}
                 </p>
-                <h2>{selectedStudent ? "學生資料" : "新增學生"}</h2>
+
+                <h2>
+                  {selectedStudent ? "學生資料" : "新增學生"}
+                </h2>
               </div>
 
-              <button type="button" onClick={() => setIsDrawerOpen(false)}>
+              <button type="button" onClick={closeDrawer}>
                 ×
               </button>
             </div>
 
             <label>
+              資料類型
+
+              <select
+                value={form.is_test ? "TEST" : "OFFICIAL"}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    is_test: e.target.value === "TEST",
+                  })
+                }
+                disabled={
+                  Boolean(selectedStudent) &&
+                  selectedStudent.is_test === false
+                }
+              >
+                <option value="OFFICIAL">正式學生</option>
+                <option value="TEST">測試學生</option>
+              </select>
+            </label>
+
+            <label>
               學號
-              <input value={form.student_no} disabled />
+
+              <input
+                value={
+                  form.student_no ||
+                  (form.is_test
+                    ? "儲存後自動產生 TEST 編號"
+                    : "儲存後自動產生 STU 編號")
+                }
+                disabled
+              />
             </label>
 
             <label>
               中文姓名
+
               <input
                 required
                 value={form.chinese_name}
                 onChange={(e) =>
-                  setForm({ ...form, chinese_name: e.target.value })
+                  setForm({
+                    ...form,
+                    chinese_name: e.target.value,
+                  })
                 }
               />
             </label>
 
             <label>
               英文姓名
+
               <input
                 value={form.english_name}
                 onChange={(e) =>
-                  setForm({ ...form, english_name: e.target.value })
+                  setForm({
+                    ...form,
+                    english_name: e.target.value,
+                  })
                 }
               />
             </label>
 
             <label>
               主要家長稱謂
+
               <input
                 required
                 value={form.primary_parent_title}
                 onChange={(e) =>
-                  setForm({ ...form, primary_parent_title: e.target.value })
+                  setForm({
+                    ...form,
+                    primary_parent_title: e.target.value,
+                  })
                 }
               />
             </label>
 
             <label>
               主要家長電話
+
               <input
                 required
                 value={form.primary_parent_phone}
                 onChange={(e) =>
-                  setForm({ ...form, primary_parent_phone: e.target.value })
+                  setForm({
+                    ...form,
+                    primary_parent_phone: e.target.value,
+                  })
                 }
               />
             </label>
 
             <label>
               年級
+
               <select
                 value={form.current_grade}
                 onChange={(e) =>
-                  setForm({ ...form, current_grade: e.target.value })
+                  setForm({
+                    ...form,
+                    current_grade: e.target.value,
+                  })
                 }
               >
                 <option value="">未設定</option>
@@ -289,14 +364,37 @@ function App() {
               </select>
             </label>
 
+            <label>
+              學生狀態
+
+              <select
+                value={form.student_status}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    student_status: e.target.value,
+                  })
+                }
+              >
+                <option value="ACTIVE">在學</option>
+                <option value="PAUSED">暫停</option>
+                <option value="WITHDRAWN">退班</option>
+                <option value="GRADUATED">畢業</option>
+              </select>
+            </label>
+
             <div className="drawerActions">
-              {selectedStudent && (
-                <button type="button" className="danger" onClick={deleteStudent}>
-                  刪除學生
+              {selectedStudent?.is_test && (
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={deleteStudent}
+                >
+                  刪除測試學生
                 </button>
               )}
 
-              <button type="button" onClick={() => setIsDrawerOpen(false)}>
+              <button type="button" onClick={closeDrawer}>
                 取消
               </button>
 
