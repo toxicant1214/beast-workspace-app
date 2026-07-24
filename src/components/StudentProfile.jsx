@@ -1,3 +1,4 @@
+import "./StudentProfile.css";
 function StudentProfile({ student, onBack, onEdit }) {
   const statusLabels = {
     ACTIVE: "在學",
