@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import StudentTable from "../components/StudentTable";
 import StudentDrawer from "../components/StudentDrawer";
+import StudentProfile from "../components/StudentProfile";
 import "../App.css";
 
 function StudentPage() {
@@ -9,6 +10,7 @@ function StudentPage() {
   const [searchText, setSearchText] = useState("");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [profileStudent, setProfileStudent] = useState(null);
 
   const emptyForm = {
     student_no: "",
@@ -34,11 +36,23 @@ function StudentPage() {
       .order("student_no");
 
     if (error) {
-      console.error(error);
+      console.error("讀取學生資料失敗：", error);
       return;
     }
 
-    setStudents(data || []);
+    const nextStudents = data || [];
+
+    setStudents(nextStudents);
+
+    if (profileStudent) {
+      const refreshedStudent = nextStudents.find(
+        (student) => student.id === profileStudent.id
+      );
+
+      if (refreshedStudent) {
+        setProfileStudent(refreshedStudent);
+      }
+    }
   }
 
   function openNewStudentDrawer() {
@@ -49,6 +63,14 @@ function StudentPage() {
     setIsDrawerOpen(true);
   }
 
+  function openStudentProfile(student) {
+    setProfileStudent(student);
+  }
+
+  function closeStudentProfile() {
+    setProfileStudent(null);
+  }
+
   function openStudentDrawer(student) {
     setSelectedStudent(student);
 
@@ -57,8 +79,10 @@ function StudentPage() {
       is_test: student.is_test ?? false,
       chinese_name: student.chinese_name || "",
       english_name: student.english_name || "",
-      primary_parent_title: student.primary_parent_title || "媽媽",
-      primary_parent_phone: student.primary_parent_phone || "",
+      primary_parent_title:
+        student.primary_parent_title || "媽媽",
+      primary_parent_phone:
+        student.primary_parent_phone || "",
       current_grade: student.current_grade || "",
       student_status: student.student_status || "ACTIVE",
     });
@@ -80,14 +104,26 @@ function StudentPage() {
     if (selectedStudent) {
       const { student_no, ...updateData } = form;
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("students")
         .update(updateData)
-        .eq("id", selectedStudent.id);
+        .eq("id", selectedStudent.id)
+        .select("*")
+        .single();
 
       if (error) {
         alert("更新失敗：" + error.message);
         return;
+      }
+
+      if (data) {
+        setProfileStudent((currentProfile) => {
+          if (currentProfile?.id === data.id) {
+            return data;
+          }
+
+          return currentProfile;
+        });
       }
     } else {
       const { student_no, ...newStudentData } = form;
@@ -130,6 +166,10 @@ function StudentPage() {
       return;
     }
 
+    if (profileStudent?.id === selectedStudent.id) {
+      setProfileStudent(null);
+    }
+
     closeDrawer();
     await loadStudents();
   }
@@ -145,16 +185,45 @@ function StudentPage() {
     );
   });
 
+  if (profileStudent) {
+    return (
+      <>
+        <StudentProfile
+          student={profileStudent}
+          onBack={closeStudentProfile}
+          onEdit={openStudentDrawer}
+        />
+
+        {isDrawerOpen && (
+          <StudentDrawer
+            selectedStudent={selectedStudent}
+            form={form}
+            setForm={setForm}
+            onClose={closeDrawer}
+            onSave={saveStudent}
+            onDelete={deleteStudent}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       <header className="topbar">
         <div>
           <p className="eyebrow">STUDENT CENTER</p>
           <h1>學生資料中心</h1>
-          <p className="summary">目前共 {students.length} 位學生</p>
+          <p className="summary">
+            目前共 {students.length} 位學生
+          </p>
         </div>
 
-        <button className="primary" onClick={openNewStudentDrawer}>
+        <button
+          type="button"
+          className="primary"
+          onClick={openNewStudentDrawer}
+        >
           ＋ 新增學生
         </button>
       </header>
@@ -174,7 +243,7 @@ function StudentPage() {
 
         <StudentTable
           students={filteredStudents}
-          onSelectStudent={openStudentDrawer}
+          onSelectStudent={openStudentProfile}
         />
       </section>
 
