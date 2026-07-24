@@ -340,11 +340,13 @@ def handle_postback(event):
             return
 
         valid_reminders = {
-            "same_day",
-            "1_day",
-            "2_days",
-            "1_week",
-        }
+    "30_minutes",
+    "1_hour",
+    "2_hours",
+    "1_day",
+    "2_days",
+    "1_week",
+}
 
         if reminder_option not in valid_reminders:
             if reply_token:

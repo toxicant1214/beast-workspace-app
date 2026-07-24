@@ -22,15 +22,20 @@ TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 # 排程稍有延遲時仍允許發送，但不補發太久以前的舊提醒。
 REMINDER_GRACE_MINUTES = 10
 
-REMINDER_DAY_OFFSETS = {
-    "same_day": 0,
-    "1_day": 1,
-    "2_days": 2,
-    "1_week": 7,
+# 所有提醒統一換算為「分鐘」。
+REMINDER_MINUTE_OFFSETS = {
+    "30_minutes": 30,
+    "1_hour": 60,
+    "2_hours": 120,
+    "1_day": 24 * 60,
+    "2_days": 2 * 24 * 60,
+    "1_week": 7 * 24 * 60,
 }
 
 REMINDER_LABELS = {
-    "same_day": "當天提醒",
+    "30_minutes": "30 分鐘前提醒",
+    "1_hour": "1 小時前提醒",
+    "2_hours": "2 小時前提醒",
     "1_day": "一天前提醒",
     "2_days": "兩天前提醒",
     "1_week": "一週前提醒",
@@ -71,23 +76,31 @@ def calculate_reminder_time(
     計算提醒時間。
 
     有指定截止時間：
-    依截止時間往前推算。
+    依截止時間往前推算指定分鐘數。
 
     未指定截止時間：
-    在對應日期上午 09:00 提醒。
+    僅支援一天前、兩天前及一週前，
+    並於對應日期上午 09:00 提醒。
     """
 
-    day_offset = REMINDER_DAY_OFFSETS.get(reminder_type)
+    minute_offset = REMINDER_MINUTE_OFFSETS.get(reminder_type)
 
-    if day_offset is None:
+    if minute_offset is None:
         return None
 
-    reminder_date = deadline.date() - timedelta(
-        days=day_offset
-    )
-
     if has_time:
-        return deadline - timedelta(days=day_offset)
+        return deadline - timedelta(minutes=minute_offset)
+
+    # 沒有截止時間時，30 分鐘、1 小時、2 小時沒有明確基準時間。
+    if reminder_type in {
+        "30_minutes",
+        "1_hour",
+        "2_hours",
+    }:
+        return None
+
+    day_offset = minute_offset // (24 * 60)
+    reminder_date = deadline.date() - timedelta(days=day_offset)
 
     return datetime.combine(
         reminder_date,

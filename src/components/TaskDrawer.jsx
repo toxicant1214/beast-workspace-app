@@ -1,6 +1,39 @@
 import { useEffect, useState } from "react";
 import { updateTodo } from "../services/todoService";
 
+const REMINDER_OPTIONS = [
+  {
+    value: "30_minutes",
+    label: "30 分鐘前提醒",
+    requiresTime: true,
+  },
+  {
+    value: "1_hour",
+    label: "1 小時前提醒",
+    requiresTime: true,
+  },
+  {
+    value: "2_hours",
+    label: "2 小時前提醒",
+    requiresTime: true,
+  },
+  {
+    value: "1_day",
+    label: "一天前提醒",
+    requiresTime: false,
+  },
+  {
+    value: "2_days",
+    label: "兩天前提醒",
+    requiresTime: false,
+  },
+  {
+    value: "1_week",
+    label: "一週前提醒",
+    requiresTime: false,
+  },
+];
+
 function TaskDrawer({ open, task, onClose, onSaved }) {
   const [title, setTitle] = useState("");
   const [deadlineDate, setDeadlineDate] = useState("");
@@ -11,13 +44,49 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
   useEffect(() => {
     if (!task) return;
 
-    const date = task.deadline_at ? new Date(task.deadline_at) : null;
+    const date = task.deadline_at
+      ? new Date(task.deadline_at)
+      : null;
 
     setTitle(task.title || "");
-    setDeadlineDate(date ? date.toISOString().slice(0, 10) : "");
-    setDeadlineTime(date && task.has_time ? date.toTimeString().slice(0, 5) : "");
     setPriority(task.priority || "normal");
     setReminderOffsets(task.reminder_offsets || []);
+
+    if (!date) {
+      setDeadlineDate("");
+      setDeadlineTime("");
+      return;
+    }
+
+    const taipeiParts = new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone: "Asia/Taipei",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }
+    ).formatToParts(date);
+
+    const parts = Object.fromEntries(
+      taipeiParts.map((part) => [
+        part.type,
+        part.value,
+      ])
+    );
+
+    setDeadlineDate(
+      `${parts.year}-${parts.month}-${parts.day}`
+    );
+
+    setDeadlineTime(
+      task.has_time
+        ? `${parts.hour}:${parts.minute}`
+        : ""
+    );
   }, [task]);
 
   if (!open || !task) return null;
@@ -32,14 +101,29 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
 
   async function handleSave() {
     const time = deadlineTime || "23:59";
-    const deadline_at = new Date(`${deadlineDate}T${time}`).toISOString();
+
+    const deadline_at = new Date(
+      `${deadlineDate}T${time}:00+08:00`
+    ).toISOString();
+
+    const validReminderOffsets = reminderOffsets.filter(
+      (item) => {
+        const option = REMINDER_OPTIONS.find(
+          (reminder) => reminder.value === item
+        );
+
+        if (!option) return false;
+
+        return !option.requiresTime || Boolean(deadlineTime);
+      }
+    );
 
     await updateTodo(task.id, {
       title,
       priority,
       deadline_at,
       has_time: Boolean(deadlineTime),
-      reminder_offsets: reminderOffsets,
+      reminder_offsets: validReminderOffsets,
     });
 
     onSaved();
@@ -47,16 +131,33 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
   }
 
   return (
-    <div className="drawerBackdrop" onClick={onClose}>
-      <div className="drawer" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="drawerBackdrop"
+      onClick={onClose}
+    >
+      <div
+        className="drawer"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="drawerHeader">
           <h2>編輯任務</h2>
-          <button onClick={onClose}>×</button>
+
+          <button
+            type="button"
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
 
         <label>
           任務名稱
-          <input value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input
+            value={title}
+            onChange={(event) =>
+              setTitle(event.target.value)
+            }
+          />
         </label>
 
         <label>
@@ -64,7 +165,9 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
           <input
             type="date"
             value={deadlineDate}
-            onChange={(e) => setDeadlineDate(e.target.value)}
+            onChange={(event) =>
+              setDeadlineDate(event.target.value)
+            }
             required
           />
         </label>
@@ -74,62 +177,84 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
           <input
             type="time"
             value={deadlineTime}
-            onChange={(e) => setDeadlineTime(e.target.value)}
+            onChange={(event) =>
+              setDeadlineTime(event.target.value)
+            }
           />
         </label>
 
         <label>
           重要程度
-          <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+          <select
+            value={priority}
+            onChange={(event) =>
+              setPriority(event.target.value)
+            }
+          >
             <option value="normal">一般</option>
             <option value="high">重要</option>
-            <option value="urgent">非常重要</option>
+            <option value="urgent">
+              非常重要
+            </option>
           </select>
         </label>
 
         <div className="drawerSection">
-          <p className="drawerSectionTitle">提醒設定</p>
+          <p className="drawerSectionTitle">
+            提醒設定（可複選）
+          </p>
 
-          <label className="reminderOption">
-            <input
-              type="checkbox"
-              checked={reminderOffsets.includes("same_day")}
-              onChange={() => toggleReminder("same_day")}
-            />
-            當天提醒
-          </label>
+          {REMINDER_OPTIONS.map((option) => (
+            <label
+              key={option.value}
+              className="reminderOption"
+            >
+              <input
+                type="checkbox"
+                checked={reminderOffsets.includes(
+                  option.value
+                )}
+                disabled={
+                  !deadlineDate ||
+                  (option.requiresTime &&
+                    !deadlineTime)
+                }
+                onChange={() =>
+                  toggleReminder(option.value)
+                }
+              />
 
-          <label className="reminderOption">
-            <input
-              type="checkbox"
-              checked={reminderOffsets.includes("one_day_before")}
-              onChange={() => toggleReminder("one_day_before")}
-            />
-            一天前提醒
-          </label>
+              {option.label}
+            </label>
+          ))}
 
-          <label className="reminderOption">
-            <input
-              type="checkbox"
-              checked={reminderOffsets.includes("two_days_before")}
-              onChange={() => toggleReminder("two_days_before")}
-            />
-            兩天前提醒
-          </label>
+          {!deadlineDate && (
+            <div className="emptyText">
+              請先選擇截止日期
+            </div>
+          )}
 
-          <label className="reminderOption">
-            <input
-              type="checkbox"
-              checked={reminderOffsets.includes("one_week_before")}
-              onChange={() => toggleReminder("one_week_before")}
-            />
-            一週前提醒
-          </label>
+          {deadlineDate && !deadlineTime && (
+            <div className="emptyText">
+              30 分鐘、1 小時及 2 小時前提醒，需要先設定截止時間
+            </div>
+          )}
         </div>
 
         <div className="drawerActions">
-          <button onClick={onClose}>取消</button>
-          <button onClick={handleSave}>儲存</button>
+          <button
+            type="button"
+            onClick={onClose}
+          >
+            取消
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+          >
+            儲存
+          </button>
         </div>
       </div>
     </div>

@@ -328,9 +328,54 @@ def reply_reminder_options(reply_token, selected=None):
 
     selected = selected or []
 
-    def option_label(value, text):
-        mark = "✅" if value in selected else "⬜"
-        return f"{mark} {text}"
+    reminder_options = [
+        ("30_minutes", "30 分鐘前"),
+        ("1_hour", "1 小時前"),
+        ("2_hours", "2 小時前"),
+        ("1_day", "一天前"),
+        ("2_days", "兩天前"),
+        ("1_week", "一週前"),
+    ]
+
+    reminder_rows = []
+
+    for value, label in reminder_options:
+        is_selected = value in selected
+
+        reminder_rows.append(
+            {
+                "type": "box",
+                "layout": "horizontal",
+                "alignItems": "center",
+                "paddingAll": "12px",
+                "action": {
+                    "type": "postback",
+                    "label": label,
+                    "data": (
+                        "action=toggle_task_reminder"
+                        f"&reminder={value}"
+                    ),
+                    "displayText": f"切換：{label}",
+                },
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "✅" if is_selected else "⬜",
+                        "size": "md",
+                        "flex": 0,
+                    },
+                    {
+                        "type": "text",
+                        "text": label,
+                        "size": "md",
+                        "margin": "md",
+                        "color": "#333333",
+                        "weight": "bold" if is_selected else "regular",
+                        "flex": 1,
+                    },
+                ],
+            }
+        )
 
     url = "https://api.line.me/v2/bot/message/reply"
 
@@ -338,73 +383,70 @@ def reply_reminder_options(reply_token, selected=None):
         "replyToken": reply_token,
         "messages": [
             {
-                "type": "template",
+                "type": "flex",
                 "altText": "請設定待辦提醒",
-                "template": {
-                    "type": "buttons",
-                    "text": "提醒設定（可複選）",
-                    "actions": [
-                        {
-                            "type": "postback",
-                            "label": option_label("same_day", "當天提醒"),
-                            "data": (
-                                "action=toggle_task_reminder"
-                                "&reminder=same_day"
-                            ),
-                            "displayText": "切換：當天提醒",
-                        },
-                        {
-                            "type": "postback",
-                            "label": option_label("1_day", "一天前提醒"),
-                            "data": (
-                                "action=toggle_task_reminder"
-                                "&reminder=1_day"
-                            ),
-                            "displayText": "切換：一天前提醒",
-                        },
-                        {
-                            "type": "postback",
-                            "label": option_label("2_days", "兩天前提醒"),
-                            "data": (
-                                "action=toggle_task_reminder"
-                                "&reminder=2_days"
-                            ),
-                            "displayText": "切換：兩天前提醒",
-                        },
-                        {
-                            "type": "postback",
-                            "label": option_label("1_week", "一週前提醒"),
-                            "data": (
-                                "action=toggle_task_reminder"
-                                "&reminder=1_week"
-                            ),
-                            "displayText": "切換：一週前提醒",
-                        },
-                    ],
+                "contents": {
+                    "type": "bubble",
+                    "size": "kilo",
+                    "header": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "paddingAll": "18px",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🔔 提醒設定",
+                                "weight": "bold",
+                                "size": "xl",
+                                "color": "#333333",
+                            },
+                            {
+                                "type": "text",
+                                "text": "可複選，再按下方完成",
+                                "size": "sm",
+                                "color": "#888888",
+                                "margin": "sm",
+                            },
+                        ],
+                    },
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "paddingAll": "0px",
+                        "contents": reminder_rows,
+                    },
+                    "footer": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "spacing": "sm",
+                        "paddingAll": "16px",
+                        "contents": [
+                            {
+                                "type": "button",
+                                "style": "primary",
+                                "height": "sm",
+                                "action": {
+                                    "type": "postback",
+                                    "label": "完成選擇",
+                                    "data": "action=finish_task_reminders",
+                                    "displayText": "完成提醒設定",
+                                },
+                            },
+                            {
+                                "type": "button",
+                                "style": "secondary",
+                                "height": "sm",
+                                "action": {
+                                    "type": "postback",
+                                    "label": "不設定提醒",
+                                    "data": "action=skip_task_reminders",
+                                    "displayText": "不設定提醒",
+                                },
+                            },
+                        ],
+                    },
                 },
-            },
-            {
-                "type": "template",
-                "altText": "完成提醒設定",
-                "template": {
-                    "type": "confirm",
-                    "text": "提醒選好了嗎？",
-                    "actions": [
-                        {
-                            "type": "postback",
-                            "label": "完成選擇",
-                            "data": "action=finish_task_reminders",
-                            "displayText": "完成提醒設定",
-                        },
-                        {
-                            "type": "postback",
-                            "label": "不設定提醒",
-                            "data": "action=skip_task_reminders",
-                            "displayText": "不設定提醒",
-                        },
-                    ],
-                },
-            },
+            }
         ],
     }
 
@@ -421,6 +463,7 @@ def reply_reminder_options(reply_token, selected=None):
         response.text,
     )
     response.raise_for_status()
+
 
 
 def reply_task_confirmation(reply_token, summary_text):

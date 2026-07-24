@@ -2,20 +2,34 @@ import { useState } from "react";
 
 const REMINDER_OPTIONS = [
   {
-    value: "same_day",
-    label: "當天提醒",
+    value: "30_minutes",
+    label: "30 分鐘前提醒",
+    requiresTime: true,
+  },
+  {
+    value: "1_hour",
+    label: "1 小時前提醒",
+    requiresTime: true,
+  },
+  {
+    value: "2_hours",
+    label: "2 小時前提醒",
+    requiresTime: true,
   },
   {
     value: "1_day",
     label: "一天前提醒",
+    requiresTime: false,
   },
   {
     value: "2_days",
     label: "兩天前提醒",
+    requiresTime: false,
   },
   {
     value: "1_week",
     label: "一週前提醒",
+    requiresTime: false,
   },
 ];
 
@@ -87,11 +101,13 @@ function TaskCard({ tasks = [], onComplete, onAdd, onDelete }) {
     }
 
     const reminderLabels = {
-      same_day: "當天",
-      "1_day": "一天前",
-      "2_days": "兩天前",
-      "1_week": "一週前",
-    };
+  "30_minutes": "30 分鐘前",
+  "1_hour": "1 小時前",
+  "2_hours": "2 小時前",
+  "1_day": "一天前",
+  "2_days": "兩天前",
+  "1_week": "一週前",
+};
 
     return reminders
       .map((item) => reminderLabels[item] || item)
@@ -219,30 +235,39 @@ function TaskCard({ tasks = [], onComplete, onAdd, onDelete }) {
               </div>
 
               {REMINDER_OPTIONS.map((option) => (
-                <label
-                  key={option.value}
-                  className="taskReminderOption"
-                >
-                  <input
-                    type="checkbox"
-                    checked={reminderOffsets.includes(
-                      option.value
-                    )}
-                    disabled={!deadlineDate}
-                    onChange={() =>
-                      toggleReminder(option.value)
-                    }
-                  />
+  <label
+    key={option.value}
+    className="taskReminderOption"
+  >
+    <input
+      type="checkbox"
+      checked={reminderOffsets.includes(
+        option.value
+      )}
+      disabled={
+        !deadlineDate ||
+        (option.requiresTime && !deadlineTime)
+      }
+      onChange={() =>
+        toggleReminder(option.value)
+      }
+    />
 
-                  <span>{option.label}</span>
-                </label>
-              ))}
+    <span>{option.label}</span>
+  </label>
+))}
 
-              {!deadlineDate && (
-                <div className="emptyText">
-                  請先選擇截止日期
-                </div>
-              )}
+{!deadlineDate && (
+  <div className="emptyText">
+    請先選擇截止日期
+  </div>
+)}
+
+{deadlineDate && !deadlineTime && (
+  <div className="emptyText">
+    30 分鐘、1 小時及 2 小時前提醒，需要先設定截止時間
+  </div>
+)}
             </div>
           </div>
         )}

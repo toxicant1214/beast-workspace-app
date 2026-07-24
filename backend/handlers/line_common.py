@@ -51,11 +51,13 @@ def build_task_summary(payload):
     }
 
     reminder_labels = {
-        "same_day": "當天",
-        "1_day": "一天前",
-        "2_days": "兩天前",
-        "1_week": "一週前",
-    }
+    "30_minutes": "30 分鐘前",
+    "1_hour": "1 小時前",
+    "2_hours": "2 小時前",
+    "1_day": "一天前",
+    "2_days": "兩天前",
+    "1_week": "一週前",
+}
 
     title = payload.get("title", "未命名任務")
     if len(title) > 45:
