@@ -1,4 +1,11 @@
 function StudentTable({ students, onSelectStudent }) {
+  const statusLabels = {
+    ACTIVE: "在學",
+    PAUSED: "暫停",
+    WITHDRAWN: "退班",
+    GRADUATED: "畢業",
+  };
+
   return (
     <table>
       <thead>
@@ -12,17 +19,38 @@ function StudentTable({ students, onSelectStudent }) {
       </thead>
 
       <tbody>
-        {students.map((s) => (
-          <tr key={s.id} onClick={() => onSelectStudent(s)}>
-            <td>{s.student_no}</td>
-            <td>{s.chinese_name}</td>
-            <td>{s.english_name || "—"}</td>
-            <td>{s.current_grade || "—"}</td>
+        {students.map((student) => (
+          <tr
+            key={student.id}
+            onClick={() => onSelectStudent(student)}
+          >
             <td>
-              <span className="badge">{s.student_status}</span>
+              {student.student_no || "—"}
+
+              {student.is_test && (
+                <span className="testBadge">測試</span>
+              )}
+            </td>
+
+            <td>{student.chinese_name}</td>
+            <td>{student.english_name || "—"}</td>
+            <td>{student.current_grade || "—"}</td>
+
+            <td>
+              <span className="badge">
+                {statusLabels[student.student_status] ||
+                  student.student_status ||
+                  "未設定"}
+              </span>
             </td>
           </tr>
         ))}
+
+        {students.length === 0 && (
+          <tr>
+            <td colSpan="5">目前沒有學生資料</td>
+          </tr>
+        )}
       </tbody>
     </table>
   );

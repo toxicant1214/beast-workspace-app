@@ -12,6 +12,7 @@ function StudentPage() {
 
   const emptyForm = {
     student_no: "",
+    is_test: false,
     chinese_name: "",
     english_name: "",
     primary_parent_title: "媽媽",
@@ -40,29 +41,20 @@ function StudentPage() {
     setStudents(data || []);
   }
 
-  function getNextStudentNo() {
-    if (students.length === 0) return "0001";
-
-    const maxNo = Math.max(
-      ...students.map((s) => Number(s.student_no || 0)).filter(Boolean)
-    );
-
-    return String(maxNo + 1).padStart(4, "0");
-  }
-
   function openNewStudentDrawer() {
     setSelectedStudent(null);
     setForm({
       ...emptyForm,
-      student_no: getNextStudentNo(),
     });
     setIsDrawerOpen(true);
   }
 
   function openStudentDrawer(student) {
     setSelectedStudent(student);
+
     setForm({
       student_no: student.student_no || "",
+      is_test: student.is_test ?? false,
       chinese_name: student.chinese_name || "",
       english_name: student.english_name || "",
       primary_parent_title: student.primary_parent_title || "媽媽",
@@ -70,16 +62,27 @@ function StudentPage() {
       current_grade: student.current_grade || "",
       student_status: student.student_status || "ACTIVE",
     });
+
     setIsDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setIsDrawerOpen(false);
+    setSelectedStudent(null);
+    setForm({
+      ...emptyForm,
+    });
   }
 
   async function saveStudent(e) {
     e.preventDefault();
 
     if (selectedStudent) {
+      const { student_no, ...updateData } = form;
+
       const { error } = await supabase
         .from("students")
-        .update(form)
+        .update(updateData)
         .eq("id", selectedStudent.id);
 
       if (error) {
@@ -87,7 +90,11 @@ function StudentPage() {
         return;
       }
     } else {
-      const { error } = await supabase.from("students").insert([form]);
+      const { student_no, ...newStudentData } = form;
+
+      const { error } = await supabase
+        .from("students")
+        .insert([newStudentData]);
 
       if (error) {
         alert("新增失敗：" + error.message);
@@ -95,17 +102,20 @@ function StudentPage() {
       }
     }
 
-    setIsDrawerOpen(false);
-    setSelectedStudent(null);
-    setForm(emptyForm);
-    loadStudents();
+    closeDrawer();
+    await loadStudents();
   }
 
   async function deleteStudent() {
     if (!selectedStudent) return;
 
+    if (!selectedStudent.is_test) {
+      alert("正式學生不可永久刪除。");
+      return;
+    }
+
     const confirmed = window.confirm(
-      `確定要刪除「${selectedStudent.chinese_name}」嗎？`
+      `確定要刪除測試學生「${selectedStudent.chinese_name}」嗎？`
     );
 
     if (!confirmed) return;
@@ -120,14 +130,12 @@ function StudentPage() {
       return;
     }
 
-    setIsDrawerOpen(false);
-    setSelectedStudent(null);
-    setForm(emptyForm);
-    loadStudents();
+    closeDrawer();
+    await loadStudents();
   }
 
   const filteredStudents = students.filter((student) => {
-    const keyword = searchText.toLowerCase();
+    const keyword = searchText.trim().toLowerCase();
 
     return (
       student.student_no?.toLowerCase().includes(keyword) ||
@@ -158,6 +166,7 @@ function StudentPage() {
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
           />
+
           <span>
             {filteredStudents.length} / {students.length} 位學生
           </span>
@@ -174,7 +183,7 @@ function StudentPage() {
           selectedStudent={selectedStudent}
           form={form}
           setForm={setForm}
-          onClose={() => setIsDrawerOpen(false)}
+          onClose={closeDrawer}
           onSave={saveStudent}
           onDelete={deleteStudent}
         />
