@@ -1044,3 +1044,46 @@ tbody tr:hover td {
     font-size: 46px;
   }
 }
+.drawer {
+  overflow-y: auto;
+}
+
+.drawerSection {
+  display: grid;
+  gap: 16px;
+}
+
+.drawer textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 13px 14px;
+  border: 1px solid #ebe7df;
+  border-radius: 14px;
+  outline: none;
+  resize: vertical;
+  background: #fbfaf7;
+  color: #2f2f2f;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.7;
+  box-sizing: border-box;
+}
+
+.drawer textarea:focus,
+.drawer input:focus,
+.drawer select:focus {
+  border-color: #9ab2a1;
+  background: #ffffff;
+}
+
+.drawerActions {
+  position: sticky;
+  bottom: -34px;
+  z-index: 2;
+  padding: 18px 0 34px;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 253, 249, 0),
+    #fffdf9 24px
+  );
+}

@@ -17,10 +17,16 @@ function StudentPage() {
     is_test: false,
     chinese_name: "",
     english_name: "",
+    birthday: "",
+    school: "",
+    enrollment_date: "",
     primary_parent_title: "媽媽",
     primary_parent_phone: "",
+    secondary_parent_title: "",
+    secondary_parent_phone: "",
     current_grade: "",
     student_status: "ACTIVE",
+    note: "",
   };
 
   const [form, setForm] = useState(emptyForm);
@@ -41,18 +47,17 @@ function StudentPage() {
     }
 
     const nextStudents = data || [];
-
     setStudents(nextStudents);
 
-    if (profileStudent) {
-      const refreshedStudent = nextStudents.find(
-        (student) => student.id === profileStudent.id
-      );
+    setProfileStudent((currentProfile) => {
+      if (!currentProfile) return null;
 
-      if (refreshedStudent) {
-        setProfileStudent(refreshedStudent);
-      }
-    }
+      return (
+        nextStudents.find(
+          (student) => student.id === currentProfile.id
+        ) || null
+      );
+    });
   }
 
   function openNewStudentDrawer() {
@@ -79,12 +84,20 @@ function StudentPage() {
       is_test: student.is_test ?? false,
       chinese_name: student.chinese_name || "",
       english_name: student.english_name || "",
+      birthday: student.birthday || "",
+      school: student.school || "",
+      enrollment_date: student.enrollment_date || "",
       primary_parent_title:
         student.primary_parent_title || "媽媽",
       primary_parent_phone:
         student.primary_parent_phone || "",
+      secondary_parent_title:
+        student.secondary_parent_title || "",
+      secondary_parent_phone:
+        student.secondary_parent_phone || "",
       current_grade: student.current_grade || "",
       student_status: student.student_status || "ACTIVE",
+      note: student.note || "",
     });
 
     setIsDrawerOpen(true);
@@ -101,8 +114,26 @@ function StudentPage() {
   async function saveStudent(e) {
     e.preventDefault();
 
+    const normalizedForm = {
+      ...form,
+      english_name: form.english_name.trim() || null,
+      birthday: form.birthday || null,
+      school: form.school.trim() || null,
+      enrollment_date: form.enrollment_date || null,
+      primary_parent_title:
+        form.primary_parent_title.trim(),
+      primary_parent_phone:
+        form.primary_parent_phone.trim(),
+      secondary_parent_title:
+        form.secondary_parent_title.trim() || null,
+      secondary_parent_phone:
+        form.secondary_parent_phone.trim() || null,
+      current_grade: form.current_grade || null,
+      note: form.note.trim() || null,
+    };
+
     if (selectedStudent) {
-      const { student_no, ...updateData } = form;
+      const { student_no, ...updateData } = normalizedForm;
 
       const { data, error } = await supabase
         .from("students")
@@ -126,7 +157,7 @@ function StudentPage() {
         });
       }
     } else {
-      const { student_no, ...newStudentData } = form;
+      const { student_no, ...newStudentData } = normalizedForm;
 
       const { error } = await supabase
         .from("students")
@@ -181,7 +212,9 @@ function StudentPage() {
       student.student_no?.toLowerCase().includes(keyword) ||
       student.chinese_name?.toLowerCase().includes(keyword) ||
       student.english_name?.toLowerCase().includes(keyword) ||
-      student.primary_parent_phone?.includes(keyword)
+      student.primary_parent_phone?.includes(keyword) ||
+      student.secondary_parent_phone?.includes(keyword) ||
+      student.school?.toLowerCase().includes(keyword)
     );
   });
 
@@ -231,7 +264,7 @@ function StudentPage() {
       <section className="card">
         <div className="cardHeader">
           <input
-            placeholder="搜尋姓名、英文名、學號、電話..."
+            placeholder="搜尋姓名、英文名、學號、電話、學校..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
           />
