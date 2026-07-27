@@ -414,6 +414,7 @@ function CoursePage() {
 
       if (error) throw error;
       setSelectedStudentIds([]);
+      setStudentSearchText("");
       await loadStudentRoster(studentClass.id);
     } catch (error) {
       console.error("加入學生失敗：", error);
@@ -510,6 +511,10 @@ function CoursePage() {
         })
         .slice(0, 30)
     : [];
+
+  const selectedStudentsForAdd = selectedStudentIds
+    .map((studentId) => allStudents.find((student) => student.id === studentId))
+    .filter(Boolean);
 
 
   async function openScheduleDrawer(classItem) {
@@ -1396,7 +1401,17 @@ function CoursePage() {
               <header className="courseDrawer__header">
                 <div>
                   <p>STUDENT ROSTER</p>
-                  <h2 id="student-drawer-title">{studentClass.class_name}｜學生名單</h2>
+                  <h2 id="student-drawer-title">{studentClass.class_name}</h2>
+                  <small
+                    style={{
+                      display: "block",
+                      marginTop: "6px",
+                      color: "#8c9a94",
+                      fontSize: "15px",
+                    }}
+                  >
+                    管理這個班級的學生名單
+                  </small>
                 </div>
                 <button
                   type="button"
@@ -1411,36 +1426,111 @@ function CoursePage() {
 
               <div className="courseDrawer__form">
                 <div className="courseDrawer__fields">
-                  <div className="courseDrawer__field">
+                  <div
+                    className="courseDrawer__field"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr auto",
+                      alignItems: "center",
+                      gap: "8px 16px",
+                    }}
+                  >
                     <span>目前學生</span>
-                    <strong>{classStudents.length} 人</strong>
-                    {isLoadingStudents ? (
-                      <small>正在讀取學生資料…</small>
-                    ) : classStudents.length === 0 ? (
-                      <small>這個班級目前尚未加入學生。</small>
-                    ) : (
-                      <div>
-                        {classStudents.map((item) => (
-                          <p key={item.id}>
-                            <strong>{getStudentDisplayName(item.students)}</strong>
-                            {item.students?.english_name ? `｜${item.students.english_name}` : ""}
-                            <button
-                              type="button"
-                              className="courseCard__toggleButton courseCard__toggleButton--disable"
-                              onClick={() => removeStudentFromClass(item)}
-                              disabled={isSavingStudents}
-                              style={{ marginLeft: "12px" }}
+                    <strong style={{ fontSize: "18px" }}>
+                      {classStudents.length} 人
+                    </strong>
+
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      {isLoadingStudents ? (
+                        <small>正在讀取學生資料…</small>
+                      ) : classStudents.length === 0 ? (
+                        <small>這個班級目前尚未加入學生。</small>
+                      ) : (
+                        <div style={{ display: "grid", gap: "8px" }}>
+                          {classStudents.map((item) => (
+                            <div
+                              key={item.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: "12px",
+                                padding: "10px 12px",
+                                border: "1px solid #e4ebe7",
+                                borderRadius: "12px",
+                              }}
                             >
-                              移除
-                            </button>
-                          </p>
-                        ))}
-                      </div>
-                    )}
+                              <span>
+                                <strong>
+                                  {getStudentDisplayName(item.students)}
+                                </strong>
+                                {item.students?.english_name
+                                  ? `｜${item.students.english_name}`
+                                  : ""}
+                              </span>
+
+                              <button
+                                type="button"
+                                className="courseCard__toggleButton courseCard__toggleButton--disable"
+                                onClick={() => removeStudentFromClass(item)}
+                                disabled={isSavingStudents}
+                              >
+                                移除
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
+                  {selectedStudentsForAdd.length > 0 && (
+                    <div className="courseDrawer__field">
+                      <span>
+                        待加入學生（{selectedStudentsForAdd.length} 人）
+                      </span>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "8px",
+                        }}
+                      >
+                        {selectedStudentsForAdd.map((student) => (
+                          <button
+                            key={student.id}
+                            type="button"
+                            onClick={() => toggleStudentSelection(student.id)}
+                            disabled={isSavingStudents}
+                            title="按一下取消選取"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              padding: "8px 12px",
+                              border: "1px solid #bed1c8",
+                              borderRadius: "999px",
+                              background: "#f3f8f5",
+                              color: "#2f5548",
+                              cursor: isSavingStudents ? "default" : "pointer",
+                              font: "inherit",
+                            }}
+                          >
+                            <strong>{getStudentDisplayName(student)}</strong>
+                            <span aria-hidden="true">×</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      <small>
+                        可繼續搜尋其他學生；已選取的人會保留在這裡。
+                      </small>
+                    </div>
+                  )}
+
                   <label className="courseDrawer__field">
-                    <span>搜尋可加入的學生</span>
+                    <span>搜尋並加入學生</span>
                     <input
                       type="search"
                       value={studentSearchText}
@@ -1448,7 +1538,7 @@ function CoursePage() {
                       placeholder="輸入姓名、英文名、學校或學號…"
                     />
                     <small>
-                      為避免學生資料過多，請先輸入關鍵字；每次最多顯示 30 筆。
+                      搜尋後勾選學生，再換一個關鍵字繼續找；已選取名單不會消失。
                     </small>
                   </label>
 
@@ -1476,9 +1566,9 @@ function CoursePage() {
 
                   <div className="courseDrawer__field">
                     <span>
-                      選擇學生
+                      搜尋結果
                       {normalizedStudentSearch
-                        ? `（找到 ${availableStudentsForClass.length} 筆）`
+                        ? `（${availableStudentsForClass.length} 筆）`
                         : ""}
                     </span>
 
