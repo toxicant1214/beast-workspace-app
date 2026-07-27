@@ -768,3 +768,41 @@ overflow: hidden;
     flex-direction: column;
   }
 }
+.courseCard__top--statusOnly {
+  justify-content: flex-end;
+}
+.courseCard__body--class {
+  min-height: auto;
+  padding: 18px 0 12px;
+}
+
+.courseCard__scheduleSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 14px 0;
+  border-top: 1px solid #edf1ef;
+  border-bottom: 1px solid #edf1ef;
+  color: #52615b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.courseCard__scheduleSummary span {
+  white-space: nowrap;
+}
+
+.courseCard__scheduleState {
+  margin: 14px 0 0;
+  color: #9aa49f;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.courseCard__actions--class {
+  flex-wrap: wrap;
+}
+
+.courseCard__actions--class button {
+  min-width: 110px;
+}
