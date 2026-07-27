@@ -1253,27 +1253,6 @@ function CoursePage() {
   }
 
   async function generateAttendanceSheet(classItem) {
-    const printWindow = window.open("", "_blank");
-
-    if (!printWindow) {
-      window.alert("瀏覽器阻擋了點名表視窗，請允許這個網站開啟彈出式視窗後再試一次。");
-      return;
-    }
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html lang="zh-Hant">
-        <head>
-          <meta charset="utf-8" />
-          <title>正在產生點名表…</title>
-        </head>
-        <body style="font-family: sans-serif; padding: 32px;">
-          正在整理課程日期與學生名單，請稍候…
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-
     try {
       const [{ data: sessions, error: sessionError }, { data: roster, error: rosterError }] =
         await Promise.all([
@@ -1293,7 +1272,7 @@ function CoursePage() {
               students (*)
             `)
             .eq("course_class_id", classItem.id)
-            .order("is_active", { ascending: false })
+            .eq("is_active", true)
             .order("created_at", { ascending: true }),
         ]);
 
@@ -1311,264 +1290,461 @@ function CoursePage() {
         .slice(0, 12);
 
       if (validSessions.length === 0) {
-        printWindow.close();
         window.alert("這個班級尚未產生可使用的上課日期，請先安排課程日期。");
         return;
       }
 
-      const validRoster = (roster || []).filter(
-        (item) => item.students && (item.is_active || item.left_at)
+      const activeRoster = (roster || []).filter(
+        (item) => item.is_active && item.students
       );
 
-      if (validRoster.length === 0) {
-        printWindow.close();
-        window.alert("這個班級目前沒有可列入點名表的學生。");
+      if (activeRoster.length === 0) {
+        window.alert("這個班級目前沒有持續上課中的學生。");
         return;
       }
 
+      await document.fonts.ready;
+
+      const bodyFont =
+        window.getComputedStyle(document.body).fontFamily ||
+        '"Iansui", "芫荽", "Noto Sans TC", sans-serif';
+
+      try {
+        await document.fonts.load(`48px ${bodyFont}`);
+      } catch (fontError) {
+        console.warn("等待系統字型載入時發生問題，將沿用目前頁面字型：", fontError);
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 3508;
+      canvas.height = 2480;
+
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        throw new Error("瀏覽器無法建立點名表畫布。");
+      }
+
+      const scaleX = canvas.width / 3508;
+      const scaleY = canvas.height / 2480;
+      ctx.scale(scaleX, scaleY);
+
+      const pageWidth = 3508;
+      const pageHeight = 2480;
+      const marginX = 120;
+      const top = 105;
+      const contentWidth = pageWidth - marginX * 2;
+
+      const palette = {
+        ink: "#263029",
+        muted: "#667068",
+        border: "#7f8a82",
+        softBorder: "#bac4bc",
+        green: "#738b62",
+        paleGreen: "#edf2e7",
+        cream: "#f7f5ec",
+        yellow: "#e9c968",
+        white: "#ffffff",
+        stripe: "#fafbf8",
+      };
+
+      const setFont = (size, weight = 400) => {
+        ctx.font = `${weight} ${size}px ${bodyFont}`;
+      };
+
+      const roundedRect = (x, y, width, height, radius) => {
+        const safeRadius = Math.min(radius, width / 2, height / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + safeRadius, y);
+        ctx.lineTo(x + width - safeRadius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+        ctx.lineTo(x + width, y + height - safeRadius);
+        ctx.quadraticCurveTo(
+          x + width,
+          y + height,
+          x + width - safeRadius,
+          y + height
+        );
+        ctx.lineTo(x + safeRadius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+        ctx.lineTo(x, y + safeRadius);
+        ctx.quadraticCurveTo(x, y, x + safeRadius, y);
+        ctx.closePath();
+      };
+
+      const drawCenteredText = (text, x, y, width, height, options = {}) => {
+        const {
+          size = 30,
+          weight = 400,
+          color = palette.ink,
+          lineHeight = size * 1.2,
+        } = options;
+
+        const lines = Array.isArray(text) ? text : [text];
+
+        ctx.save();
+        ctx.fillStyle = color;
+        setFont(size, weight);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        const blockHeight = lineHeight * lines.length;
+        const startY = y + height / 2 - blockHeight / 2 + lineHeight / 2;
+
+        lines.forEach((line, index) => {
+          ctx.fillText(String(line), x + width / 2, startY + index * lineHeight);
+        });
+
+        ctx.restore();
+      };
+
+      const drawLeaf = (x, y, rotation, size, color) => {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size * 0.48, size, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
+
       const courseName = managingCourse?.course_name || "課程";
+      const className = classItem.class_name || "班級";
+      const weekdayText = getWeekdayLabel(classItem.weekday);
       const timeText =
         classItem.start_time && classItem.end_time
           ? `${normalizeTime(classItem.start_time)}–${normalizeTime(classItem.end_time)}`
           : "";
 
-      const dateHeaders = Array.from({ length: 12 }, (_, index) => {
-        const session = validSessions[index];
+      ctx.fillStyle = palette.white;
+      ctx.fillRect(0, 0, pageWidth, pageHeight);
 
-        if (!session) {
-          return `
-            <th class="date-column">
-              <span class="session-number">第 ${index + 1} 堂</span>
-              <span class="session-date">尚未排定</span>
-            </th>
-          `;
+      // 頂部柔和底色
+      const headerGradient = ctx.createLinearGradient(0, 0, pageWidth, 0);
+      headerGradient.addColorStop(0, "#f4f6ed");
+      headerGradient.addColorStop(0.62, "#ffffff");
+      headerGradient.addColorStop(1, "#fbf7e7");
+      ctx.fillStyle = headerGradient;
+      ctx.fillRect(0, 0, pageWidth, 410);
+
+      // 左上識別與標題
+      ctx.fillStyle = palette.green;
+      roundedRect(marginX, top, 76, 76, 24);
+      ctx.fill();
+
+      ctx.strokeStyle = palette.white;
+      ctx.lineWidth = 9;
+      ctx.beginPath();
+      ctx.arc(marginX + 38, top + 38, 22, 0.2, Math.PI * 1.7);
+      ctx.stroke();
+
+      ctx.fillStyle = palette.yellow;
+      ctx.beginPath();
+      ctx.arc(marginX + 57, top + 19, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = palette.ink;
+      setFont(32, 700);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText("BEAST", marginX + 98, top + 3);
+
+      ctx.fillStyle = palette.muted;
+      setFont(24, 500);
+      ctx.fillText("倍思學院", marginX + 98, top + 46);
+
+      ctx.fillStyle = palette.paleGreen;
+      roundedRect(marginX + 470, top - 4, 500, 92, 46);
+      ctx.fill();
+
+      ctx.fillStyle = palette.ink;
+      setFont(54, 700);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("點 名 表", marginX + 720, top + 42);
+
+      // 右上簡約裝飾
+      ctx.strokeStyle = palette.green;
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.moveTo(pageWidth - 300, top + 125);
+      ctx.quadraticCurveTo(pageWidth - 245, top + 62, pageWidth - 215, top + 5);
+      ctx.stroke();
+      drawLeaf(pageWidth - 270, top + 90, -0.8, 25, "#90a77c");
+      drawLeaf(pageWidth - 235, top + 53, 0.7, 24, "#758f64");
+      drawLeaf(pageWidth - 207, top + 18, -0.5, 20, "#a7b990");
+      ctx.fillStyle = palette.yellow;
+      ctx.beginPath();
+      ctx.arc(pageWidth - 155, top + 22, 22, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 課程資訊
+      const infoY = 245;
+      ctx.fillStyle = palette.ink;
+      setFont(31, 600);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`課程：${courseName}`, marginX, infoY);
+
+      ctx.fillText(`班級：${className}`, marginX + 760, infoY);
+
+      const scheduleText = [weekdayText, timeText].filter(Boolean).join(" ");
+      ctx.fillText(`上課時間：${scheduleText || "尚未設定"}`, marginX + 1440, infoY);
+
+      ctx.fillStyle = palette.muted;
+      setFont(24, 400);
+      ctx.fillText(`目前上課學生：${activeRoster.length} 人`, marginX, infoY + 65);
+
+      // 表格尺寸
+      const tableX = marginX;
+      const tableY = 405;
+      const tableWidth = contentWidth;
+      const headerHeight = 150;
+
+      const reservedBottom = 210;
+      const availableBodyHeight = pageHeight - tableY - headerHeight - reservedBottom;
+      const minimumRows = 12;
+      const displayRows = Math.max(minimumRows, activeRoster.length);
+      const rowHeight = Math.min(112, Math.floor(availableBodyHeight / displayRows));
+      const tableHeight = headerHeight + rowHeight * displayRows;
+
+      const numberWidth = 72;
+      const nameWidth = 255;
+      const phoneWidth = 330;
+      const dateWidth = (tableWidth - numberWidth - nameWidth - phoneWidth) / 12;
+
+      const columnXs = [tableX];
+      [numberWidth, nameWidth, phoneWidth, ...Array(12).fill(dateWidth)].forEach(
+        (width) => {
+          columnXs.push(columnXs[columnXs.length - 1] + width);
         }
+      );
 
-        return `
-          <th class="date-column">
-            <span class="session-number">第 ${index + 1} 堂</span>
-            <span class="session-date">
-              ${escapePrintHtml(formatAttendanceDate(session.session_date))}
-            </span>
-          </th>
-        `;
-      }).join("");
+      // 表格外框
+      ctx.fillStyle = palette.white;
+      ctx.strokeStyle = palette.border;
+      ctx.lineWidth = 3;
+      roundedRect(tableX, tableY, tableWidth, tableHeight, 18);
+      ctx.fill();
+      ctx.stroke();
 
-      const studentRows = validRoster
-        .map((item, studentIndex) => {
-          const student = item.students;
-          const name = getStudentDisplayName(student);
-          const phone = getParentPhone(student);
+      // 表頭底色
+      ctx.save();
+      roundedRect(tableX, tableY, tableWidth, headerHeight, 18);
+      ctx.clip();
 
-          const attendanceCells = Array.from({ length: 12 }, (_, index) => {
-            const session = validSessions[index];
+      const tableGradient = ctx.createLinearGradient(
+        tableX,
+        tableY,
+        tableX,
+        tableY + headerHeight
+      );
+      tableGradient.addColorStop(0, "#eaf0e2");
+      tableGradient.addColorStop(1, "#f6f8f2");
+      ctx.fillStyle = tableGradient;
+      ctx.fillRect(tableX, tableY, tableWidth, headerHeight);
+      ctx.restore();
 
-            if (!session) {
-              return '<td class="attendance-cell unavailable"></td>';
-            }
+      // 斑馬紋
+      for (let rowIndex = 0; rowIndex < displayRows; rowIndex += 1) {
+        if (rowIndex % 2 === 1) {
+          ctx.fillStyle = palette.stripe;
+          ctx.fillRect(
+            tableX,
+            tableY + headerHeight + rowIndex * rowHeight,
+            tableWidth,
+            rowHeight
+          );
+        }
+      }
 
-            const isAfterWithdrawal =
-              item.left_at && session.session_date > item.left_at;
+      // 格線
+      ctx.strokeStyle = palette.softBorder;
+      ctx.lineWidth = 2;
 
-            return isAfterWithdrawal
-              ? '<td class="attendance-cell unavailable"></td>'
-              : '<td class="attendance-cell"></td>';
-          }).join("");
+      columnXs.slice(1, -1).forEach((x) => {
+        ctx.beginPath();
+        ctx.moveTo(x, tableY);
+        ctx.lineTo(x, tableY + tableHeight);
+        ctx.stroke();
+      });
 
-          return `
-            <tr>
-              <td class="number-column">${studentIndex + 1}</td>
-              <td class="name-column">${escapePrintHtml(name)}</td>
-              <td class="phone-column">${escapePrintHtml(phone)}</td>
-              ${attendanceCells}
-            </tr>
-          `;
-        })
-        .join("");
+      ctx.beginPath();
+      ctx.moveTo(tableX, tableY + headerHeight);
+      ctx.lineTo(tableX + tableWidth, tableY + headerHeight);
+      ctx.stroke();
 
-      const html = `
-        <!doctype html>
-        <html lang="zh-Hant">
-          <head>
-            <meta charset="utf-8" />
-            <title>${escapePrintHtml(courseName)}－${escapePrintHtml(
-              classItem.class_name
-            )}點名表</title>
-            <style>
-              * { box-sizing: border-box; }
+      for (let rowIndex = 1; rowIndex < displayRows; rowIndex += 1) {
+        const y = tableY + headerHeight + rowIndex * rowHeight;
+        ctx.beginPath();
+        ctx.moveTo(tableX, y);
+        ctx.lineTo(tableX + tableWidth, y);
+        ctx.stroke();
+      }
 
-              body {
-                margin: 0;
-                color: #222;
-                font-family:
-                  "Noto Sans TC",
-                  "PingFang TC",
-                  "Microsoft JhengHei",
-                  sans-serif;
-                background: #fff;
-              }
+      // 表頭文字
+      drawCenteredText("序", tableX, tableY, numberWidth, headerHeight, {
+        size: 29,
+        weight: 700,
+      });
 
-              .sheet {
-                width: 100%;
-                padding: 7mm;
-              }
+      drawCenteredText("學生姓名", tableX + numberWidth, tableY, nameWidth, headerHeight, {
+        size: 31,
+        weight: 700,
+      });
 
-              header {
-                display: flex;
-                align-items: flex-end;
-                justify-content: space-between;
-                gap: 16px;
-                margin-bottom: 8px;
-              }
+      drawCenteredText(
+        "家長電話",
+        tableX + numberWidth + nameWidth,
+        tableY,
+        phoneWidth,
+        headerHeight,
+        {
+          size: 31,
+          weight: 700,
+        }
+      );
 
-              h1 {
-                margin: 0 0 3px;
-                font-size: 18px;
-                letter-spacing: 0.03em;
-              }
+      for (let index = 0; index < 12; index += 1) {
+        const session = validSessions[index];
+        const columnX =
+          tableX + numberWidth + nameWidth + phoneWidth + index * dateWidth;
 
-              header p {
-                margin: 0;
-                font-size: 11px;
-                color: #555;
-              }
+        const dateText = session
+          ? formatAttendanceDate(session.session_date)
+          : "尚未排定";
 
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                table-layout: fixed;
-              }
+        const [dateLine, weekdayLine] = dateText.includes("（")
+          ? dateText.replace("）", "").split("（")
+          : [dateText, ""];
 
-              th,
-              td {
-                border: 1px solid #333;
-                text-align: center;
-                vertical-align: middle;
-              }
+        ctx.fillStyle = palette.green;
+        ctx.beginPath();
+        ctx.arc(columnX + dateWidth / 2, tableY + 36, 24, 0, Math.PI * 2);
+        ctx.fill();
 
-              th {
-                height: 50px;
-                padding: 3px 2px;
-                background: #f1f1ee;
-                font-weight: 700;
-                font-size: 9px;
-              }
+        ctx.fillStyle = palette.white;
+        setFont(22, 700);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(index + 1), columnX + dateWidth / 2, tableY + 36);
 
-              td {
-                height: 34px;
-                padding: 3px;
-                font-size: 10px;
-              }
+        drawCenteredText(
+          [dateLine, weekdayLine ? `（${weekdayLine}）` : ""].filter(Boolean),
+          columnX,
+          tableY + 62,
+          dateWidth,
+          headerHeight - 62,
+          {
+            size: 22,
+            weight: 600,
+            lineHeight: 29,
+          }
+        );
+      }
 
-              .number-column { width: 24px; }
-              .name-column { width: 68px; font-size: 11px; }
-              .phone-column { width: 88px; font-size: 9px; }
-              .date-column { width: 50px; }
+      // 學生資料
+      for (let rowIndex = 0; rowIndex < displayRows; rowIndex += 1) {
+        const rowY = tableY + headerHeight + rowIndex * rowHeight;
+        const rosterItem = activeRoster[rowIndex];
 
-              .session-number,
-              .session-date {
-                display: block;
-                line-height: 1.25;
-              }
+        if (!rosterItem) continue;
 
-              .session-number {
-                margin-bottom: 2px;
-                font-size: 9px;
-              }
+        const student = rosterItem.students;
+        const name = getStudentDisplayName(student);
+        const phone = getParentPhone(student);
 
-              .session-date {
-                font-size: 8px;
-                font-weight: 500;
-              }
+        drawCenteredText(
+          String(rowIndex + 1),
+          tableX,
+          rowY,
+          numberWidth,
+          rowHeight,
+          { size: 27, weight: 500 }
+        );
 
-              .attendance-cell { height: 34px; }
+        drawCenteredText(
+          name,
+          tableX + numberWidth,
+          rowY,
+          nameWidth,
+          rowHeight,
+          { size: 29, weight: 600 }
+        );
 
-              .unavailable {
-                background:
-                  linear-gradient(
-                    to bottom right,
-                    transparent 48%,
-                    #aaa 49%,
-                    #aaa 51%,
-                    transparent 52%
-                  ),
-                  #f3f3f3;
-              }
+        drawCenteredText(
+          phone || "—",
+          tableX + numberWidth + nameWidth,
+          rowY,
+          phoneWidth,
+          rowHeight,
+          {
+            size: phone ? 25 : 23,
+            weight: 400,
+            color: phone ? palette.ink : palette.muted,
+          }
+        );
+      }
 
-              footer {
-                display: flex;
-                align-items: flex-start;
-                gap: 8px;
-                margin-top: 9px;
-                font-size: 10px;
-              }
+      // 下方備註區
+      const footerY = tableY + tableHeight + 55;
 
-              footer div {
-                flex: 1;
-                min-height: 26px;
-                border-bottom: 1px solid #777;
-              }
+      ctx.fillStyle = palette.paleGreen;
+      roundedRect(tableX, footerY, 620, 95, 26);
+      ctx.fill();
 
-              @page {
-                size: A4 landscape;
-                margin: 4mm;
-              }
+      ctx.fillStyle = palette.green;
+      setFont(28, 700);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("點名提醒", tableX + 28, footerY + 47);
 
-              @media print {
-                .sheet { padding: 0; }
-              }
-            </style>
-          </head>
-          <body>
-            <section class="sheet">
-              <header>
-                <div>
-                  <h1>${escapePrintHtml(courseName)}｜${escapePrintHtml(
-                    classItem.class_name
-                  )} 點名表</h1>
-                  <p>
-                    ${escapePrintHtml(getWeekdayLabel(classItem.weekday))}
-                    ${timeText ? `｜${escapePrintHtml(timeText)}` : ""}
-                  </p>
-                </div>
-              </header>
+      ctx.fillStyle = palette.ink;
+      setFont(24, 400);
+      ctx.fillText("請於每堂課確實完成紙本點名。", tableX + 175, footerY + 47);
 
-              <table>
-                <thead>
-                  <tr>
-                    <th class="number-column">序</th>
-                    <th class="name-column">學生姓名</th>
-                    <th class="phone-column">家長電話</th>
-                    ${dateHeaders}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${studentRows}
-                </tbody>
-              </table>
+      ctx.fillStyle = palette.ink;
+      setFont(28, 600);
+      ctx.fillText("備註：", tableX + 780, footerY + 48);
 
-              <footer>
-                <span>備註：</span>
-                <div></div>
-              </footer>
-            </section>
+      ctx.strokeStyle = palette.border;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(tableX + 900, footerY + 58);
+      ctx.lineTo(tableX + tableWidth - 20, footerY + 58);
+      ctx.stroke();
 
-            <script>
-              window.addEventListener("load", () => {
-                window.setTimeout(() => window.print(), 250);
-              });
-            </script>
-          </body>
-        </html>
-      `;
+      const safeCourseName = String(courseName)
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .trim();
+      const safeClassName = String(className)
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .trim();
 
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            window.alert("點名表圖片產生失敗，請再試一次。");
+            return;
+          }
+
+          const url = URL.createObjectURL(blob);
+          const downloadLink = document.createElement("a");
+          downloadLink.href = url;
+          downloadLink.download = `${safeCourseName}_${safeClassName}_點名表.png`;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          downloadLink.remove();
+
+          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        },
+        "image/png",
+        1
+      );
     } catch (error) {
-      console.error("產生點名表失敗：", error);
-      printWindow.close();
-      window.alert(`產生點名表失敗：${error.message}`);
+      console.error("下載點名表 PNG圖檔失敗：", error);
+      window.alert(`下載點名表 PNG圖檔失敗：${error.message}`);
     }
   }
 
@@ -1847,10 +2023,10 @@ function CoursePage() {
                         title={
                           getGeneratedSessionCount(classItem) === 0
                             ? "請先安排課程日期"
-                            : "依課程日期、學生姓名與家長電話產生可列印點名表"
+                            : "依課程日期、目前上課學生姓名與家長電話產生高解析度 PNG"
                         }
                       >
-                        產生點名表
+                        下載點名表 PNG
                       </button>
 
                       <button
