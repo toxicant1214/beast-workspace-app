@@ -71,6 +71,9 @@ function CoursePage() {
   const [allStudents, setAllStudents] = useState([]);
   const [studentSearchText, setStudentSearchText] = useState("");
   const [showHistoricalStudents, setShowHistoricalStudents] = useState(false);
+  const [studentJoinDate, setStudentJoinDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isSavingStudents, setIsSavingStudents] = useState(false);
@@ -291,6 +294,67 @@ function CoursePage() {
     }
   }
 
+  async function deleteCoursePermanently(course) {
+    const classCount = getClassCount(course);
+    const typedName = window.prompt(
+      `這會永久刪除「${course.course_name}」以及底下的 ${classCount} 個班級、課程日期與學生修課關聯。\n\n此操作無法復原。若確定刪除，請輸入完整課程名稱：`
+    );
+
+    if (typedName === null) return;
+
+    if (typedName.trim() !== course.course_name.trim()) {
+      window.alert("輸入的課程名稱不一致，已取消刪除。");
+      return;
+    }
+
+    try {
+      const { data: classes, error: classLoadError } = await supabase
+        .from("course_classes")
+        .select("id")
+        .eq("course_id", course.id);
+
+      if (classLoadError) throw classLoadError;
+
+      const classIds = (classes || []).map((item) => item.id);
+
+      if (classIds.length > 0) {
+        const { error: rosterDeleteError } = await supabase
+          .from("course_class_students")
+          .delete()
+          .in("course_class_id", classIds);
+
+        if (rosterDeleteError) throw rosterDeleteError;
+
+        const { error: sessionDeleteError } = await supabase
+          .from("course_class_sessions")
+          .delete()
+          .in("course_class_id", classIds);
+
+        if (sessionDeleteError) throw sessionDeleteError;
+
+        const { error: classDeleteError } = await supabase
+          .from("course_classes")
+          .delete()
+          .in("id", classIds);
+
+        if (classDeleteError) throw classDeleteError;
+      }
+
+      const { error: courseDeleteError } = await supabase
+        .from("courses")
+        .delete()
+        .eq("id", course.id);
+
+      if (courseDeleteError) throw courseDeleteError;
+
+      await loadCourses();
+      window.alert(`已永久刪除「${course.course_name}」。`);
+    } catch (error) {
+      console.error("永久刪除課程失敗：", error);
+      window.alert(`永久刪除課程失敗：${error.message}`);
+    }
+  }
+
   async function openCourseClasses(course) {
     setManagingCourse(course);
     setViewMode("CLASSES");
@@ -331,7 +395,7 @@ function CoursePage() {
         students (*)
       `)
       .eq("course_class_id", classId)
-      .eq("is_active", true)
+      .order("is_active", { ascending: false })
       .order("joined_at", { ascending: true });
 
     if (error) throw error;
@@ -352,6 +416,7 @@ function CoursePage() {
     setStudentClass(classItem);
     setStudentSearchText("");
     setShowHistoricalStudents(false);
+    setStudentJoinDate(new Date().toISOString().slice(0, 10));
     setSelectedStudentIds([]);
     setStudentError("");
     setIsStudentDrawerOpen(true);
@@ -381,6 +446,7 @@ function CoursePage() {
     setSelectedStudentIds([]);
     setStudentSearchText("");
     setShowHistoricalStudents(false);
+    setStudentJoinDate(new Date().toISOString().slice(0, 10));
     setStudentError("");
   }
 
@@ -402,7 +468,7 @@ function CoursePage() {
       const payload = selectedStudentIds.map((studentId) => ({
         course_class_id: studentClass.id,
         student_id: studentId,
-        joined_at: new Date().toISOString().slice(0, 10),
+        joined_at: studentJoinDate,
         left_at: null,
         is_active: true,
         updated_at: new Date().toISOString(),
@@ -424,20 +490,42 @@ function CoursePage() {
     }
   }
 
-  async function removeStudentFromClass(rosterItem) {
+  async function withdrawStudentFromClass(rosterItem) {
     if (!studentClass) return;
+
     const name = getStudentDisplayName(rosterItem.students);
-    if (!window.confirm(`確定要將「${name}」移出這個班級嗎？`)) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const leftDate = window.prompt(
+      `請輸入「${name}」的退班日期（YYYY-MM-DD）：`,
+      today
+    );
+
+    if (leftDate === null) return;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(leftDate.trim())) {
+      window.alert("日期格式不正確，請使用 YYYY-MM-DD。");
+      return;
+    }
+
+    if (
+      rosterItem.joined_at &&
+      leftDate.trim() < String(rosterItem.joined_at).slice(0, 10)
+    ) {
+      window.alert("退班日期不能早於插班日期。");
+      return;
+    }
+
+    if (!window.confirm(`確定將「${name}」設為退班嗎？`)) return;
 
     try {
       setIsSavingStudents(true);
       setStudentError("");
-      const today = new Date().toISOString().slice(0, 10);
+
       const { error } = await supabase
         .from("course_class_students")
         .update({
           is_active: false,
-          left_at: today,
+          left_at: leftDate.trim(),
           updated_at: new Date().toISOString(),
         })
         .eq("id", rosterItem.id);
@@ -445,8 +533,49 @@ function CoursePage() {
       if (error) throw error;
       await loadStudentRoster(studentClass.id);
     } catch (error) {
-      console.error("移除學生失敗：", error);
-      setStudentError(`移除學生失敗：${error.message}`);
+      console.error("學生退班失敗：", error);
+      setStudentError(`學生退班失敗：${error.message}`);
+    } finally {
+      setIsSavingStudents(false);
+    }
+  }
+
+  async function rejoinStudentToClass(rosterItem) {
+    if (!studentClass) return;
+
+    const name = getStudentDisplayName(rosterItem.students);
+    const today = new Date().toISOString().slice(0, 10);
+    const joinDate = window.prompt(
+      `請輸入「${name}」重新插班的日期（YYYY-MM-DD）：`,
+      today
+    );
+
+    if (joinDate === null) return;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(joinDate.trim())) {
+      window.alert("日期格式不正確，請使用 YYYY-MM-DD。");
+      return;
+    }
+
+    try {
+      setIsSavingStudents(true);
+      setStudentError("");
+
+      const { error } = await supabase
+        .from("course_class_students")
+        .update({
+          joined_at: joinDate.trim(),
+          left_at: null,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", rosterItem.id);
+
+      if (error) throw error;
+      await loadStudentRoster(studentClass.id);
+    } catch (error) {
+      console.error("重新插班失敗：", error);
+      setStudentError(`重新插班失敗：${error.message}`);
     } finally {
       setIsSavingStudents(false);
     }
@@ -515,6 +644,9 @@ function CoursePage() {
   const selectedStudentsForAdd = selectedStudentIds
     .map((studentId) => allStudents.find((student) => student.id === studentId))
     .filter(Boolean);
+
+  const activeClassStudents = classStudents.filter((item) => item.is_active);
+  const inactiveClassStudents = classStudents.filter((item) => !item.is_active);
 
 
   async function openScheduleDrawer(classItem) {
@@ -1035,6 +1167,49 @@ function CoursePage() {
     }
   }
 
+  async function deleteClassPermanently(classItem) {
+    const sessionCount = getGeneratedSessionCount(classItem);
+    const typedName = window.prompt(
+      `這會永久刪除班級「${classItem.class_name}」、${sessionCount} 堂課程日期，以及此班的學生修課關聯。\n\n學生主資料不會被刪除。此操作無法復原。若確定刪除，請輸入完整班級名稱：`
+    );
+
+    if (typedName === null) return;
+
+    if (typedName.trim() !== classItem.class_name.trim()) {
+      window.alert("輸入的班級名稱不一致，已取消刪除。");
+      return;
+    }
+
+    try {
+      const { error: rosterDeleteError } = await supabase
+        .from("course_class_students")
+        .delete()
+        .eq("course_class_id", classItem.id);
+
+      if (rosterDeleteError) throw rosterDeleteError;
+
+      const { error: sessionDeleteError } = await supabase
+        .from("course_class_sessions")
+        .delete()
+        .eq("course_class_id", classItem.id);
+
+      if (sessionDeleteError) throw sessionDeleteError;
+
+      const { error: classDeleteError } = await supabase
+        .from("course_classes")
+        .delete()
+        .eq("id", classItem.id);
+
+      if (classDeleteError) throw classDeleteError;
+
+      await loadCourseClasses(managingCourse.id);
+      window.alert(`已永久刪除班級「${classItem.class_name}」。`);
+    } catch (error) {
+      console.error("永久刪除班級失敗：", error);
+      window.alert(`永久刪除班級失敗：${error.message}`);
+    }
+  }
+
   function getClassCount(course) {
     return Array.isArray(course.course_classes)
       ? course.course_classes.length
@@ -1376,6 +1551,20 @@ function CoursePage() {
                       >
                         {classItem.is_active ? "停用" : "重新啟用"}
                       </button>
+
+                      <button
+                        type="button"
+                        className="courseCard__toggleButton courseCard__toggleButton--disable"
+                        onClick={() => deleteClassPermanently(classItem)}
+                        title="永久刪除班級與其測試資料"
+                        style={{
+                          borderColor: "#d79a91",
+                          color: "#a74b3f",
+                          background: "#fff8f7",
+                        }}
+                      >
+                        永久刪除
+                      </button>
                     </div>
                   </article>
                 ))}
@@ -1426,63 +1615,130 @@ function CoursePage() {
 
               <div className="courseDrawer__form">
                 <div className="courseDrawer__fields">
-                  <div
-                    className="courseDrawer__field"
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto",
-                      alignItems: "center",
-                      gap: "8px 16px",
-                    }}
-                  >
-                    <span>目前學生</span>
-                    <strong style={{ fontSize: "18px" }}>
-                      {classStudents.length} 人
-                    </strong>
-
-                    <div style={{ gridColumn: "1 / -1" }}>
-                      {isLoadingStudents ? (
-                        <small>正在讀取學生資料…</small>
-                      ) : classStudents.length === 0 ? (
-                        <small>這個班級目前尚未加入學生。</small>
-                      ) : (
-                        <div style={{ display: "grid", gap: "8px" }}>
-                          {classStudents.map((item) => (
-                            <div
-                              key={item.id}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                gap: "12px",
-                                padding: "10px 12px",
-                                border: "1px solid #e4ebe7",
-                                borderRadius: "12px",
-                              }}
-                            >
-                              <span>
-                                <strong>
-                                  {getStudentDisplayName(item.students)}
-                                </strong>
-                                {item.students?.english_name
-                                  ? `｜${item.students.english_name}`
-                                  : ""}
-                              </span>
-
-                              <button
-                                type="button"
-                                className="courseCard__toggleButton courseCard__toggleButton--disable"
-                                onClick={() => removeStudentFromClass(item)}
-                                disabled={isSavingStudents}
-                              >
-                                移除
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                  <div className="courseDrawer__field">
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                      }}
+                    >
+                      <span>目前上課學生</span>
+                      <strong style={{ fontSize: "18px" }}>
+                        {activeClassStudents.length} 人
+                      </strong>
                     </div>
+
+                    {isLoadingStudents ? (
+                      <small>正在讀取學生資料…</small>
+                    ) : activeClassStudents.length === 0 ? (
+                      <small>這個班級目前尚未加入學生。</small>
+                    ) : (
+                      <div style={{ display: "grid", gap: "8px" }}>
+                        {activeClassStudents.map((item) => (
+                          <div
+                            key={item.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              padding: "12px",
+                              border: "1px solid #e4ebe7",
+                              borderRadius: "12px",
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <strong>
+                                {getStudentDisplayName(item.students)}
+                              </strong>
+                              {item.students?.english_name
+                                ? `｜${item.students.english_name}`
+                                : ""}
+                              <small
+                                style={{
+                                  display: "block",
+                                  marginTop: "4px",
+                                }}
+                              >
+                                插班日期：{formatDate(item.joined_at)}
+                              </small>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="courseCard__toggleButton courseCard__toggleButton--disable"
+                              onClick={() => withdrawStudentFromClass(item)}
+                              disabled={isSavingStudents}
+                            >
+                              退班
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
+                  {inactiveClassStudents.length > 0 && (
+                    <div className="courseDrawer__field">
+                      <span>曾上過此班（{inactiveClassStudents.length} 人）</span>
+
+                      <div style={{ display: "grid", gap: "8px" }}>
+                        {inactiveClassStudents.map((item) => (
+                          <div
+                            key={item.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              padding: "12px",
+                              border: "1px dashed #d8dfdb",
+                              borderRadius: "12px",
+                              background: "#fafbf9",
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <strong>
+                                {getStudentDisplayName(item.students)}
+                              </strong>
+                              <small
+                                style={{
+                                  display: "block",
+                                  marginTop: "4px",
+                                }}
+                              >
+                                {formatDate(item.joined_at)}～{formatDate(item.left_at)}
+                              </small>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="courseCard__toggleButton courseCard__toggleButton--enable"
+                              onClick={() => rejoinStudentToClass(item)}
+                              disabled={isSavingStudents}
+                            >
+                              重新插班
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <label className="courseDrawer__field">
+                    <span>本次插班日期</span>
+                    <input
+                      type="date"
+                      value={studentJoinDate}
+                      onChange={(event) => setStudentJoinDate(event.target.value)}
+                      disabled={isSavingStudents}
+                    />
+                    <small>
+                      本次勾選加入的學生會共同使用這個插班日期。
+                    </small>
+                  </label>
 
                   {selectedStudentsForAdd.length > 0 && (
                     <div className="courseDrawer__field">
@@ -1663,7 +1919,7 @@ function CoursePage() {
                   >
                     {isSavingStudents
                       ? "加入中…"
-                      : `加入班級（${selectedStudentIds.length}）`}
+                      : `確認插班（${selectedStudentIds.length}）`}
                   </button>
                 </footer>
               </div>
@@ -2190,6 +2446,20 @@ function CoursePage() {
                       onClick={() => toggleCourseStatus(course)}
                     >
                       {course.is_active ? "停用" : "重新啟用"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="courseCard__toggleButton courseCard__toggleButton--disable"
+                      onClick={() => deleteCoursePermanently(course)}
+                      title="永久刪除課程與底下所有測試資料"
+                      style={{
+                        borderColor: "#d79a91",
+                        color: "#a74b3f",
+                        background: "#fff8f7",
+                      }}
+                    >
+                      永久刪除
                     </button>
                   </div>
                 </article>
