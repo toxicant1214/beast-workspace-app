@@ -19,6 +19,11 @@ const EMPTY_CLASS_FORM = {
   is_active: true,
 };
 
+const EMPTY_SCHEDULE_FORM = {
+  exclude_holidays: true,
+  exclude_custom: true,
+};
+
 const WEEKDAY_OPTIONS = [
   { value: "1", label: "星期一" },
   { value: "2", label: "星期二" },
@@ -56,6 +61,15 @@ function CoursePage() {
   const [classForm, setClassForm] = useState({ ...EMPTY_CLASS_FORM });
   const [isSavingClass, setIsSavingClass] = useState(false);
   const [classFormError, setClassFormError] = useState("");
+
+  const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState(false);
+  const [schedulingClass, setSchedulingClass] = useState(null);
+  const [scheduleForm, setScheduleForm] = useState({ ...EMPTY_SCHEDULE_FORM });
+  const [scheduleExclusions, setScheduleExclusions] = useState([]);
+  const [schedulePreview, setSchedulePreview] = useState([]);
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [scheduleError, setScheduleError] = useState("");
 
   useEffect(() => {
     loadCourses();
@@ -113,7 +127,13 @@ function CoursePage() {
           note,
           is_active,
           created_at,
-          updated_at
+          updated_at,
+          course_class_sessions (
+            id,
+            session_number,
+            session_date,
+            status
+          )
         `)
         .eq("course_id", courseId)
         .order("is_active", { ascending: false })
@@ -264,6 +284,220 @@ function CoursePage() {
     setCourseClasses([]);
     setClassLoadError("");
     await loadCourses();
+  }
+
+  async function openScheduleDrawer(classItem) {
+    setSchedulingClass(classItem);
+    setScheduleForm({ ...EMPTY_SCHEDULE_FORM });
+    setSchedulePreview([]);
+    setScheduleError("");
+    setIsScheduleDrawerOpen(true);
+
+    try {
+      setIsLoadingSchedule(true);
+
+      const { data, error } = await supabase
+        .from("schedule_exclusions")
+        .select(`
+          id,
+          title,
+          exclusion_type,
+          start_date,
+          end_date,
+          is_active,
+          note
+        `)
+        .eq("is_active", true)
+        .order("start_date", { ascending: true });
+
+      if (error) throw error;
+      setScheduleExclusions(data || []);
+    } catch (error) {
+      console.error("讀取停課日期失敗：", error);
+      setScheduleExclusions([]);
+      setScheduleError(`讀取停課日期失敗：${error.message}`);
+    } finally {
+      setIsLoadingSchedule(false);
+    }
+  }
+
+  function closeScheduleDrawer() {
+    setIsScheduleDrawerOpen(false);
+    setSchedulingClass(null);
+    setSchedulePreview([]);
+    setScheduleExclusions([]);
+    setScheduleError("");
+  }
+
+  function updateScheduleForm(field, value) {
+    setScheduleForm((current) => ({ ...current, [field]: value }));
+    setSchedulePreview([]);
+    if (scheduleError) setScheduleError("");
+  }
+
+  function parseDateOnly(value) {
+    const [year, month, day] = String(value).split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, day));
+  }
+
+  function toDateOnlyString(date) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  function addDays(date, days) {
+    const nextDate = new Date(date);
+    nextDate.setUTCDate(nextDate.getUTCDate() + days);
+    return nextDate;
+  }
+
+  function isDateInRange(dateString, startDate, endDate) {
+    return dateString >= startDate && dateString <= endDate;
+  }
+
+  function getAppliedExclusions() {
+    return scheduleExclusions.filter((item) => {
+      if (!item.is_active) return false;
+      if (item.exclusion_type === "HOLIDAY") {
+        return scheduleForm.exclude_holidays;
+      }
+      return scheduleForm.exclude_custom;
+    });
+  }
+
+  function buildSchedulePreview() {
+    if (!schedulingClass) return [];
+
+    const {
+      first_lesson_date: firstLessonDate,
+      weekday,
+      start_time: startTime,
+      end_time: endTime,
+      total_sessions: totalSessionsValue,
+    } = schedulingClass;
+
+    const totalSessions = Number(totalSessionsValue);
+
+    if (!firstLessonDate || weekday === null || weekday === undefined) {
+      throw new Error("請先在班級資料設定第一堂日期與每週上課日。");
+    }
+
+    if (!startTime || !endTime) {
+      throw new Error("請先在班級資料設定開始時間與結束時間。");
+    }
+
+    if (!Number.isInteger(totalSessions) || totalSessions <= 0) {
+      throw new Error("班級的一期堂數設定不正確。");
+    }
+
+    const firstDate = parseDateOnly(firstLessonDate);
+    if (firstDate.getUTCDay() !== Number(weekday)) {
+      throw new Error(
+        `第一堂日期是星期${["日", "一", "二", "三", "四", "五", "六"][firstDate.getUTCDay()]}，與班級設定的${getWeekdayLabel(weekday)}不一致。請先編輯班級資料。`
+      );
+    }
+
+    const appliedExclusions = getAppliedExclusions();
+    const sessions = [];
+    let candidateDate = firstDate;
+    let safetyCount = 0;
+
+    while (sessions.length < totalSessions && safetyCount < 520) {
+      const candidateString = toDateOnlyString(candidateDate);
+      const matchedExclusion = appliedExclusions.find((item) =>
+        isDateInRange(candidateString, item.start_date, item.end_date)
+      );
+
+      if (!matchedExclusion) {
+        sessions.push({
+          session_number: sessions.length + 1,
+          session_date: candidateString,
+          start_time: normalizeTime(startTime),
+          end_time: normalizeTime(endTime),
+        });
+      }
+
+      candidateDate = addDays(candidateDate, 7);
+      safetyCount += 1;
+    }
+
+    if (sessions.length < totalSessions) {
+      throw new Error("無法在合理範圍內產生完整堂次，請檢查停課期間設定。");
+    }
+
+    return sessions;
+  }
+
+  function previewSchedule() {
+    try {
+      setScheduleError("");
+      setSchedulePreview(buildSchedulePreview());
+    } catch (error) {
+      setSchedulePreview([]);
+      setScheduleError(error.message);
+    }
+  }
+
+  async function generateSchedule() {
+    if (!schedulingClass || !managingCourse) return;
+
+    let preview;
+    try {
+      preview = schedulePreview.length > 0 ? schedulePreview : buildSchedulePreview();
+    } catch (error) {
+      setScheduleError(error.message);
+      return;
+    }
+
+    const existingCount = Array.isArray(schedulingClass.course_class_sessions)
+      ? schedulingClass.course_class_sessions.length
+      : 0;
+
+    if (
+      existingCount > 0 &&
+      !window.confirm(
+        `「${schedulingClass.class_name}」目前已有 ${existingCount} 堂課程日期。重新產生會取代原有排程，確定繼續嗎？`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setIsSavingSchedule(true);
+      setScheduleError("");
+
+      const { error: deleteError } = await supabase
+        .from("course_class_sessions")
+        .delete()
+        .eq("course_class_id", schedulingClass.id);
+
+      if (deleteError) throw deleteError;
+
+      const payload = preview.map((session) => ({
+        course_class_id: schedulingClass.id,
+        session_number: session.session_number,
+        session_date: session.session_date,
+        start_time: session.start_time,
+        end_time: session.end_time,
+        status: "SCHEDULED",
+        original_date: null,
+        note: null,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error: insertError } = await supabase
+        .from("course_class_sessions")
+        .insert(payload);
+
+      if (insertError) throw insertError;
+
+      closeScheduleDrawer();
+      await loadCourseClasses(managingCourse.id);
+    } catch (error) {
+      console.error("產生課程日期失敗：", error);
+      setScheduleError(`產生課程日期失敗：${error.message}`);
+    } finally {
+      setIsSavingSchedule(false);
+    }
   }
 
   function openNewClassDrawer() {
@@ -426,6 +660,21 @@ function CoursePage() {
 
   function normalizeTime(value) {
     return value ? String(value).slice(0, 5) : "";
+  }
+
+  function getGeneratedSessionCount(classItem) {
+    return Array.isArray(classItem.course_class_sessions)
+      ? classItem.course_class_sessions.length
+      : 0;
+  }
+
+  function getLastGeneratedSessionDate(classItem) {
+    if (!Array.isArray(classItem.course_class_sessions)) return null;
+    const dates = classItem.course_class_sessions
+      .map((session) => session.session_date)
+      .filter(Boolean)
+      .sort();
+    return dates.at(-1) || null;
   }
 
   function getWeekdayLabel(value) {
@@ -636,11 +885,7 @@ function CoursePage() {
                       classItem.is_active ? "" : "courseCard--inactive"
                     }`}
                   >
-                    <div className="courseCard__top">
-                      <div className="courseCard__symbol">
-                        {classItem.class_name?.trim().charAt(0) || "班"}
-                      </div>
-
+                    <div className="courseCard__top courseCard__top--statusOnly">
                       <span
                         className={`courseCard__status ${
                           classItem.is_active
@@ -652,56 +897,76 @@ function CoursePage() {
                       </span>
                     </div>
 
-                    <div className="courseCard__body">
+                    <div className="courseCard__body courseCard__body--class">
                       <h2>{classItem.class_name}</h2>
-                      <p
-                        className={
-                          classItem.note
-                            ? "courseCard__note"
-                            : "courseCard__note courseCard__note--empty"
-                        }
+
+                      <div className="courseCard__scheduleSummary">
+                        <p>
+                          <span>固定時段</span>
+                          <strong>
+                            {getWeekdayLabel(classItem.weekday)}
+                            {classItem.start_time && classItem.end_time
+                              ? `｜${normalizeTime(classItem.start_time)}–${normalizeTime(
+                                  classItem.end_time
+                                )}`
+                              : "｜尚未設定時間"}
+                          </strong>
+                        </p>
+
+                        <p>
+                          <span>第一堂</span>
+                          <strong>{formatDate(classItem.first_lesson_date)}</strong>
+                        </p>
+
+                        <p>
+                          <span>一期堂數</span>
+                          <strong>{classItem.total_sessions || 12} 堂</strong>
+                        </p>
+                      </div>
+
+                      {classItem.note && (
+                        <p className="courseCard__note">{classItem.note}</p>
+                      )}
+                    </div>
+
+                    <div className="courseCard__scheduleState">
+                      {getGeneratedSessionCount(classItem) > 0 ? (
+                        <>
+                          <strong>
+                            已產生 {getGeneratedSessionCount(classItem)} 堂課程日期
+                          </strong>
+                          <span>
+                            最後一堂：{formatDate(getLastGeneratedSessionDate(classItem))}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <strong>尚未產生實際課程日期</strong>
+                          <span>
+                            將依固定時段、國定假日與自訂停課期間安排。
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="courseCard__actions courseCard__actions--class">
+                      <button
+                        type="button"
+                        className="courseCard__manageButton"
+                        onClick={() => openScheduleDrawer(classItem)}
+                        disabled={!classItem.is_active}
                       >
-                        {classItem.note || "尚未填寫班級備註。"}
-                      </p>
-                    </div>
+                        {getGeneratedSessionCount(classItem) > 0
+                          ? "重新安排課程"
+                          : "安排課程日期"}
+                      </button>
 
-                    <div className="courseCard__classInfo">
-                      <div>
-                        <span>上課日</span>
-                        <strong>{getWeekdayLabel(classItem.weekday)}</strong>
-                      </div>
-
-                      <div>
-                        <span>一期堂數</span>
-                        <strong>{classItem.total_sessions || 12}</strong>
-                      </div>
-                    </div>
-
-                    <div className="courseCard__classInfo">
-                      <div>
-                        <span>上課時間</span>
-                        <strong>
-                          {classItem.start_time && classItem.end_time
-                            ? `${normalizeTime(classItem.start_time)}–${normalizeTime(
-                                classItem.end_time
-                              )}`
-                            : "尚未設定"}
-                        </strong>
-                      </div>
-
-                      <div>
-                        <span>第一堂</span>
-                        <strong>{formatDate(classItem.first_lesson_date)}</strong>
-                      </div>
-                    </div>
-
-                    <div className="courseCard__actions">
                       <button
                         type="button"
                         className="courseCard__editButton"
                         onClick={() => openEditClassDrawer(classItem)}
                       >
-                        編輯
+                        編輯班級
                       </button>
 
                       <button
@@ -721,6 +986,180 @@ function CoursePage() {
               </div>
             )}
         </section>
+
+        {isScheduleDrawerOpen && schedulingClass && (
+          <div
+            className="courseDrawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="schedule-drawer-title"
+          >
+            <button
+              type="button"
+              className="courseDrawer__backdrop"
+              onClick={closeScheduleDrawer}
+              aria-label="關閉排課視窗"
+            />
+
+            <aside className="courseDrawer__panel">
+              <header className="courseDrawer__header">
+                <div>
+                  <p>SCHEDULE</p>
+                  <h2 id="schedule-drawer-title">安排課程日期</h2>
+                </div>
+
+                <button
+                  type="button"
+                  className="courseDrawer__closeButton"
+                  onClick={closeScheduleDrawer}
+                  disabled={isSavingSchedule}
+                  aria-label="關閉"
+                >
+                  ×
+                </button>
+              </header>
+
+              <div className="courseDrawer__form">
+                <div className="courseDrawer__fields">
+                  <div className="courseDrawer__field">
+                    <span>班級</span>
+                    <strong>{schedulingClass.class_name}</strong>
+                    <small>
+                      {getWeekdayLabel(schedulingClass.weekday)}｜
+                      {normalizeTime(schedulingClass.start_time)}–
+                      {normalizeTime(schedulingClass.end_time)}｜
+                      {schedulingClass.total_sessions} 堂
+                    </small>
+                  </div>
+
+                  <div className="courseDrawer__field">
+                    <span>第一堂日期</span>
+                    <strong>{formatDate(schedulingClass.first_lesson_date)}</strong>
+                  </div>
+
+                  <div className="courseDrawer__statusField">
+                    <div>
+                      <strong>排除台灣國定假日</strong>
+                      <p>套用停課類型為 HOLIDAY 的日期。</p>
+                    </div>
+
+                    <label className="courseSwitch">
+                      <input
+                        type="checkbox"
+                        checked={scheduleForm.exclude_holidays}
+                        onChange={(event) =>
+                          updateScheduleForm(
+                            "exclude_holidays",
+                            event.target.checked
+                          )
+                        }
+                      />
+                      <span className="courseSwitch__track">
+                        <span className="courseSwitch__thumb" />
+                      </span>
+                      <strong>
+                        {scheduleForm.exclude_holidays ? "排除" : "不排除"}
+                      </strong>
+                    </label>
+                  </div>
+
+                  <div className="courseDrawer__statusField">
+                    <div>
+                      <strong>排除自訂停課期間</strong>
+                      <p>套用寒假、暑假及其他自訂停課日期。</p>
+                    </div>
+
+                    <label className="courseSwitch">
+                      <input
+                        type="checkbox"
+                        checked={scheduleForm.exclude_custom}
+                        onChange={(event) =>
+                          updateScheduleForm("exclude_custom", event.target.checked)
+                        }
+                      />
+                      <span className="courseSwitch__track">
+                        <span className="courseSwitch__thumb" />
+                      </span>
+                      <strong>
+                        {scheduleForm.exclude_custom ? "排除" : "不排除"}
+                      </strong>
+                    </label>
+                  </div>
+
+                  <div className="courseDrawer__field">
+                    <span>目前套用的停課日期</span>
+                    {isLoadingSchedule ? (
+                      <small>正在讀取停課日期…</small>
+                    ) : getAppliedExclusions().length === 0 ? (
+                      <small>目前沒有符合條件的停課日期。</small>
+                    ) : (
+                      <div>
+                        {getAppliedExclusions().map((item) => (
+                          <p key={item.id}>
+                            <strong>{item.title}</strong>　
+                            {formatDate(item.start_date)}～{formatDate(item.end_date)}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="coursePage__primaryButton"
+                    onClick={previewSchedule}
+                    disabled={isLoadingSchedule || isSavingSchedule}
+                  >
+                    預覽課程日期
+                  </button>
+
+                  {schedulePreview.length > 0 && (
+                    <div className="courseDrawer__field">
+                      <span>排課預覽</span>
+                      <div>
+                        {schedulePreview.map((session) => (
+                          <p key={session.session_number}>
+                            第 {session.session_number} 堂　
+                            <strong>{formatDate(session.session_date)}</strong>　
+                            {session.start_time}–{session.end_time}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {scheduleError && (
+                    <div className="courseDrawer__error">{scheduleError}</div>
+                  )}
+                </div>
+
+                <footer className="courseDrawer__footer">
+                  <button
+                    type="button"
+                    className="courseDrawer__cancelButton"
+                    onClick={closeScheduleDrawer}
+                    disabled={isSavingSchedule}
+                  >
+                    取消
+                  </button>
+
+                  <button
+                    type="button"
+                    className="courseDrawer__saveButton"
+                    onClick={generateSchedule}
+                    disabled={
+                      isSavingSchedule ||
+                      isLoadingSchedule ||
+                      schedulePreview.length === 0
+                    }
+                  >
+                    {isSavingSchedule ? "產生中…" : "確認產生課程"}
+                  </button>
+                </footer>
+              </div>
+            </aside>
+          </div>
+        )}
 
         {isClassDrawerOpen && (
           <div
@@ -1035,11 +1474,7 @@ function CoursePage() {
                     course.is_active ? "" : "courseCard--inactive"
                   }`}
                 >
-                  <div className="courseCard__top">
-                    <div className="courseCard__symbol">
-                      {course.course_name?.trim().charAt(0) || "課"}
-                    </div>
-
+                  <div className="courseCard__top courseCard__top--statusOnly">
                     <span
                       className={`courseCard__status ${
                         course.is_active
