@@ -70,6 +70,7 @@ function CoursePage() {
   const [classStudents, setClassStudents] = useState([]);
   const [allStudents, setAllStudents] = useState([]);
   const [studentSearchText, setStudentSearchText] = useState("");
+  const [showHistoricalStudents, setShowHistoricalStudents] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isSavingStudents, setIsSavingStudents] = useState(false);
@@ -350,6 +351,7 @@ function CoursePage() {
   async function openStudentDrawer(classItem) {
     setStudentClass(classItem);
     setStudentSearchText("");
+    setShowHistoricalStudents(false);
     setSelectedStudentIds([]);
     setStudentError("");
     setIsStudentDrawerOpen(true);
@@ -378,6 +380,7 @@ function CoursePage() {
     setAllStudents([]);
     setSelectedStudentIds([]);
     setStudentSearchText("");
+    setShowHistoricalStudents(false);
     setStudentError("");
   }
 
@@ -448,25 +451,66 @@ function CoursePage() {
     }
   }
 
-  const availableStudentsForClass = allStudents.filter((student) => {
-    const alreadyJoined = classStudents.some(
-      (item) => item.student_id === student.id && item.is_active
-    );
-    if (alreadyJoined) return false;
-
-    const keyword = studentSearchText.trim().toLowerCase();
-    if (!keyword) return true;
-    const searchable = [
-      getStudentDisplayName(student),
-      student.english_name,
-      student.school,
-      student.student_number,
-    ]
-      .filter(Boolean)
-      .join(" ")
+  function getStudentStatusValue(student) {
+    return String(
+      student?.student_status ||
+      student?.status ||
+      student?.enrollment_status ||
+      ""
+    )
+      .trim()
       .toLowerCase();
-    return searchable.includes(keyword);
-  });
+  }
+
+  function isHistoricalStudent(student) {
+    const status = getStudentStatusValue(student);
+
+    return [
+      "畢業",
+      "畢業生",
+      "退班",
+      "離班",
+      "停用",
+      "inactive",
+      "graduated",
+      "graduate",
+      "withdrawn",
+      "withdraw",
+      "alumni",
+    ].some((keyword) => status.includes(keyword));
+  }
+
+  const normalizedStudentSearch = studentSearchText.trim().toLowerCase();
+
+  const availableStudentsForClass = normalizedStudentSearch
+    ? allStudents
+        .filter((student) => {
+          const alreadyJoined = classStudents.some(
+            (item) => item.student_id === student.id && item.is_active
+          );
+          if (alreadyJoined) return false;
+
+          if (!showHistoricalStudents && isHistoricalStudent(student)) {
+            return false;
+          }
+
+          const searchable = [
+            getStudentDisplayName(student),
+            student.english_name,
+            student.school,
+            student.student_number,
+            student.grade,
+            getStudentStatusValue(student),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+
+          return searchable.includes(normalizedStudentSearch);
+        })
+        .slice(0, 30)
+    : [];
+
 
   async function openScheduleDrawer(classItem) {
     setSchedulingClass(classItem);
@@ -1401,14 +1445,49 @@ function CoursePage() {
                       type="search"
                       value={studentSearchText}
                       onChange={(event) => setStudentSearchText(event.target.value)}
-                      placeholder="輸入學生姓名、英文名或學校…"
+                      placeholder="輸入姓名、英文名、學校或學號…"
                     />
+                    <small>
+                      為避免學生資料過多，請先輸入關鍵字；每次最多顯示 30 筆。
+                    </small>
                   </label>
 
+                  <div className="courseDrawer__statusField">
+                    <div>
+                      <strong>包含歷史學生</strong>
+                      <p>預設隱藏畢業生與退班生，需要時再開啟。</p>
+                    </div>
+
+                    <label className="courseSwitch">
+                      <input
+                        type="checkbox"
+                        checked={showHistoricalStudents}
+                        onChange={(event) =>
+                          setShowHistoricalStudents(event.target.checked)
+                        }
+                        disabled={isSavingStudents}
+                      />
+                      <span className="courseSwitch__track">
+                        <span className="courseSwitch__thumb" />
+                      </span>
+                      <strong>{showHistoricalStudents ? "顯示" : "隱藏"}</strong>
+                    </label>
+                  </div>
+
                   <div className="courseDrawer__field">
-                    <span>選擇學生</span>
-                    {availableStudentsForClass.length === 0 ? (
-                      <small>沒有可加入的學生，或沒有符合搜尋條件的學生。</small>
+                    <span>
+                      選擇學生
+                      {normalizedStudentSearch
+                        ? `（找到 ${availableStudentsForClass.length} 筆）`
+                        : ""}
+                    </span>
+
+                    {!normalizedStudentSearch ? (
+                      <small>請先輸入學生姓名、英文名、學校或學號。</small>
+                    ) : availableStudentsForClass.length === 0 ? (
+                      <small>
+                        找不到可加入的學生。可調整關鍵字，或開啟「包含歷史學生」。
+                      </small>
                     ) : (
                       <div>
                         {availableStudentsForClass.map((student) => (
@@ -1458,6 +1537,11 @@ function CoursePage() {
                               {student.english_name ? (
                                 <small style={{ margin: 0 }}>
                                   {student.english_name}
+                                </small>
+                              ) : null}
+                              {isHistoricalStudent(student) ? (
+                                <small style={{ margin: 0 }}>
+                                  {getStudentStatusValue(student) || "歷史學生"}
                                 </small>
                               ) : null}
                             </span>
