@@ -1211,6 +1211,369 @@ function CoursePage() {
     }).format(new Date(`${value}T00:00:00`));
   }
 
+
+  function getParentPhone(student) {
+    return (
+      student?.parent_phone_1 ||
+      student?.parent_phone1 ||
+      student?.primary_parent_phone ||
+      student?.guardian_phone_1 ||
+      student?.guardian_phone ||
+      student?.parent_phone ||
+      student?.phone ||
+      student?.mobile ||
+      ""
+    );
+  }
+
+  function formatAttendanceDate(value) {
+    if (!value) return "";
+    const date = new Date(`${value}T00:00:00`);
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const weekday = ["日", "一", "二", "三", "四", "五", "六"][date.getDay()];
+    return `${month}/${day}（${weekday}）`;
+  }
+
+  function escapePrintHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function splitIntoChunks(items, chunkSize) {
+    const chunks = [];
+    for (let index = 0; index < items.length; index += chunkSize) {
+      chunks.push(items.slice(index, index + chunkSize));
+    }
+    return chunks;
+  }
+
+  async function generateAttendanceSheet(classItem) {
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) {
+      window.alert("瀏覽器阻擋了點名表視窗，請允許這個網站開啟彈出式視窗後再試一次。");
+      return;
+    }
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="zh-Hant">
+        <head>
+          <meta charset="utf-8" />
+          <title>正在產生點名表…</title>
+        </head>
+        <body style="font-family: sans-serif; padding: 32px;">
+          正在整理課程日期與學生名單，請稍候…
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+
+    try {
+      const [{ data: sessions, error: sessionError }, { data: roster, error: rosterError }] =
+        await Promise.all([
+          supabase
+            .from("course_class_sessions")
+            .select("id, session_number, session_date, status")
+            .eq("course_class_id", classItem.id)
+            .order("session_date", { ascending: true }),
+          supabase
+            .from("course_class_students")
+            .select(`
+              id,
+              student_id,
+              left_at,
+              is_active,
+              students (*)
+            `)
+            .eq("course_class_id", classItem.id)
+            .order("is_active", { ascending: false })
+            .order("created_at", { ascending: true }),
+        ]);
+
+      if (sessionError) throw sessionError;
+      if (rosterError) throw rosterError;
+
+      const validSessions = (sessions || []).filter(
+        (session) =>
+          session.session_date &&
+          !["CANCELLED", "CANCELED", "取消", "停課"].includes(
+            String(session.status || "").toUpperCase()
+          )
+      );
+
+      if (validSessions.length === 0) {
+        printWindow.close();
+        window.alert("這個班級尚未產生可使用的上課日期，請先安排課程日期。");
+        return;
+      }
+
+      const validRoster = (roster || []).filter(
+        (item) => item.students && (item.is_active || item.left_at)
+      );
+
+      if (validRoster.length === 0) {
+        printWindow.close();
+        window.alert("這個班級目前沒有可列入點名表的學生。");
+        return;
+      }
+
+      const dateGroups = splitIntoChunks(validSessions, 8);
+      const courseName = managingCourse?.course_name || "課程";
+      const timeText =
+        classItem.start_time && classItem.end_time
+          ? `${normalizeTime(classItem.start_time)}–${normalizeTime(classItem.end_time)}`
+          : "";
+
+      const pagesHtml = dateGroups
+        .map((dateGroup, pageIndex) => {
+          const dateHeaders = dateGroup
+            .map(
+              (session) => `
+                <th class="date-column">
+                  <span>${escapePrintHtml(formatAttendanceDate(session.session_date))}</span>
+                </th>
+              `
+            )
+            .join("");
+
+          const studentRows = validRoster
+            .map((item, studentIndex) => {
+              const student = item.students;
+              const name = getStudentDisplayName(student);
+              const phone = getParentPhone(student);
+
+              const attendanceCells = dateGroup
+                .map((session) => {
+                  const isAfterWithdrawal =
+                    item.left_at && session.session_date > item.left_at;
+
+                  return isAfterWithdrawal
+                    ? '<td class="attendance-cell unavailable">—</td>'
+                    : '<td class="attendance-cell"></td>';
+                })
+                .join("");
+
+              return `
+                <tr>
+                  <td class="number-column">${studentIndex + 1}</td>
+                  <td class="name-column">${escapePrintHtml(name)}</td>
+                  <td class="phone-column">${escapePrintHtml(phone)}</td>
+                  ${attendanceCells}
+                </tr>
+              `;
+            })
+            .join("");
+
+          return `
+            <section class="sheet ${pageIndex < dateGroups.length - 1 ? "page-break" : ""}">
+              <header>
+                <div>
+                  <h1>${escapePrintHtml(courseName)}｜${escapePrintHtml(
+                    classItem.class_name
+                  )} 點名表</h1>
+                  <p>
+                    ${escapePrintHtml(getWeekdayLabel(classItem.weekday))}
+                    ${timeText ? `｜${escapePrintHtml(timeText)}` : ""}
+                  </p>
+                </div>
+                <div class="page-number">
+                  第 ${pageIndex + 1}／${dateGroups.length} 頁
+                </div>
+              </header>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th class="number-column">序</th>
+                    <th class="name-column">學生姓名</th>
+                    <th class="phone-column">家長電話</th>
+                    ${dateHeaders}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${studentRows}
+                </tbody>
+              </table>
+
+              <footer>
+                <span>備註：</span>
+                <div></div>
+              </footer>
+            </section>
+          `;
+        })
+        .join("");
+
+      const html = `
+        <!doctype html>
+        <html lang="zh-Hant">
+          <head>
+            <meta charset="utf-8" />
+            <title>${escapePrintHtml(courseName)}－${escapePrintHtml(
+              classItem.class_name
+            )}點名表</title>
+            <style>
+              * {
+                box-sizing: border-box;
+              }
+
+              body {
+                margin: 0;
+                color: #222;
+                font-family:
+                  "Noto Sans TC",
+                  "PingFang TC",
+                  "Microsoft JhengHei",
+                  sans-serif;
+                background: #fff;
+              }
+
+              .sheet {
+                width: 100%;
+                padding: 10mm;
+              }
+
+              .page-break {
+                break-after: page;
+                page-break-after: always;
+              }
+
+              header {
+                display: flex;
+                align-items: flex-end;
+                justify-content: space-between;
+                gap: 20px;
+                margin-bottom: 10px;
+              }
+
+              h1 {
+                margin: 0 0 4px;
+                font-size: 20px;
+                letter-spacing: 0.04em;
+              }
+
+              header p,
+              .page-number {
+                margin: 0;
+                font-size: 12px;
+                color: #555;
+              }
+
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+              }
+
+              th,
+              td {
+                height: 38px;
+                padding: 5px;
+                border: 1px solid #333;
+                text-align: center;
+                vertical-align: middle;
+                font-size: 11px;
+              }
+
+              thead th {
+                background: #f1f1ee;
+                font-weight: 700;
+              }
+
+              .number-column {
+                width: 34px;
+              }
+
+              .name-column {
+                width: 92px;
+                font-size: 12px;
+              }
+
+              .phone-column {
+                width: 116px;
+                font-size: 10px;
+              }
+
+              .date-column {
+                width: 68px;
+                padding: 3px;
+              }
+
+              .date-column span {
+                display: block;
+                line-height: 1.3;
+              }
+
+              .attendance-cell {
+                height: 42px;
+              }
+
+              .unavailable {
+                background:
+                  linear-gradient(
+                    to bottom right,
+                    transparent 48%,
+                    #aaa 49%,
+                    #aaa 51%,
+                    transparent 52%
+                  ),
+                  #f3f3f3;
+                color: transparent;
+              }
+
+              footer {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                margin-top: 12px;
+                font-size: 12px;
+              }
+
+              footer div {
+                flex: 1;
+                min-height: 34px;
+                border-bottom: 1px solid #777;
+              }
+
+              @page {
+                size: A4 landscape;
+                margin: 6mm;
+              }
+
+              @media print {
+                .sheet {
+                  padding: 0;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            ${pagesHtml}
+            <script>
+              window.addEventListener("load", () => {
+                window.setTimeout(() => window.print(), 250);
+              });
+            </script>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } catch (error) {
+      console.error("產生點名表失敗：", error);
+      printWindow.close();
+      window.alert(`產生點名表失敗：${error.message}`);
+    }
+  }
+
   const filteredCourses = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
 
@@ -1474,6 +1837,22 @@ function CoursePage() {
                         onClick={() => openStudentDrawer(classItem)}
                       >
                         學生名單
+                      </button>
+
+                      <button
+                        type="button"
+                        className="courseCard__manageButton"
+                        onClick={() => generateAttendanceSheet(classItem)}
+                        disabled={
+                          getGeneratedSessionCount(classItem) === 0
+                        }
+                        title={
+                          getGeneratedSessionCount(classItem) === 0
+                            ? "請先安排課程日期"
+                            : "依課程日期、學生姓名與家長電話產生可列印點名表"
+                        }
+                      >
+                        產生點名表
                       </button>
 
                       <button
