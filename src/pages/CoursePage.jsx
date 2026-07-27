@@ -1281,6 +1281,7 @@ function CoursePage() {
             .from("course_class_sessions")
             .select("id, session_number, session_date, status")
             .eq("course_class_id", classItem.id)
+            .order("session_number", { ascending: true })
             .order("session_date", { ascending: true }),
           supabase
             .from("course_class_students")
@@ -1299,13 +1300,15 @@ function CoursePage() {
       if (sessionError) throw sessionError;
       if (rosterError) throw rosterError;
 
-      const validSessions = (sessions || []).filter(
-        (session) =>
-          session.session_date &&
-          !["CANCELLED", "CANCELED", "取消", "停課"].includes(
-            String(session.status || "").toUpperCase()
-          )
-      );
+      const validSessions = (sessions || [])
+        .filter(
+          (session) =>
+            session.session_date &&
+            !["CANCELLED", "CANCELED", "取消", "停課"].includes(
+              String(session.status || "").toUpperCase()
+            )
+        )
+        .slice(0, 12);
 
       if (validSessions.length === 0) {
         printWindow.close();
@@ -1323,55 +1326,201 @@ function CoursePage() {
         return;
       }
 
-      const dateGroups = splitIntoChunks(validSessions, 8);
       const courseName = managingCourse?.course_name || "課程";
       const timeText =
         classItem.start_time && classItem.end_time
           ? `${normalizeTime(classItem.start_time)}–${normalizeTime(classItem.end_time)}`
           : "";
 
-      const pagesHtml = dateGroups
-        .map((dateGroup, pageIndex) => {
-          const dateHeaders = dateGroup
-            .map(
-              (session) => `
-                <th class="date-column">
-                  <span>${escapePrintHtml(formatAttendanceDate(session.session_date))}</span>
-                </th>
-              `
-            )
-            .join("");
+      const dateHeaders = Array.from({ length: 12 }, (_, index) => {
+        const session = validSessions[index];
 
-          const studentRows = validRoster
-            .map((item, studentIndex) => {
-              const student = item.students;
-              const name = getStudentDisplayName(student);
-              const phone = getParentPhone(student);
+        if (!session) {
+          return `
+            <th class="date-column">
+              <span class="session-number">第 ${index + 1} 堂</span>
+              <span class="session-date">尚未排定</span>
+            </th>
+          `;
+        }
 
-              const attendanceCells = dateGroup
-                .map((session) => {
-                  const isAfterWithdrawal =
-                    item.left_at && session.session_date > item.left_at;
+        return `
+          <th class="date-column">
+            <span class="session-number">第 ${index + 1} 堂</span>
+            <span class="session-date">
+              ${escapePrintHtml(formatAttendanceDate(session.session_date))}
+            </span>
+          </th>
+        `;
+      }).join("");
 
-                  return isAfterWithdrawal
-                    ? '<td class="attendance-cell unavailable">—</td>'
-                    : '<td class="attendance-cell"></td>';
-                })
-                .join("");
+      const studentRows = validRoster
+        .map((item, studentIndex) => {
+          const student = item.students;
+          const name = getStudentDisplayName(student);
+          const phone = getParentPhone(student);
 
-              return `
-                <tr>
-                  <td class="number-column">${studentIndex + 1}</td>
-                  <td class="name-column">${escapePrintHtml(name)}</td>
-                  <td class="phone-column">${escapePrintHtml(phone)}</td>
-                  ${attendanceCells}
-                </tr>
-              `;
-            })
-            .join("");
+          const attendanceCells = Array.from({ length: 12 }, (_, index) => {
+            const session = validSessions[index];
+
+            if (!session) {
+              return '<td class="attendance-cell unavailable"></td>';
+            }
+
+            const isAfterWithdrawal =
+              item.left_at && session.session_date > item.left_at;
+
+            return isAfterWithdrawal
+              ? '<td class="attendance-cell unavailable"></td>'
+              : '<td class="attendance-cell"></td>';
+          }).join("");
 
           return `
-            <section class="sheet ${pageIndex < dateGroups.length - 1 ? "page-break" : ""}">
+            <tr>
+              <td class="number-column">${studentIndex + 1}</td>
+              <td class="name-column">${escapePrintHtml(name)}</td>
+              <td class="phone-column">${escapePrintHtml(phone)}</td>
+              ${attendanceCells}
+            </tr>
+          `;
+        })
+        .join("");
+
+      const html = `
+        <!doctype html>
+        <html lang="zh-Hant">
+          <head>
+            <meta charset="utf-8" />
+            <title>${escapePrintHtml(courseName)}－${escapePrintHtml(
+              classItem.class_name
+            )}點名表</title>
+            <style>
+              * { box-sizing: border-box; }
+
+              body {
+                margin: 0;
+                color: #222;
+                font-family:
+                  "Noto Sans TC",
+                  "PingFang TC",
+                  "Microsoft JhengHei",
+                  sans-serif;
+                background: #fff;
+              }
+
+              .sheet {
+                width: 100%;
+                padding: 7mm;
+              }
+
+              header {
+                display: flex;
+                align-items: flex-end;
+                justify-content: space-between;
+                gap: 16px;
+                margin-bottom: 8px;
+              }
+
+              h1 {
+                margin: 0 0 3px;
+                font-size: 18px;
+                letter-spacing: 0.03em;
+              }
+
+              header p {
+                margin: 0;
+                font-size: 11px;
+                color: #555;
+              }
+
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+              }
+
+              th,
+              td {
+                border: 1px solid #333;
+                text-align: center;
+                vertical-align: middle;
+              }
+
+              th {
+                height: 50px;
+                padding: 3px 2px;
+                background: #f1f1ee;
+                font-weight: 700;
+                font-size: 9px;
+              }
+
+              td {
+                height: 34px;
+                padding: 3px;
+                font-size: 10px;
+              }
+
+              .number-column { width: 24px; }
+              .name-column { width: 68px; font-size: 11px; }
+              .phone-column { width: 88px; font-size: 9px; }
+              .date-column { width: 50px; }
+
+              .session-number,
+              .session-date {
+                display: block;
+                line-height: 1.25;
+              }
+
+              .session-number {
+                margin-bottom: 2px;
+                font-size: 9px;
+              }
+
+              .session-date {
+                font-size: 8px;
+                font-weight: 500;
+              }
+
+              .attendance-cell { height: 34px; }
+
+              .unavailable {
+                background:
+                  linear-gradient(
+                    to bottom right,
+                    transparent 48%,
+                    #aaa 49%,
+                    #aaa 51%,
+                    transparent 52%
+                  ),
+                  #f3f3f3;
+              }
+
+              footer {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                margin-top: 9px;
+                font-size: 10px;
+              }
+
+              footer div {
+                flex: 1;
+                min-height: 26px;
+                border-bottom: 1px solid #777;
+              }
+
+              @page {
+                size: A4 landscape;
+                margin: 4mm;
+              }
+
+              @media print {
+                .sheet { padding: 0; }
+              }
+            </style>
+          </head>
+          <body>
+            <section class="sheet">
               <header>
                 <div>
                   <h1>${escapePrintHtml(courseName)}｜${escapePrintHtml(
@@ -1381,9 +1530,6 @@ function CoursePage() {
                     ${escapePrintHtml(getWeekdayLabel(classItem.weekday))}
                     ${timeText ? `｜${escapePrintHtml(timeText)}` : ""}
                   </p>
-                </div>
-                <div class="page-number">
-                  第 ${pageIndex + 1}／${dateGroups.length} 頁
                 </div>
               </header>
 
@@ -1406,155 +1552,7 @@ function CoursePage() {
                 <div></div>
               </footer>
             </section>
-          `;
-        })
-        .join("");
 
-      const html = `
-        <!doctype html>
-        <html lang="zh-Hant">
-          <head>
-            <meta charset="utf-8" />
-            <title>${escapePrintHtml(courseName)}－${escapePrintHtml(
-              classItem.class_name
-            )}點名表</title>
-            <style>
-              * {
-                box-sizing: border-box;
-              }
-
-              body {
-                margin: 0;
-                color: #222;
-                font-family:
-                  "Noto Sans TC",
-                  "PingFang TC",
-                  "Microsoft JhengHei",
-                  sans-serif;
-                background: #fff;
-              }
-
-              .sheet {
-                width: 100%;
-                padding: 10mm;
-              }
-
-              .page-break {
-                break-after: page;
-                page-break-after: always;
-              }
-
-              header {
-                display: flex;
-                align-items: flex-end;
-                justify-content: space-between;
-                gap: 20px;
-                margin-bottom: 10px;
-              }
-
-              h1 {
-                margin: 0 0 4px;
-                font-size: 20px;
-                letter-spacing: 0.04em;
-              }
-
-              header p,
-              .page-number {
-                margin: 0;
-                font-size: 12px;
-                color: #555;
-              }
-
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                table-layout: fixed;
-              }
-
-              th,
-              td {
-                height: 38px;
-                padding: 5px;
-                border: 1px solid #333;
-                text-align: center;
-                vertical-align: middle;
-                font-size: 11px;
-              }
-
-              thead th {
-                background: #f1f1ee;
-                font-weight: 700;
-              }
-
-              .number-column {
-                width: 34px;
-              }
-
-              .name-column {
-                width: 92px;
-                font-size: 12px;
-              }
-
-              .phone-column {
-                width: 116px;
-                font-size: 10px;
-              }
-
-              .date-column {
-                width: 68px;
-                padding: 3px;
-              }
-
-              .date-column span {
-                display: block;
-                line-height: 1.3;
-              }
-
-              .attendance-cell {
-                height: 42px;
-              }
-
-              .unavailable {
-                background:
-                  linear-gradient(
-                    to bottom right,
-                    transparent 48%,
-                    #aaa 49%,
-                    #aaa 51%,
-                    transparent 52%
-                  ),
-                  #f3f3f3;
-                color: transparent;
-              }
-
-              footer {
-                display: flex;
-                align-items: flex-start;
-                gap: 8px;
-                margin-top: 12px;
-                font-size: 12px;
-              }
-
-              footer div {
-                flex: 1;
-                min-height: 34px;
-                border-bottom: 1px solid #777;
-              }
-
-              @page {
-                size: A4 landscape;
-                margin: 6mm;
-              }
-
-              @media print {
-                .sheet {
-                  padding: 0;
-                }
-              }
-            </style>
-          </head>
-          <body>
-            ${pagesHtml}
             <script>
               window.addEventListener("load", () => {
                 window.setTimeout(() => window.print(), 250);
