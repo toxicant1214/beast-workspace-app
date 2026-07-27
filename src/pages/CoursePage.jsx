@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
+import beastAcademyLogo from "../assets/beast-academy-logo.png";
 import "./CoursePage.css";
 
 const EMPTY_COURSE_FORM = {
@@ -1315,6 +1316,13 @@ function CoursePage() {
         console.warn("等待系統字型載入時發生問題，將沿用目前頁面字型：", fontError);
       }
 
+      const logoImage = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("無法載入倍思學院 Logo。"));
+        image.src = beastAcademyLogo;
+      });
+
       const canvas = document.createElement("canvas");
       canvas.width = 3508;
       canvas.height = 2480;
@@ -1398,17 +1406,6 @@ function CoursePage() {
         ctx.restore();
       };
 
-      const drawLeaf = (x, y, rotation, size, color) => {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(rotation);
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, size * 0.48, size, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      };
-
       const courseName = managingCourse?.course_name || "課程";
       const className = classItem.class_name || "班級";
       const weekdayText = getWeekdayLabel(classItem.weekday);
@@ -1423,82 +1420,92 @@ function CoursePage() {
       // 頂部柔和底色
       const headerGradient = ctx.createLinearGradient(0, 0, pageWidth, 0);
       headerGradient.addColorStop(0, "#f4f6ed");
-      headerGradient.addColorStop(0.62, "#ffffff");
+      headerGradient.addColorStop(0.58, "#ffffff");
       headerGradient.addColorStop(1, "#fbf7e7");
       ctx.fillStyle = headerGradient;
-      ctx.fillRect(0, 0, pageWidth, 410);
+      ctx.fillRect(0, 0, pageWidth, 470);
 
-      // 左上識別與標題
-      ctx.fillStyle = palette.green;
-      roundedRect(marginX, top, 76, 76, 24);
-      ctx.fill();
+      // 正確倍思 Logo：左上
+      const logoMaxWidth = 310;
+      const logoMaxHeight = 250;
+      const logoScale = Math.min(
+        logoMaxWidth / logoImage.width,
+        logoMaxHeight / logoImage.height
+      );
+      const logoWidth = logoImage.width * logoScale;
+      const logoHeight = logoImage.height * logoScale;
 
-      ctx.strokeStyle = palette.white;
-      ctx.lineWidth = 9;
-      ctx.beginPath();
-      ctx.arc(marginX + 38, top + 38, 22, 0.2, Math.PI * 1.7);
-      ctx.stroke();
+      ctx.drawImage(
+        logoImage,
+        marginX,
+        top - 8,
+        logoWidth,
+        logoHeight
+      );
 
-      ctx.fillStyle = palette.yellow;
-      ctx.beginPath();
-      ctx.arc(marginX + 57, top + 19, 10, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = palette.ink;
-      setFont(32, 700);
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText("BEAST", marginX + 98, top + 3);
-
-      ctx.fillStyle = palette.muted;
-      setFont(24, 500);
-      ctx.fillText("倍思學院", marginX + 98, top + 46);
-
+      // 主標題：整張表單最上方、水平置中
       ctx.fillStyle = palette.paleGreen;
-      roundedRect(marginX + 470, top - 4, 500, 92, 46);
+      roundedRect(pageWidth / 2 - 360, top - 16, 720, 112, 54);
       ctx.fill();
 
       ctx.fillStyle = palette.ink;
-      setFont(54, 700);
+      setFont(62, 700);
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("點 名 表", marginX + 720, top + 42);
+      ctx.fillText("點 名 表", pageWidth / 2, top + 40);
 
-      // 右上簡約裝飾
-      ctx.strokeStyle = palette.green;
-      ctx.lineWidth = 10;
-      ctx.beginPath();
-      ctx.moveTo(pageWidth - 300, top + 125);
-      ctx.quadraticCurveTo(pageWidth - 245, top + 62, pageWidth - 215, top + 5);
-      ctx.stroke();
-      drawLeaf(pageWidth - 270, top + 90, -0.8, 25, "#90a77c");
-      drawLeaf(pageWidth - 235, top + 53, 0.7, 24, "#758f64");
-      drawLeaf(pageWidth - 207, top + 18, -0.5, 20, "#a7b990");
-      ctx.fillStyle = palette.yellow;
-      ctx.beginPath();
-      ctx.arc(pageWidth - 155, top + 22, 22, 0, Math.PI * 2);
-      ctx.fill();
+      // 左側課程資訊：垂直排列並靠左
+      const infoX = marginX + 390;
+      const infoStartY = top + 145;
+      const infoGap = 62;
+      const scheduleText = [weekdayText, timeText].filter(Boolean).join(" ");
 
-      // 課程資訊
-      const infoY = 245;
       ctx.fillStyle = palette.ink;
-      setFont(31, 600);
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(`課程：${courseName}`, marginX, infoY);
 
-      ctx.fillText(`班級：${className}`, marginX + 760, infoY);
+      setFont(32, 600);
+      ctx.fillText(`課程：${courseName}`, infoX, infoStartY);
+      ctx.fillText(`班級：${className}`, infoX, infoStartY + infoGap);
+      ctx.fillText(
+        `上課時間：${scheduleText || "尚未設定"}`,
+        infoX,
+        infoStartY + infoGap * 2
+      );
 
-      const scheduleText = [weekdayText, timeText].filter(Boolean).join(" ");
-      ctx.fillText(`上課時間：${scheduleText || "尚未設定"}`, marginX + 1440, infoY);
+      // 右側只顯示目前上課學生人數
+      const countBoxWidth = 520;
+      const countBoxHeight = 110;
+      const countBoxX = pageWidth - marginX - countBoxWidth;
+      const countBoxY = infoStartY + 22;
+
+      ctx.fillStyle = palette.cream;
+      roundedRect(countBoxX, countBoxY, countBoxWidth, countBoxHeight, 28);
+      ctx.fill();
+
+      ctx.strokeStyle = "#d7ddcf";
+      ctx.lineWidth = 2;
+      roundedRect(countBoxX, countBoxY, countBoxWidth, countBoxHeight, 28);
+      ctx.stroke();
 
       ctx.fillStyle = palette.muted;
-      setFont(24, 400);
-      ctx.fillText(`目前上課學生：${activeRoster.length} 人`, marginX, infoY + 65);
+      setFont(27, 500);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("目前上課學生", countBoxX + 34, countBoxY + countBoxHeight / 2);
+
+      ctx.fillStyle = palette.green;
+      setFont(42, 700);
+      ctx.textAlign = "right";
+      ctx.fillText(
+        `${activeRoster.length} 人`,
+        countBoxX + countBoxWidth - 34,
+        countBoxY + countBoxHeight / 2
+      );
 
       // 表格尺寸
       const tableX = marginX;
-      const tableY = 405;
+      const tableY = 500;
       const tableWidth = contentWidth;
       const headerHeight = 150;
 
