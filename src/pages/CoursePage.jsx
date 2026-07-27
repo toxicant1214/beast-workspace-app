@@ -71,9 +71,6 @@ function CoursePage() {
   const [allStudents, setAllStudents] = useState([]);
   const [studentSearchText, setStudentSearchText] = useState("");
   const [showHistoricalStudents, setShowHistoricalStudents] = useState(false);
-  const [studentJoinDate, setStudentJoinDate] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isSavingStudents, setIsSavingStudents] = useState(false);
@@ -416,7 +413,6 @@ function CoursePage() {
     setStudentClass(classItem);
     setStudentSearchText("");
     setShowHistoricalStudents(false);
-    setStudentJoinDate(new Date().toISOString().slice(0, 10));
     setSelectedStudentIds([]);
     setStudentError("");
     setIsStudentDrawerOpen(true);
@@ -446,7 +442,6 @@ function CoursePage() {
     setSelectedStudentIds([]);
     setStudentSearchText("");
     setShowHistoricalStudents(false);
-    setStudentJoinDate(new Date().toISOString().slice(0, 10));
     setStudentError("");
   }
 
@@ -468,7 +463,7 @@ function CoursePage() {
       const payload = selectedStudentIds.map((studentId) => ({
         course_class_id: studentClass.id,
         student_id: studentId,
-        joined_at: studentJoinDate,
+        joined_at: new Date().toISOString().slice(0, 10),
         left_at: null,
         is_active: true,
         updated_at: new Date().toISOString(),
@@ -540,46 +535,6 @@ function CoursePage() {
     }
   }
 
-  async function rejoinStudentToClass(rosterItem) {
-    if (!studentClass) return;
-
-    const name = getStudentDisplayName(rosterItem.students);
-    const today = new Date().toISOString().slice(0, 10);
-    const joinDate = window.prompt(
-      `請輸入「${name}」重新插班的日期（YYYY-MM-DD）：`,
-      today
-    );
-
-    if (joinDate === null) return;
-
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(joinDate.trim())) {
-      window.alert("日期格式不正確，請使用 YYYY-MM-DD。");
-      return;
-    }
-
-    try {
-      setIsSavingStudents(true);
-      setStudentError("");
-
-      const { error } = await supabase
-        .from("course_class_students")
-        .update({
-          joined_at: joinDate.trim(),
-          left_at: null,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", rosterItem.id);
-
-      if (error) throw error;
-      await loadStudentRoster(studentClass.id);
-    } catch (error) {
-      console.error("重新插班失敗：", error);
-      setStudentError(`重新插班失敗：${error.message}`);
-    } finally {
-      setIsSavingStudents(false);
-    }
-  }
 
   function getStudentStatusValue(student) {
     return String(
@@ -1656,14 +1611,6 @@ function CoursePage() {
                               {item.students?.english_name
                                 ? `｜${item.students.english_name}`
                                 : ""}
-                              <small
-                                style={{
-                                  display: "block",
-                                  marginTop: "4px",
-                                }}
-                              >
-                                插班日期：{formatDate(item.joined_at)}
-                              </small>
                             </div>
 
                             <button
@@ -1689,61 +1636,33 @@ function CoursePage() {
                           <div
                             key={item.id}
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: "12px",
                               padding: "12px",
                               border: "1px dashed #d8dfdb",
                               borderRadius: "12px",
                               background: "#fafbf9",
                             }}
                           >
-                            <div style={{ minWidth: 0 }}>
-                              <strong>
-                                {getStudentDisplayName(item.students)}
-                              </strong>
-                              <small
-                                style={{
-                                  display: "block",
-                                  marginTop: "4px",
-                                }}
-                              >
-                                {formatDate(item.joined_at)}～{formatDate(item.left_at)}
-                              </small>
-                            </div>
-
-                            <button
-                              type="button"
-                              className="courseCard__toggleButton courseCard__toggleButton--enable"
-                              onClick={() => rejoinStudentToClass(item)}
-                              disabled={isSavingStudents}
+                            <strong>
+                              {getStudentDisplayName(item.students)}
+                            </strong>
+                            <small
+                              style={{
+                                display: "block",
+                                marginTop: "4px",
+                              }}
                             >
-                              重新插班
-                            </button>
+                              退班日期：{formatDate(item.left_at)}
+                            </small>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  <label className="courseDrawer__field">
-                    <span>本次插班日期</span>
-                    <input
-                      type="date"
-                      value={studentJoinDate}
-                      onChange={(event) => setStudentJoinDate(event.target.value)}
-                      disabled={isSavingStudents}
-                    />
-                    <small>
-                      本次勾選加入的學生會共同使用這個插班日期。
-                    </small>
-                  </label>
-
                   {selectedStudentsForAdd.length > 0 && (
                     <div className="courseDrawer__field">
                       <span>
-                        待加入學生（{selectedStudentsForAdd.length} 人）
+                        已選擇學生（{selectedStudentsForAdd.length} 人）
                       </span>
 
                       <div
@@ -1919,7 +1838,7 @@ function CoursePage() {
                   >
                     {isSavingStudents
                       ? "加入中…"
-                      : `確認插班（${selectedStudentIds.length}）`}
+                      : `加入班級（${selectedStudentIds.length}）`}
                   </button>
                 </footer>
               </div>
