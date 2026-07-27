@@ -59,7 +59,7 @@ function ClassDrawer({
 
               <div>
                 <h3>班級基本資料</h3>
-                <p>設定班級名稱與課程分類。</p>
+                <p>設定安親行政班級的名稱。</p>
               </div>
             </div>
 
@@ -73,7 +73,7 @@ function ClassDrawer({
                 required
                 autoFocus
                 value={form.class_name}
-                placeholder="例如：低年級安親班"
+                placeholder="例如：G1A、G2B、中年級A班"
                 onChange={(event) =>
                   updateField(
                     "class_name",
@@ -81,35 +81,6 @@ function ClassDrawer({
                   )
                 }
               />
-            </label>
-
-            <label className="classDrawer__field">
-              <span>
-                課程類型
-                <b>必填</b>
-              </span>
-
-              <select
-                required
-                value={form.course_type}
-                onChange={(event) =>
-                  updateField(
-                    "course_type",
-                    event.target.value
-                  )
-                }
-              >
-                <option value="AFTER_SCHOOL">
-                  安親
-                </option>
-                <option value="ENGLISH">美語</option>
-                <option value="LOGIC">邏輯</option>
-                <option value="GO">圍棋</option>
-                <option value="READING">閱讀</option>
-                <option value="WRITING">作文</option>
-                <option value="CAMP">營隊</option>
-                <option value="OTHER">其他</option>
-              </select>
             </label>
           </section>
 
@@ -119,7 +90,7 @@ function ClassDrawer({
 
               <div>
                 <h3>學期資訊</h3>
-                <p>用來辨識不同學年度與班級梯次。</p>
+                <p>用來辨識不同學年度與學期的班級資料。</p>
               </div>
             </div>
 
@@ -158,9 +129,9 @@ function ClassDrawer({
                   <option value="下學期">
                     下學期
                   </option>
-                  <option value="寒假">寒假</option>
-                  <option value="暑假">暑假</option>
-                  <option value="全年">全年</option>
+                  <option value="全年">
+                    全年
+                  </option>
                 </select>
               </label>
             </div>
@@ -171,8 +142,8 @@ function ClassDrawer({
               <span>03</span>
 
               <div>
-                <h3>課程期間</h3>
-                <p>設定班級的開始與結束日期。</p>
+                <h3>班級期間</h3>
+                <p>設定這個班級適用的開始與結束日期。</p>
               </div>
             </div>
 
@@ -223,8 +194,9 @@ function ClassDrawer({
             <label className="classDrawer__toggleField">
               <div>
                 <strong>啟用班級</strong>
+
                 <p>
-                  啟用後可供學生選擇與加入修課。
+                  啟用後可供學生加入這個安親班級。
                 </p>
               </div>
 
@@ -246,7 +218,7 @@ function ClassDrawer({
               <textarea
                 rows="5"
                 value={form.note}
-                placeholder="可記錄上課教室、適用年級或其他說明……"
+                placeholder="可記錄導師、教室位置或其他管理說明……"
                 onChange={(event) =>
                   updateField(
                     "note",

@@ -6,7 +6,6 @@ import "../components/ClassPage.css";
 
 const EMPTY_FORM = {
   class_name: "",
-  course_type: "AFTER_SCHOOL",
   academic_year: "",
   term: "",
   start_date: "",
@@ -18,8 +17,6 @@ const EMPTY_FORM = {
 function ClassPage() {
   const [classes, setClasses] = useState([]);
   const [searchText, setSearchText] = useState("");
-  const [courseTypeFilter, setCourseTypeFilter] =
-    useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ACTIVE");
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -34,23 +31,28 @@ function ClassPage() {
   }, []);
 
   async function loadClasses() {
-    setIsLoading(true);
+    try {
+      setIsLoading(true);
 
-    const { data, error } = await supabase
-      .from("classes")
-      .select("*")
-      .order("is_active", { ascending: false })
-      .order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("classes")
+        .select("*")
+        .eq("course_type", "AFTER_SCHOOL")
+        .order("is_active", { ascending: false })
+        .order("created_at", { ascending: false });
 
-    if (error) {
+      if (error) {
+        throw error;
+      }
+
+      setClasses(data || []);
+    } catch (error) {
       console.error("讀取班級資料失敗：", error);
-      alert(`讀取班級資料失敗：${error.message}`);
+      window.alert(`讀取班級資料失敗：${error.message}`);
+      setClasses([]);
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    setClasses(data || []);
-    setIsLoading(false);
   }
 
   function openNewClassDrawer() {
@@ -64,8 +66,6 @@ function ClassPage() {
 
     setForm({
       class_name: classItem.class_name || "",
-      course_type:
-        classItem.course_type || "AFTER_SCHOOL",
       academic_year: classItem.academic_year || "",
       term: classItem.term || "",
       start_date: classItem.start_date || "",
@@ -78,7 +78,9 @@ function ClassPage() {
   }
 
   function closeDrawer() {
-    if (isSaving) return;
+    if (isSaving) {
+      return;
+    }
 
     setIsDrawerOpen(false);
     setSelectedClass(null);
@@ -91,12 +93,7 @@ function ClassPage() {
     const className = form.class_name.trim();
 
     if (!className) {
-      alert("請輸入班級名稱。");
-      return;
-    }
-
-    if (!form.course_type) {
-      alert("請選擇課程類型。");
+      window.alert("請輸入班級名稱。");
       return;
     }
 
@@ -105,15 +102,40 @@ function ClassPage() {
       form.end_date &&
       form.end_date < form.start_date
     ) {
-      alert("結束日期不可早於開始日期。");
+      window.alert("結束日期不可早於開始日期。");
+      return;
+    }
+
+    const duplicatedClass = classes.find((classItem) => {
+      const isCurrentClass =
+        selectedClass && classItem.id === selectedClass.id;
+
+      return (
+        !isCurrentClass &&
+        classItem.class_name.trim().toLowerCase() ===
+          className.toLowerCase() &&
+        (classItem.academic_year || "").trim().toLowerCase() ===
+          form.academic_year.trim().toLowerCase() &&
+        (classItem.term || "").trim().toLowerCase() ===
+          form.term.trim().toLowerCase()
+      );
+    });
+
+    if (duplicatedClass) {
+      window.alert(
+        `同一學年度與學期已經有「${duplicatedClass.class_name}」這個班級。`
+      );
       return;
     }
 
     const payload = {
       class_name: className,
-      course_type: form.course_type,
-      academic_year:
-        form.academic_year.trim() || null,
+
+      // 班級管理目前只處理安親班級。
+      // 暫時保留此欄位，避免現有 Supabase 資料表發生錯誤。
+      course_type: "AFTER_SCHOOL",
+
+      academic_year: form.academic_year.trim() || null,
       term: form.term.trim() || null,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
@@ -122,61 +144,71 @@ function ClassPage() {
       updated_at: new Date().toISOString(),
     };
 
-    setIsSaving(true);
+    try {
+      setIsSaving(true);
 
-    if (selectedClass) {
-      const { error } = await supabase
-        .from("classes")
-        .update(payload)
-        .eq("id", selectedClass.id);
+      if (selectedClass) {
+        const { error } = await supabase
+          .from("classes")
+          .update(payload)
+          .eq("id", selectedClass.id);
 
-      if (error) {
-        alert(`更新班級失敗：${error.message}`);
-        setIsSaving(false);
-        return;
+        if (error) {
+          throw error;
+        }
+      } else {
+        const { error } = await supabase
+          .from("classes")
+          .insert([payload]);
+
+        if (error) {
+          throw error;
+        }
       }
-    } else {
-      const { error } = await supabase
-        .from("classes")
-        .insert([payload]);
 
-      if (error) {
-        alert(`新增班級失敗：${error.message}`);
-        setIsSaving(false);
-        return;
-      }
+      setIsDrawerOpen(false);
+      setSelectedClass(null);
+      setForm({ ...EMPTY_FORM });
+
+      await loadClasses();
+    } catch (error) {
+      console.error("儲存班級失敗：", error);
+      window.alert(`儲存班級失敗：${error.message}`);
+    } finally {
+      setIsSaving(false);
     }
-
-    setIsSaving(false);
-    closeDrawer();
-    await loadClasses();
   }
 
   async function toggleClassStatus(classItem) {
     const nextStatus = !classItem.is_active;
-
     const actionText = nextStatus ? "重新啟用" : "停用";
 
     const confirmed = window.confirm(
       `確定要${actionText}「${classItem.class_name}」嗎？`
     );
 
-    if (!confirmed) return;
-
-    const { error } = await supabase
-      .from("classes")
-      .update({
-        is_active: nextStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", classItem.id);
-
-    if (error) {
-      alert(`${actionText}班級失敗：${error.message}`);
+    if (!confirmed) {
       return;
     }
 
-    await loadClasses();
+    try {
+      const { error } = await supabase
+        .from("classes")
+        .update({
+          is_active: nextStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", classItem.id);
+
+      if (error) {
+        throw error;
+      }
+
+      await loadClasses();
+    } catch (error) {
+      console.error(`${actionText}班級失敗：`, error);
+      window.alert(`${actionText}班級失敗：${error.message}`);
+    }
   }
 
   const filteredClasses = useMemo(() => {
@@ -198,10 +230,6 @@ function ClassPage() {
           ?.toLowerCase()
           .includes(keyword);
 
-      const matchesCourseType =
-        courseTypeFilter === "ALL" ||
-        classItem.course_type === courseTypeFilter;
-
       const matchesStatus =
         statusFilter === "ALL" ||
         (statusFilter === "ACTIVE" &&
@@ -209,18 +237,9 @@ function ClassPage() {
         (statusFilter === "INACTIVE" &&
           !classItem.is_active);
 
-      return (
-        matchesKeyword &&
-        matchesCourseType &&
-        matchesStatus
-      );
+      return matchesKeyword && matchesStatus;
     });
-  }, [
-    classes,
-    searchText,
-    courseTypeFilter,
-    statusFilter,
-  ]);
+  }, [classes, searchText, statusFilter]);
 
   const activeClassCount = classes.filter(
     (classItem) => classItem.is_active
@@ -240,7 +259,7 @@ function ClassPage() {
           <h1>班級管理</h1>
 
           <p className="classPage__summary">
-            建立各類課程班級，並管理學年度、學期及啟用狀態。
+            建立安親行政班級，管理學年度、學期、班級期間與啟用狀態。
           </p>
         </div>
 
@@ -273,7 +292,7 @@ function ClassPage() {
       <section className="classPage__content">
         <div className="classPage__toolbar">
           <div className="classPage__search">
-            <span>⌕</span>
+            <span aria-hidden="true">⌕</span>
 
             <input
               type="search"
@@ -286,27 +305,11 @@ function ClassPage() {
           </div>
 
           <select
-            value={courseTypeFilter}
-            onChange={(event) =>
-              setCourseTypeFilter(event.target.value)
-            }
-          >
-            <option value="ALL">全部課程類型</option>
-            <option value="AFTER_SCHOOL">安親</option>
-            <option value="ENGLISH">美語</option>
-            <option value="LOGIC">邏輯</option>
-            <option value="GO">圍棋</option>
-            <option value="READING">閱讀</option>
-            <option value="WRITING">作文</option>
-            <option value="CAMP">營隊</option>
-            <option value="OTHER">其他</option>
-          </select>
-
-          <select
             value={statusFilter}
             onChange={(event) =>
               setStatusFilter(event.target.value)
             }
+            aria-label="班級狀態篩選"
           >
             <option value="ACTIVE">目前啟用</option>
             <option value="INACTIVE">已停用</option>

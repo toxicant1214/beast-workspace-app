@@ -1,20 +1,11 @@
-const COURSE_TYPE_LABELS = {
-  AFTER_SCHOOL: "安親",
-  ENGLISH: "美語",
-  LOGIC: "邏輯",
-  GO: "圍棋",
-  READING: "閱讀",
-  WRITING: "作文",
-  CAMP: "營隊",
-  OTHER: "其他",
-};
-
 function displayValue(value) {
   return value || "未設定";
 }
 
 function formatDate(dateString) {
-  if (!dateString) return "未設定";
+  if (!dateString) {
+    return "未設定";
+  }
 
   const [year, month, day] = dateString.split("-");
 
@@ -43,8 +34,12 @@ function ClassTable({
     return (
       <div className="classTable__empty">
         <div className="classTable__emptyIcon">＋</div>
+
         <strong>目前沒有符合條件的班級</strong>
-        <p>可以新增第一個班級，或調整搜尋及篩選條件。</p>
+
+        <p>
+          可以新增第一個班級，或調整搜尋及篩選條件。
+        </p>
       </div>
     );
   }
@@ -55,9 +50,8 @@ function ClassTable({
         <thead>
           <tr>
             <th>班級名稱</th>
-            <th>課程類型</th>
             <th>學年度／學期</th>
-            <th>課程期間</th>
+            <th>班級期間</th>
             <th>狀態</th>
             <th aria-label="操作" />
           </tr>
@@ -83,22 +77,13 @@ function ClassTable({
               </td>
 
               <td>
-                <span
-                  className={`classTable__typeBadge classTable__typeBadge--${classItem.course_type?.toLowerCase()}`}
-                >
-                  {COURSE_TYPE_LABELS[
-                    classItem.course_type
-                  ] || classItem.course_type}
-                </span>
-              </td>
-
-              <td>
                 <div className="classTable__stackedText">
                   <strong>
                     {displayValue(
                       classItem.academic_year
                     )}
                   </strong>
+
                   <span>
                     {displayValue(classItem.term)}
                   </span>
