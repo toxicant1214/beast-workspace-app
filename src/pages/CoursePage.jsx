@@ -19,9 +19,12 @@ const EMPTY_CLASS_FORM = {
   is_active: true,
 };
 
-const EMPTY_SCHEDULE_FORM = {
-  exclude_holidays: true,
-  exclude_custom: true,
+const EMPTY_EXCLUSION_FORM = {
+  title: "",
+  date_mode: "SINGLE",
+  start_date: "",
+  end_date: "",
+  note: "",
 };
 
 const WEEKDAY_OPTIONS = [
@@ -64,8 +67,15 @@ function CoursePage() {
 
   const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState(false);
   const [schedulingClass, setSchedulingClass] = useState(null);
-  const [scheduleForm, setScheduleForm] = useState({ ...EMPTY_SCHEDULE_FORM });
   const [scheduleExclusions, setScheduleExclusions] = useState([]);
+
+  const [isExclusionDrawerOpen, setIsExclusionDrawerOpen] = useState(false);
+  const [globalExclusions, setGlobalExclusions] = useState([]);
+  const [selectedExclusion, setSelectedExclusion] = useState(null);
+  const [exclusionForm, setExclusionForm] = useState({ ...EMPTY_EXCLUSION_FORM });
+  const [isLoadingExclusions, setIsLoadingExclusions] = useState(false);
+  const [isSavingExclusion, setIsSavingExclusion] = useState(false);
+  const [exclusionError, setExclusionError] = useState("");
   const [schedulePreview, setSchedulePreview] = useState([]);
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
@@ -288,7 +298,6 @@ function CoursePage() {
 
   async function openScheduleDrawer(classItem) {
     setSchedulingClass(classItem);
-    setScheduleForm({ ...EMPTY_SCHEDULE_FORM });
     setSchedulePreview([]);
     setScheduleError("");
     setIsScheduleDrawerOpen(true);
@@ -329,10 +338,166 @@ function CoursePage() {
     setScheduleError("");
   }
 
-  function updateScheduleForm(field, value) {
-    setScheduleForm((current) => ({ ...current, [field]: value }));
-    setSchedulePreview([]);
-    if (scheduleError) setScheduleError("");
+  async function loadGlobalExclusions() {
+    try {
+      setIsLoadingExclusions(true);
+      setExclusionError("");
+
+      const { data, error } = await supabase
+        .from("schedule_exclusions")
+        .select(`
+          id,
+          title,
+          exclusion_type,
+          start_date,
+          end_date,
+          is_active,
+          note,
+          created_at,
+          updated_at
+        `)
+        .order("start_date", { ascending: true });
+
+      if (error) throw error;
+      setGlobalExclusions(data || []);
+    } catch (error) {
+      console.error("讀取共用休假失敗：", error);
+      setGlobalExclusions([]);
+      setExclusionError(`讀取共用休假失敗：${error.message}`);
+    } finally {
+      setIsLoadingExclusions(false);
+    }
+  }
+
+  async function openExclusionDrawer() {
+    setSelectedExclusion(null);
+    setExclusionForm({ ...EMPTY_EXCLUSION_FORM });
+    setExclusionError("");
+    setIsExclusionDrawerOpen(true);
+    await loadGlobalExclusions();
+  }
+
+  function closeExclusionDrawer() {
+    if (isSavingExclusion) return;
+    setIsExclusionDrawerOpen(false);
+    setSelectedExclusion(null);
+    setExclusionForm({ ...EMPTY_EXCLUSION_FORM });
+    setExclusionError("");
+  }
+
+  function updateExclusionForm(field, value) {
+    setExclusionForm((current) => {
+      const next = { ...current, [field]: value };
+      if (field === "date_mode" && value === "SINGLE") {
+        next.end_date = next.start_date;
+      }
+      if (field === "start_date" && current.date_mode === "SINGLE") {
+        next.end_date = value;
+      }
+      return next;
+    });
+    if (exclusionError) setExclusionError("");
+  }
+
+  function editExclusion(item) {
+    setSelectedExclusion(item);
+    setExclusionForm({
+      title: item.title || "",
+      date_mode:
+        item.start_date && item.end_date && item.start_date !== item.end_date
+          ? "RANGE"
+          : "SINGLE",
+      start_date: item.start_date || "",
+      end_date: item.end_date || item.start_date || "",
+      note: item.note || "",
+    });
+    setExclusionError("");
+  }
+
+  function cancelEditExclusion() {
+    setSelectedExclusion(null);
+    setExclusionForm({ ...EMPTY_EXCLUSION_FORM });
+    setExclusionError("");
+  }
+
+  async function saveExclusion(event) {
+    event.preventDefault();
+
+    const title = exclusionForm.title.trim();
+    const startDate = exclusionForm.start_date;
+    const endDate =
+      exclusionForm.date_mode === "SINGLE"
+        ? startDate
+        : exclusionForm.end_date;
+
+    if (!title) {
+      setExclusionError("請輸入休假名稱。");
+      return;
+    }
+    if (!startDate || !endDate) {
+      setExclusionError("請選擇完整日期。");
+      return;
+    }
+    if (endDate < startDate) {
+      setExclusionError("結束日期不能早於開始日期。");
+      return;
+    }
+
+    const payload = {
+      title,
+      exclusion_type: "CUSTOM",
+      start_date: startDate,
+      end_date: endDate,
+      is_active: true,
+      note: exclusionForm.note.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      setIsSavingExclusion(true);
+      setExclusionError("");
+
+      if (selectedExclusion) {
+        const { error } = await supabase
+          .from("schedule_exclusions")
+          .update(payload)
+          .eq("id", selectedExclusion.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("schedule_exclusions")
+          .insert([payload]);
+        if (error) throw error;
+      }
+
+      setSelectedExclusion(null);
+      setExclusionForm({ ...EMPTY_EXCLUSION_FORM });
+      await loadGlobalExclusions();
+    } catch (error) {
+      console.error("儲存共用休假失敗：", error);
+      setExclusionError(`儲存共用休假失敗：${error.message}`);
+    } finally {
+      setIsSavingExclusion(false);
+    }
+  }
+
+  async function deleteExclusion(item) {
+    if (!window.confirm(`確定要刪除「${item.title}」嗎？所有課程之後排課都不會再跳過這段日期。`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("schedule_exclusions")
+        .delete()
+        .eq("id", item.id);
+      if (error) throw error;
+      if (selectedExclusion?.id === item.id) cancelEditExclusion();
+      await loadGlobalExclusions();
+    } catch (error) {
+      console.error("刪除共用休假失敗：", error);
+      setExclusionError(`刪除共用休假失敗：${error.message}`);
+    }
   }
 
   function parseDateOnly(value) {
@@ -355,13 +520,15 @@ function CoursePage() {
   }
 
   function getAppliedExclusions() {
-    return scheduleExclusions.filter((item) => {
-      if (!item.is_active) return false;
-      if (item.exclusion_type === "HOLIDAY") {
-        return scheduleForm.exclude_holidays;
-      }
-      return scheduleForm.exclude_custom;
-    });
+    return scheduleExclusions.filter((item) => item.is_active);
+  }
+
+  function formatExclusionRange(item) {
+    if (!item?.start_date) return "尚未設定";
+    if (!item.end_date || item.start_date === item.end_date) {
+      return formatDate(item.start_date);
+    }
+    return `${formatDate(item.start_date)}～${formatDate(item.end_date)}`;
   }
 
   function buildSchedulePreview() {
@@ -1039,51 +1206,10 @@ function CoursePage() {
 
                   <div className="courseDrawer__statusField">
                     <div>
-                      <strong>排除台灣國定假日</strong>
-                      <p>套用停課類型為 HOLIDAY 的日期。</p>
+                      <strong>套用共用休假日期</strong>
+                      <p>所有課程統一套用，排課時會自動跳過已設定的單日與日期區間。</p>
                     </div>
-
-                    <label className="courseSwitch">
-                      <input
-                        type="checkbox"
-                        checked={scheduleForm.exclude_holidays}
-                        onChange={(event) =>
-                          updateScheduleForm(
-                            "exclude_holidays",
-                            event.target.checked
-                          )
-                        }
-                      />
-                      <span className="courseSwitch__track">
-                        <span className="courseSwitch__thumb" />
-                      </span>
-                      <strong>
-                        {scheduleForm.exclude_holidays ? "排除" : "不排除"}
-                      </strong>
-                    </label>
-                  </div>
-
-                  <div className="courseDrawer__statusField">
-                    <div>
-                      <strong>排除自訂停課期間</strong>
-                      <p>套用寒假、暑假及其他自訂停課日期。</p>
-                    </div>
-
-                    <label className="courseSwitch">
-                      <input
-                        type="checkbox"
-                        checked={scheduleForm.exclude_custom}
-                        onChange={(event) =>
-                          updateScheduleForm("exclude_custom", event.target.checked)
-                        }
-                      />
-                      <span className="courseSwitch__track">
-                        <span className="courseSwitch__thumb" />
-                      </span>
-                      <strong>
-                        {scheduleForm.exclude_custom ? "排除" : "不排除"}
-                      </strong>
-                    </label>
+                    <strong>自動套用</strong>
                   </div>
 
                   <div className="courseDrawer__field">
@@ -1097,7 +1223,7 @@ function CoursePage() {
                         {getAppliedExclusions().map((item) => (
                           <p key={item.id}>
                             <strong>{item.title}</strong>　
-                            {formatDate(item.start_date)}～{formatDate(item.end_date)}
+                            {formatExclusionRange(item)}
                           </p>
                         ))}
                       </div>
@@ -1366,13 +1492,23 @@ function CoursePage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="coursePage__primaryButton"
-          onClick={openNewCourseDrawer}
-        >
-          ＋ 新增課程
-        </button>
+        <div className="courseCard__actions">
+          <button
+            type="button"
+            className="courseCard__editButton"
+            onClick={openExclusionDrawer}
+          >
+            共用休假設定
+          </button>
+
+          <button
+            type="button"
+            className="coursePage__primaryButton"
+            onClick={openNewCourseDrawer}
+          >
+            ＋ 新增課程
+          </button>
+        </div>
       </header>
 
       <section className="coursePage__stats">
@@ -1545,6 +1681,191 @@ function CoursePage() {
           </div>
         )}
       </section>
+
+      {isExclusionDrawerOpen && (
+        <div
+          className="courseDrawer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exclusion-drawer-title"
+        >
+          <button
+            type="button"
+            className="courseDrawer__backdrop"
+            onClick={closeExclusionDrawer}
+            aria-label="關閉共用休假設定"
+          />
+
+          <aside className="courseDrawer__panel">
+            <header className="courseDrawer__header">
+              <div>
+                <p>SHARED DAYS OFF</p>
+                <h2 id="exclusion-drawer-title">共用休假設定</h2>
+              </div>
+
+              <button
+                type="button"
+                className="courseDrawer__closeButton"
+                onClick={closeExclusionDrawer}
+                disabled={isSavingExclusion}
+                aria-label="關閉"
+              >
+                ×
+              </button>
+            </header>
+
+            <form className="courseDrawer__form" onSubmit={saveExclusion}>
+              <div className="courseDrawer__fields">
+                <div className="courseDrawer__field">
+                  <span>套用範圍</span>
+                  <strong>所有課程與所有班級</strong>
+                  <small>新增一次，之後每個班級產生課程日期時都會自動跳過。</small>
+                </div>
+
+                <label className="courseDrawer__field">
+                  <span>休假名稱 <em>必填</em></span>
+                  <input
+                    type="text"
+                    value={exclusionForm.title}
+                    onChange={(event) =>
+                      updateExclusionForm("title", event.target.value)
+                    }
+                    placeholder="例如：中秋節補假、寒假"
+                    maxLength={80}
+                    autoFocus
+                  />
+                </label>
+
+                <label className="courseDrawer__field">
+                  <span>日期類型</span>
+                  <select
+                    value={exclusionForm.date_mode}
+                    onChange={(event) =>
+                      updateExclusionForm("date_mode", event.target.value)
+                    }
+                  >
+                    <option value="SINGLE">單日</option>
+                    <option value="RANGE">日期區間</option>
+                  </select>
+                </label>
+
+                <label className="courseDrawer__field">
+                  <span>
+                    {exclusionForm.date_mode === "SINGLE" ? "休假日期" : "開始日期"}
+                    <em>必填</em>
+                  </span>
+                  <input
+                    type="date"
+                    value={exclusionForm.start_date}
+                    onChange={(event) =>
+                      updateExclusionForm("start_date", event.target.value)
+                    }
+                  />
+                </label>
+
+                {exclusionForm.date_mode === "RANGE" && (
+                  <label className="courseDrawer__field">
+                    <span>結束日期 <em>必填</em></span>
+                    <input
+                      type="date"
+                      value={exclusionForm.end_date}
+                      min={exclusionForm.start_date || undefined}
+                      onChange={(event) =>
+                        updateExclusionForm("end_date", event.target.value)
+                      }
+                    />
+                  </label>
+                )}
+
+                <label className="courseDrawer__field">
+                  <span>備註</span>
+                  <textarea
+                    value={exclusionForm.note}
+                    onChange={(event) =>
+                      updateExclusionForm("note", event.target.value)
+                    }
+                    placeholder="選填"
+                    rows={3}
+                    maxLength={300}
+                  />
+                </label>
+
+                {exclusionError && (
+                  <div className="courseDrawer__error">{exclusionError}</div>
+                )}
+
+                <div className="courseDrawer__field">
+                  <span>已設定的共用休假</span>
+
+                  {isLoadingExclusions ? (
+                    <small>正在讀取共用休假…</small>
+                  ) : globalExclusions.length === 0 ? (
+                    <small>目前尚未設定任何休假日期。</small>
+                  ) : (
+                    <div>
+                      {globalExclusions.map((item) => (
+                        <div key={item.id} className="courseCard__actions">
+                          <p>
+                            <strong>{item.title}</strong>　{formatExclusionRange(item)}
+                          </p>
+                          <button
+                            type="button"
+                            className="courseCard__editButton"
+                            onClick={() => editExclusion(item)}
+                          >
+                            編輯
+                          </button>
+                          <button
+                            type="button"
+                            className="courseCard__toggleButton courseCard__toggleButton--disable"
+                            onClick={() => deleteExclusion(item)}
+                          >
+                            刪除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <footer className="courseDrawer__footer">
+                {selectedExclusion && (
+                  <button
+                    type="button"
+                    className="courseDrawer__cancelButton"
+                    onClick={cancelEditExclusion}
+                    disabled={isSavingExclusion}
+                  >
+                    取消編輯
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="courseDrawer__cancelButton"
+                  onClick={closeExclusionDrawer}
+                  disabled={isSavingExclusion}
+                >
+                  關閉
+                </button>
+
+                <button
+                  type="submit"
+                  className="courseDrawer__saveButton"
+                  disabled={isSavingExclusion}
+                >
+                  {isSavingExclusion
+                    ? "儲存中…"
+                    : selectedExclusion
+                      ? "儲存修改"
+                      : "新增休假"}
+                </button>
+              </footer>
+            </form>
+          </aside>
+        </div>
+      )}
 
       {isCourseDrawerOpen && (
         <div
