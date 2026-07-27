@@ -1412,15 +1412,55 @@ function CoursePage() {
                     ) : (
                       <div>
                         {availableStudentsForClass.map((student) => (
-                          <label key={student.id} style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "10px" }}>
+                          <label
+                            key={student.id}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "22px minmax(0, 1fr)",
+                              alignItems: "center",
+                              columnGap: "12px",
+                              width: "100%",
+                              boxSizing: "border-box",
+                              padding: "12px 14px",
+                              marginBottom: "10px",
+                              border: "1px solid #dfe7e2",
+                              borderRadius: "14px",
+                              cursor: isSavingStudents ? "default" : "pointer",
+                            }}
+                          >
                             <input
                               type="checkbox"
                               checked={selectedStudentIds.includes(student.id)}
                               onChange={() => toggleStudentSelection(student.id)}
                               disabled={isSavingStudents}
+                              style={{
+                                width: "20px",
+                                height: "20px",
+                                minWidth: "20px",
+                                margin: 0,
+                                padding: 0,
+                                flex: "none",
+                              }}
                             />
-                            <strong>{getStudentDisplayName(student)}</strong>
-                            {student.english_name ? <small>{student.english_name}</small> : null}
+                            <span
+                              style={{
+                                minWidth: 0,
+                                display: "flex",
+                                alignItems: "baseline",
+                                gap: "8px",
+                                flexWrap: "wrap",
+                                textAlign: "left",
+                              }}
+                            >
+                              <strong style={{ wordBreak: "keep-all" }}>
+                                {getStudentDisplayName(student)}
+                              </strong>
+                              {student.english_name ? (
+                                <small style={{ margin: 0 }}>
+                                  {student.english_name}
+                                </small>
+                              ) : null}
+                            </span>
                           </label>
                         ))}
                       </div>
