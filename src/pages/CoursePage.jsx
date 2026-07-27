@@ -41,7 +41,7 @@ function CoursePage() {
           note,
           created_at,
           updated_at,
-          classes (
+          course_classes (
             id,
             is_active
           )
@@ -81,6 +81,10 @@ function CoursePage() {
 
     setFormError("");
     setIsDrawerOpen(true);
+  }
+
+  function openCourseClasses(course) {
+    console.log("管理課程班級：", course);
   }
 
   function closeDrawer() {
@@ -222,17 +226,19 @@ function CoursePage() {
   }
 
   function getClassCount(course) {
-    return Array.isArray(course.classes)
-      ? course.classes.length
+    return Array.isArray(course.course_classes)
+      ? course.course_classes.length
       : 0;
   }
 
   function getActiveClassCount(course) {
-    if (!Array.isArray(course.classes)) {
+    if (!Array.isArray(course.course_classes)) {
       return 0;
     }
 
-    return course.classes.filter((classItem) => classItem.is_active).length;
+    return course.course_classes.filter(
+      (classItem) => classItem.is_active
+    ).length;
   }
 
   const filteredCourses = useMemo(() => {
@@ -461,10 +467,16 @@ function CoursePage() {
                     <div className="courseCard__actions">
                       <button
                         type="button"
+                        className="courseCard__manageButton"
+                        onClick={() => openCourseClasses(course)}
+                      >
+                        管理班級
+                      </button>
+
+                      <button
+                        type="button"
                         className="courseCard__editButton"
-                        onClick={() =>
-                          openEditCourseDrawer(course)
-                        }
+                        onClick={() => openEditCourseDrawer(course)}
                       >
                         編輯
                       </button>
@@ -476,9 +488,7 @@ function CoursePage() {
                             ? "courseCard__toggleButton courseCard__toggleButton--disable"
                             : "courseCard__toggleButton courseCard__toggleButton--enable"
                         }
-                        onClick={() =>
-                          toggleCourseStatus(course)
-                        }
+                        onClick={() => toggleCourseStatus(course)}
                       >
                         {course.is_active
                           ? "停用"

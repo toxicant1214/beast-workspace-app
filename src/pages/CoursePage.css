@@ -269,13 +269,10 @@
 
 .courseCard__note {
   display: -webkit-box;
-  overflow: hidden;
-  margin: 9px 0 0;
-  color: #718078;
-  font-size: 13px;
-  line-height: 1.7;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+-webkit-box-orient: vertical;
+-webkit-line-clamp: 2;
+line-clamp: 2;
+overflow: hidden;
 }
 
 .courseCard__note--empty {
