@@ -65,6 +65,16 @@ function CoursePage() {
   const [isSavingClass, setIsSavingClass] = useState(false);
   const [classFormError, setClassFormError] = useState("");
 
+  const [isStudentDrawerOpen, setIsStudentDrawerOpen] = useState(false);
+  const [studentClass, setStudentClass] = useState(null);
+  const [classStudents, setClassStudents] = useState([]);
+  const [allStudents, setAllStudents] = useState([]);
+  const [studentSearchText, setStudentSearchText] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false);
+  const [isSavingStudents, setIsSavingStudents] = useState(false);
+  const [studentError, setStudentError] = useState("");
+
   const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState(false);
   const [schedulingClass, setSchedulingClass] = useState(null);
   const [scheduleExclusions, setScheduleExclusions] = useState([]);
@@ -295,6 +305,168 @@ function CoursePage() {
     setClassLoadError("");
     await loadCourses();
   }
+
+  function getStudentDisplayName(student) {
+    return (
+      student?.chinese_name ||
+      student?.student_name ||
+      student?.name ||
+      student?.full_name ||
+      student?.english_name ||
+      "未命名學生"
+    );
+  }
+
+  async function loadStudentRoster(classId) {
+    const { data, error } = await supabase
+      .from("course_class_students")
+      .select(`
+        id,
+        student_id,
+        joined_at,
+        left_at,
+        is_active,
+        note,
+        students (*)
+      `)
+      .eq("course_class_id", classId)
+      .eq("is_active", true)
+      .order("joined_at", { ascending: true });
+
+    if (error) throw error;
+    setClassStudents(data || []);
+  }
+
+  async function loadAvailableStudents() {
+    const { data, error } = await supabase
+      .from("students")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    if (error) throw error;
+    setAllStudents(data || []);
+  }
+
+  async function openStudentDrawer(classItem) {
+    setStudentClass(classItem);
+    setStudentSearchText("");
+    setSelectedStudentIds([]);
+    setStudentError("");
+    setIsStudentDrawerOpen(true);
+
+    try {
+      setIsLoadingStudents(true);
+      await Promise.all([
+        loadStudentRoster(classItem.id),
+        loadAvailableStudents(),
+      ]);
+    } catch (error) {
+      console.error("讀取學生名單失敗：", error);
+      setClassStudents([]);
+      setAllStudents([]);
+      setStudentError(`讀取學生名單失敗：${error.message}`);
+    } finally {
+      setIsLoadingStudents(false);
+    }
+  }
+
+  function closeStudentDrawer() {
+    if (isSavingStudents) return;
+    setIsStudentDrawerOpen(false);
+    setStudentClass(null);
+    setClassStudents([]);
+    setAllStudents([]);
+    setSelectedStudentIds([]);
+    setStudentSearchText("");
+    setStudentError("");
+  }
+
+  function toggleStudentSelection(studentId) {
+    setSelectedStudentIds((current) =>
+      current.includes(studentId)
+        ? current.filter((id) => id !== studentId)
+        : [...current, studentId]
+    );
+  }
+
+  async function addSelectedStudents() {
+    if (!studentClass || selectedStudentIds.length === 0) return;
+
+    try {
+      setIsSavingStudents(true);
+      setStudentError("");
+
+      const payload = selectedStudentIds.map((studentId) => ({
+        course_class_id: studentClass.id,
+        student_id: studentId,
+        joined_at: new Date().toISOString().slice(0, 10),
+        left_at: null,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error } = await supabase
+        .from("course_class_students")
+        .upsert(payload, { onConflict: "course_class_id,student_id" });
+
+      if (error) throw error;
+      setSelectedStudentIds([]);
+      await loadStudentRoster(studentClass.id);
+    } catch (error) {
+      console.error("加入學生失敗：", error);
+      setStudentError(`加入學生失敗：${error.message}`);
+    } finally {
+      setIsSavingStudents(false);
+    }
+  }
+
+  async function removeStudentFromClass(rosterItem) {
+    if (!studentClass) return;
+    const name = getStudentDisplayName(rosterItem.students);
+    if (!window.confirm(`確定要將「${name}」移出這個班級嗎？`)) return;
+
+    try {
+      setIsSavingStudents(true);
+      setStudentError("");
+      const today = new Date().toISOString().slice(0, 10);
+      const { error } = await supabase
+        .from("course_class_students")
+        .update({
+          is_active: false,
+          left_at: today,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", rosterItem.id);
+
+      if (error) throw error;
+      await loadStudentRoster(studentClass.id);
+    } catch (error) {
+      console.error("移除學生失敗：", error);
+      setStudentError(`移除學生失敗：${error.message}`);
+    } finally {
+      setIsSavingStudents(false);
+    }
+  }
+
+  const availableStudentsForClass = allStudents.filter((student) => {
+    const alreadyJoined = classStudents.some(
+      (item) => item.student_id === student.id && item.is_active
+    );
+    if (alreadyJoined) return false;
+
+    const keyword = studentSearchText.trim().toLowerCase();
+    if (!keyword) return true;
+    const searchable = [
+      getStudentDisplayName(student),
+      student.english_name,
+      student.school,
+      student.student_number,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return searchable.includes(keyword);
+  });
 
   async function openScheduleDrawer(classItem) {
     setSchedulingClass(classItem);
@@ -1120,6 +1292,14 @@ function CoursePage() {
                       <button
                         type="button"
                         className="courseCard__manageButton"
+                        onClick={() => openStudentDrawer(classItem)}
+                      >
+                        學生名單
+                      </button>
+
+                      <button
+                        type="button"
+                        className="courseCard__manageButton"
                         onClick={() => openScheduleDrawer(classItem)}
                         disabled={!classItem.is_active}
                       >
@@ -1153,6 +1333,129 @@ function CoursePage() {
               </div>
             )}
         </section>
+
+        {isStudentDrawerOpen && studentClass && (
+          <div
+            className="courseDrawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="student-drawer-title"
+          >
+            <button
+              type="button"
+              className="courseDrawer__backdrop"
+              onClick={closeStudentDrawer}
+              aria-label="關閉學生名單"
+            />
+
+            <aside className="courseDrawer__panel">
+              <header className="courseDrawer__header">
+                <div>
+                  <p>STUDENT ROSTER</p>
+                  <h2 id="student-drawer-title">{studentClass.class_name}｜學生名單</h2>
+                </div>
+                <button
+                  type="button"
+                  className="courseDrawer__closeButton"
+                  onClick={closeStudentDrawer}
+                  disabled={isSavingStudents}
+                  aria-label="關閉"
+                >
+                  ×
+                </button>
+              </header>
+
+              <div className="courseDrawer__form">
+                <div className="courseDrawer__fields">
+                  <div className="courseDrawer__field">
+                    <span>目前學生</span>
+                    <strong>{classStudents.length} 人</strong>
+                    {isLoadingStudents ? (
+                      <small>正在讀取學生資料…</small>
+                    ) : classStudents.length === 0 ? (
+                      <small>這個班級目前尚未加入學生。</small>
+                    ) : (
+                      <div>
+                        {classStudents.map((item) => (
+                          <p key={item.id}>
+                            <strong>{getStudentDisplayName(item.students)}</strong>
+                            {item.students?.english_name ? `｜${item.students.english_name}` : ""}
+                            <button
+                              type="button"
+                              className="courseCard__toggleButton courseCard__toggleButton--disable"
+                              onClick={() => removeStudentFromClass(item)}
+                              disabled={isSavingStudents}
+                              style={{ marginLeft: "12px" }}
+                            >
+                              移除
+                            </button>
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="courseDrawer__field">
+                    <span>搜尋可加入的學生</span>
+                    <input
+                      type="search"
+                      value={studentSearchText}
+                      onChange={(event) => setStudentSearchText(event.target.value)}
+                      placeholder="輸入學生姓名、英文名或學校…"
+                    />
+                  </label>
+
+                  <div className="courseDrawer__field">
+                    <span>選擇學生</span>
+                    {availableStudentsForClass.length === 0 ? (
+                      <small>沒有可加入的學生，或沒有符合搜尋條件的學生。</small>
+                    ) : (
+                      <div>
+                        {availableStudentsForClass.map((student) => (
+                          <label key={student.id} style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "10px" }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedStudentIds.includes(student.id)}
+                              onChange={() => toggleStudentSelection(student.id)}
+                              disabled={isSavingStudents}
+                            />
+                            <strong>{getStudentDisplayName(student)}</strong>
+                            {student.english_name ? <small>{student.english_name}</small> : null}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {studentError && (
+                    <div className="courseDrawer__error">{studentError}</div>
+                  )}
+                </div>
+
+                <footer className="courseDrawer__footer">
+                  <button
+                    type="button"
+                    className="courseDrawer__cancelButton"
+                    onClick={closeStudentDrawer}
+                    disabled={isSavingStudents}
+                  >
+                    關閉
+                  </button>
+                  <button
+                    type="button"
+                    className="courseDrawer__saveButton"
+                    onClick={addSelectedStudents}
+                    disabled={isSavingStudents || selectedStudentIds.length === 0}
+                  >
+                    {isSavingStudents
+                      ? "加入中…"
+                      : `加入班級（${selectedStudentIds.length}）`}
+                  </button>
+                </footer>
+              </div>
+            </aside>
+          </div>
+        )}
 
         {isScheduleDrawerOpen && schedulingClass && (
           <div
