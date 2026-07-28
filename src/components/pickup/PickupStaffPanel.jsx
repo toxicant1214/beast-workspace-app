@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import { supabase } from "../../lib/supabase";
 
 const WEEKDAYS = [
@@ -28,6 +30,39 @@ const WEEKDAYS = [
     column: "friday_time",
   },
 ];
+
+const GRADE_GROUP_MAP = {
+  "一年級": "LOW",
+  "二年級": "LOW",
+  "三年級": "MIDDLE",
+  "四年級": "MIDDLE",
+  "五年級": "HIGH",
+  "六年級": "HIGH",
+};
+
+const PREFERRED_SCHOOL_ORDER = [
+  "麗園",
+  "麗林",
+  "頭湖",
+  "新林",
+  "南勢",
+  "東湖",
+];
+
+function getSchoolOrder(school) {
+  const index = PREFERRED_SCHOOL_ORDER.indexOf(school);
+  return index === -1 ? 999 : index;
+}
+
+function getTimePeriod(value) {
+  const time = normalizeTime(value);
+  if (!time) return "";
+  return time < "14:00" ? "NOON" : "AFTERNOON";
+}
+
+function getPeriodLabel(period) {
+  return period === "NOON" ? "中午" : "下午";
+}
 
 function normalizeTime(value) {
   if (!value) {
@@ -164,6 +199,7 @@ function TeacherTags({
 }
 
 function PickupStaffPanel() {
+  const [students, setStudents] = useState([]);
   const [rules, setRules] = useState([]);
   const [staffRules, setStaffRules] =
     useState([]);
@@ -183,6 +219,9 @@ function PickupStaffPanel() {
   const [errorMessage, setErrorMessage] =
     useState("");
 
+  const [isExporting, setIsExporting] =
+    useState(false);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -192,9 +231,24 @@ function PickupStaffPanel() {
     setErrorMessage("");
 
     const [
+      studentsResult,
       pickupRulesResult,
       staffRulesResult,
     ] = await Promise.all([
+      supabase
+        .from("students")
+        .select(
+          `
+            id,
+            school,
+            current_grade,
+            student_status
+          `
+        )
+        .eq("student_status", "ACTIVE")
+        .order("school")
+        .order("current_grade"),
+
       supabase
         .from("pickup_rules")
         .select(
@@ -232,6 +286,17 @@ function PickupStaffPanel() {
         .order("pickup_time"),
     ]);
 
+    if (studentsResult.error) {
+      console.error(studentsResult.error);
+
+      setErrorMessage(
+        `讀取學生資料失敗：${studentsResult.error.message}`
+      );
+
+      setIsLoading(false);
+      return;
+    }
+
     if (pickupRulesResult.error) {
       console.error(
         pickupRulesResult.error
@@ -261,6 +326,7 @@ function PickupStaffPanel() {
     const nextRules =
       pickupRulesResult.data ?? [];
 
+    setStudents(studentsResult.data ?? []);
     setRules(nextRules);
 
     setStaffRules(
@@ -273,9 +339,16 @@ function PickupStaffPanel() {
           .map((rule) => rule.school)
           .filter(Boolean)
       )
-    ).sort((a, b) =>
-      a.localeCompare(b, "zh-Hant")
-    );
+    ).sort((a, b) => {
+      const orderCompare =
+        getSchoolOrder(a) - getSchoolOrder(b);
+
+      if (orderCompare !== 0) {
+        return orderCompare;
+      }
+
+      return a.localeCompare(b, "zh-Hant");
+    });
 
     setSelectedSchool((current) => {
       if (
@@ -303,9 +376,16 @@ function PickupStaffPanel() {
           (row) => row.school
         )
       )
-    ).sort((a, b) =>
-      a.localeCompare(b, "zh-Hant")
-    );
+    ).sort((a, b) => {
+      const orderCompare =
+        getSchoolOrder(a) - getSchoolOrder(b);
+
+      if (orderCompare !== 0) {
+        return orderCompare;
+      }
+
+      return a.localeCompare(b, "zh-Hant");
+    });
   }, [scheduleRows]);
 
   const selectedRows = useMemo(() => {
@@ -487,6 +567,370 @@ function PickupStaffPanel() {
     );
   }
 
+
+  const summaryCells = useMemo(() => {
+    const result = new Map();
+
+    WEEKDAYS.forEach((weekday) => {
+      ["NOON", "AFTERNOON"].forEach((period) => {
+        schools.forEach((school) => {
+          const matchingRules = rules.filter(
+            (rule) =>
+              rule.school === school &&
+              getTimePeriod(rule[weekday.column]) === period
+          );
+
+          const studentCount = students.filter((student) => {
+            if (student.school !== school) {
+              return false;
+            }
+
+            const gradeGroup =
+              GRADE_GROUP_MAP[student.current_grade];
+
+            return matchingRules.some(
+              (rule) => rule.grade_group === gradeGroup
+            );
+          }).length;
+
+          const matchingRows = scheduleRows.filter(
+            (row) =>
+              row.school === school &&
+              row.weekday === weekday.value &&
+              getTimePeriod(row.pickup_time) === period
+          );
+
+          const teacherNames = Array.from(
+            new Set(
+              matchingRows.flatMap((row) =>
+                getStaffNames(row)
+              )
+            )
+          );
+
+          const times = Array.from(
+            new Set(
+              matchingRows.map((row) =>
+                normalizeTime(row.pickup_time)
+              )
+            )
+          ).sort();
+
+          result.set(
+            `${weekday.value}|${period}|${school}`,
+            {
+              studentCount,
+              teacherNames,
+              times,
+              hasSchedule: matchingRules.length > 0,
+            }
+          );
+        });
+      });
+    });
+
+    return result;
+  }, [rules, students, scheduleRows, staffRules, schools]);
+
+  function getSummaryCell(weekday, period, school) {
+    return (
+      summaryCells.get(
+        `${weekday}|${period}|${school}`
+      ) ?? {
+        studentCount: 0,
+        teacherNames: [],
+        times: [],
+        hasSchedule: false,
+      }
+    );
+  }
+
+  function getPeriodTimes(weekday, period) {
+    return Array.from(
+      new Set(
+        schools.flatMap((school) =>
+          getSummaryCell(
+            weekday,
+            period,
+            school
+          ).times
+        )
+      )
+    ).sort();
+  }
+
+  async function exportStaffSchedulePdf() {
+    const pageElement = document.querySelector(
+      "[data-pickup-staff-pdf]"
+    );
+
+    if (!pageElement) {
+      setErrorMessage("找不到可輸出的接車老師安排表。");
+      return;
+    }
+
+    setIsExporting(true);
+    setErrorMessage("");
+
+    try {
+      await document.fonts?.ready;
+
+      const canvas = await html2canvas(pageElement, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
+        width: 1122,
+        height: 794,
+        windowWidth: 1122,
+        windowHeight: 794,
+      });
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      pdf.addImage(
+        canvas.toDataURL("image/jpeg", 0.95),
+        "JPEG",
+        0,
+        0,
+        pdf.internal.pageSize.getWidth(),
+        pdf.internal.pageSize.getHeight(),
+        undefined,
+        "FAST"
+      );
+
+      pdf.save("接車老師週安排表.pdf");
+    } catch (error) {
+      console.error("輸出接車老師安排表失敗：", error);
+      setErrorMessage(
+        `輸出 PDF 失敗：${error?.message || "請稍後再試"}`
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  function renderSummaryTable(isPdf = false) {
+    const borderColor = "#555555";
+    const thinBorder = `1px solid ${borderColor}`;
+    const strongBorder = `2px solid ${borderColor}`;
+    const labelWidth = isPdf ? 46 : 58;
+
+    return (
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          tableLayout: "fixed",
+          fontSize: isPdf ? "10px" : "12px",
+          color: "#2f2f2f",
+          background: "#ffffff",
+        }}
+      >
+        <tbody>
+          <tr>
+            <th
+              style={{
+                width: `${labelWidth}px`,
+                border: strongBorder,
+                padding: "5px 2px",
+              }}
+            >
+              星期
+            </th>
+
+            {WEEKDAYS.map((weekday) => (
+              <th
+                key={weekday.value}
+                colSpan={schools.length}
+                style={{
+                  border: strongBorder,
+                  padding: "5px 2px",
+                  fontWeight: 700,
+                }}
+              >
+                {weekday.label}
+              </th>
+            ))}
+          </tr>
+
+          {["NOON", "AFTERNOON"].map(
+            (period, periodIndex) => (
+              <Fragment key={period}>
+                <tr>
+                  <th
+                    style={{
+                      border: strongBorder,
+                      padding: "4px 2px",
+                    }}
+                  >
+                    時間
+                  </th>
+
+                  {WEEKDAYS.map((weekday) => {
+                    const times = getPeriodTimes(
+                      weekday.value,
+                      period
+                    );
+
+                    return (
+                      <th
+                        key={weekday.value}
+                        colSpan={schools.length}
+                        style={{
+                          border: strongBorder,
+                          padding: "4px 2px",
+                        }}
+                      >
+                        {times.length > 0
+                          ? times.join("／")
+                          : getPeriodLabel(period)}
+                      </th>
+                    );
+                  })}
+                </tr>
+
+                <tr>
+                  <th
+                    style={{
+                      border: strongBorder,
+                      padding: "4px 2px",
+                    }}
+                  >
+                    學校
+                  </th>
+
+                  {WEEKDAYS.flatMap((weekday) =>
+                    schools.map((school) => (
+                      <th
+                        key={`${weekday.value}-${period}-${school}`}
+                        style={{
+                          border: thinBorder,
+                          padding: "4px 1px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {school}
+                      </th>
+                    ))
+                  )}
+                </tr>
+
+                <tr>
+                  <th
+                    style={{
+                      border: strongBorder,
+                      padding: "5px 2px",
+                    }}
+                  >
+                    老師
+                  </th>
+
+                  {WEEKDAYS.flatMap((weekday) =>
+                    schools.map((school) => {
+                      const cell = getSummaryCell(
+                        weekday.value,
+                        period,
+                        school
+                      );
+
+                      return (
+                        <td
+                          key={`${weekday.value}-${period}-${school}-teacher`}
+                          style={{
+                            border: thinBorder,
+                            height: isPdf ? "68px" : "76px",
+                            padding: "5px 2px",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            lineHeight: 1.5,
+                            background: cell.hasSchedule
+                              ? "#ffffff"
+                              : "#f3f3f1",
+                          }}
+                        >
+                          {cell.hasSchedule
+                            ? cell.teacherNames.join("、") ||
+                              "尚未安排"
+                            : "—"}
+                        </td>
+                      );
+                    })
+                  )}
+                </tr>
+
+                <tr>
+                  <th
+                    style={{
+                      border: strongBorder,
+                      padding: "4px 2px",
+                    }}
+                  >
+                    人數
+                  </th>
+
+                  {WEEKDAYS.flatMap((weekday) =>
+                    schools.map((school) => {
+                      const cell = getSummaryCell(
+                        weekday.value,
+                        period,
+                        school
+                      );
+
+                      return (
+                        <td
+                          key={`${weekday.value}-${period}-${school}-count`}
+                          style={{
+                            border: thinBorder,
+                            padding: "4px 1px",
+                            textAlign: "center",
+                            background: cell.hasSchedule
+                              ? "#ffffff"
+                              : "#f3f3f1",
+                          }}
+                        >
+                          {cell.hasSchedule
+                            ? cell.studentCount
+                            : "—"}
+                        </td>
+                      );
+                    })
+                  )}
+                </tr>
+
+                {periodIndex === 0 && (
+                  <tr>
+                    <td
+                      colSpan={
+                        1 +
+                        WEEKDAYS.length *
+                          schools.length
+                      }
+                      style={{
+                        height: "8px",
+                        padding: 0,
+                        borderLeft: strongBorder,
+                        borderRight: strongBorder,
+                        borderTop: strongBorder,
+                        borderBottom: strongBorder,
+                        background: "#ffffff",
+                      }}
+                    />
+                  </tr>
+                )}
+              </Fragment>
+            )
+          )}
+        </tbody>
+      </table>
+    );
+  }
+
   if (isLoading) {
     return (
       <section className="pickupPanel">
@@ -519,13 +963,32 @@ function PickupStaffPanel() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="pickupStaffRefreshButton"
-          onClick={loadData}
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
         >
-          重新整理
-        </button>
+          <button
+            type="button"
+            className="pickupStaffRefreshButton"
+            onClick={loadData}
+          >
+            重新整理
+          </button>
+
+          <button
+            type="button"
+            className="primaryButton"
+            onClick={exportStaffSchedulePdf}
+            disabled={isExporting}
+          >
+            {isExporting
+              ? "正在產生 PDF…"
+              : "下載接車老師週表 PDF"}
+          </button>
+        </div>
       </div>
 
       {errorMessage && (
@@ -704,6 +1167,145 @@ function PickupStaffPanel() {
           </div>
         </div>
       )}
+
+      {schools.length > 0 && (
+        <div
+          style={{
+            marginTop: "28px",
+            paddingTop: "24px",
+            borderTop: "1px solid #d9d9d4",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              gap: "16px",
+              marginBottom: "14px",
+            }}
+          >
+            <div>
+              <p className="eyebrow">
+                WEEKLY OVERVIEW
+              </p>
+              <h3 style={{ margin: "4px 0 0" }}>
+                接車老師週安排總表
+              </h3>
+            </div>
+
+            <small style={{ color: "#6f746f" }}>
+              人數依學生年級與接車規則自動計算
+            </small>
+          </div>
+
+          <div
+            style={{
+              width: "100%",
+              overflowX: "auto",
+              borderRadius: "10px",
+            }}
+          >
+            <div style={{ minWidth: "1500px" }}>
+              {renderSummaryTable(false)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div
+        style={{
+          position: "fixed",
+          left: "-20000px",
+          top: 0,
+          width: "1122px",
+          height: "794px",
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          data-pickup-staff-pdf
+          style={{
+            boxSizing: "border-box",
+            width: "1122px",
+            height: "794px",
+            padding: "24px 28px 20px",
+            background: "#ffffff",
+            color: "#2f2f2f",
+            fontFamily:
+              '"Iansui", "Noto Sans TC", sans-serif',
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              marginBottom: "12px",
+              paddingBottom: "10px",
+              borderBottom: "1px solid #555555",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: "10px",
+                  letterSpacing: "1.6px",
+                  color: "#777777",
+                  marginBottom: "4px",
+                }}
+              >
+                BEAST ACADEMY｜WEEKLY PICKUP STAFF
+              </div>
+
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: "25px",
+                  lineHeight: 1.15,
+                }}
+              >
+                接車老師週安排表
+              </h1>
+            </div>
+
+            <div
+              style={{
+                fontSize: "10px",
+                color: "#555555",
+                textAlign: "right",
+                lineHeight: 1.5,
+              }}
+            >
+              週一至週五｜中午、下午
+              <br />
+              人數依接車規則自動計算
+            </div>
+          </div>
+
+          {renderSummaryTable(true)}
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginTop: "10px",
+              paddingTop: "6px",
+              borderTop: "1px solid #777777",
+              fontSize: "9px",
+              color: "#666666",
+            }}
+          >
+            <span>倍思學院｜接車老師週安排表</span>
+            <span>
+              列印日期：
+              {new Intl.DateTimeFormat("zh-TW").format(
+                new Date()
+              )}
+            </span>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
