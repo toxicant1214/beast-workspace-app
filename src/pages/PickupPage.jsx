@@ -1,28 +1,34 @@
 import { useState } from "react";
 import PickupRulesPanel from "../components/pickup/PickupRulesPanel";
 import PickupClosuresPanel from "../components/pickup/PickupClosuresPanel";
+import PickupStaffPanel from "../components/pickup/PickupStaffPanel";
 import "../App.css";
 
 const PICKUP_TABS = [
   {
     key: "today",
     label: "今日接車",
-    description: "查看今天實際需要接送的學生名單",
+    description: "查看今天各學校的接車時間與負責老師",
   },
   {
     key: "monthly",
     label: "月接車表",
-    description: "產生每月接車名單並列印或輸出",
+    description: "產生每月學生接車名單並列印或輸出",
   },
   {
     key: "rules",
     label: "接車規則",
-    description: "設定各學校、年級與星期的固定接車時段",
+    description: "設定各學校與年級群組的固定放學時間",
+  },
+  {
+    key: "staff",
+    label: "接車老師",
+    description: "設定各學校與時段的學期固定接車老師",
   },
   {
     key: "exceptions",
-    label: "停接與例外",
-    description: "管理學生個別不接與學校停課安排",
+    label: "停接安排",
+    description: "管理全體停接與指定學校停接日期",
   },
 ];
 
@@ -42,11 +48,11 @@ function PickupPage() {
               🚌
             </span>
 
-            <h2>今日接車名單</h2>
+            <h2>今日接車安排</h2>
 
             <p>
-              完成接車規則設定後，系統會依照學生資料、學校、
-              年級與例外紀錄，自動產生今天的實際接車名單。
+              系統將依照接車規則、固定接車老師與停接安排，
+              整理今天各學校的接車時間與負責老師。
             </p>
           </div>
         </section>
@@ -76,6 +82,10 @@ function PickupPage() {
       return <PickupRulesPanel />;
     }
 
+    if (activeTab === "staff") {
+      return <PickupStaffPanel />;
+    }
+
     if (activeTab === "exceptions") {
       return <PickupClosuresPanel />;
     }
@@ -94,7 +104,7 @@ function PickupPage() {
           <h1>接送管理</h1>
 
           <p className="summary">
-            建立固定接車規則，並自動整理每日與每月接車名單。
+            管理固定接車時間、接車老師、停接日期與每月接車表。
           </p>
         </div>
       </header>
