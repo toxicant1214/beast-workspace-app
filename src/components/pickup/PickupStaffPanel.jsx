@@ -848,7 +848,12 @@ function PickupStaffPanel() {
                             padding: "5px 2px",
                             textAlign: "center",
                             verticalAlign: "middle",
-                            lineHeight: 1.5,
+                            lineHeight: 1.25,
+                            fontSize: isPdf ? "8px" : "10px",
+                            whiteSpace: "nowrap",
+                            wordBreak: "keep-all",
+                            overflow: "hidden",
+                            textOverflow: "clip",
                             background: cell.hasSchedule
                               ? "#ffffff"
                               : "#f3f3f1",
@@ -948,7 +953,16 @@ function PickupStaffPanel() {
   }
 
   return (
-    <section className="pickupPanel pickupStaffPanel">
+    <section
+      className="pickupPanel pickupStaffPanel"
+      style={{
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        overflow: "hidden",
+        boxSizing: "border-box",
+      }}
+    >
       <div className="pickupStaffHeader">
         <div>
           <p className="eyebrow">
@@ -1011,7 +1025,14 @@ function PickupStaffPanel() {
           </p>
         </div>
       ) : (
-        <div className="pickupStaffLayout">
+        <div
+          className="pickupStaffLayout"
+          style={{
+            width: "100%",
+            maxWidth: "100%",
+            minWidth: 0,
+          }}
+        >
           <aside className="pickupStaffSchoolList">
             <p className="pickupStaffSchoolList__title">
               選擇學校
@@ -1045,7 +1066,13 @@ function PickupStaffPanel() {
             ))}
           </aside>
 
-          <div className="pickupStaffSchedule">
+          <div
+            className="pickupStaffSchedule"
+            style={{
+              minWidth: 0,
+              maxWidth: "100%",
+            }}
+          >
             <div className="pickupStaffScheduleHeader">
               <div>
                 <p className="eyebrow">
@@ -1171,9 +1198,14 @@ function PickupStaffPanel() {
       {schools.length > 0 && (
         <div
           style={{
+            width: "100%",
+            maxWidth: "100%",
+            minWidth: 0,
             marginTop: "28px",
             paddingTop: "24px",
             borderTop: "1px solid #d9d9d4",
+            boxSizing: "border-box",
+            overflow: "hidden",
           }}
         >
           <div
@@ -1201,12 +1233,17 @@ function PickupStaffPanel() {
 
           <div
             style={{
+              display: "block",
               width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
               overflowX: "auto",
+              overflowY: "hidden",
               borderRadius: "10px",
+              WebkitOverflowScrolling: "touch",
             }}
           >
-            <div style={{ minWidth: "1500px" }}>
+            <div style={{ width: "1500px", minWidth: "1500px" }}>
               {renderSummaryTable(false)}
             </div>
           </div>
