@@ -1417,3 +1417,179 @@ tbody tr:hover td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+/* =========================
+   Pickup Management
+========================= */
+
+.pickupPage {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 10px 0 64px;
+}
+
+.pickupPageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 26px;
+}
+
+.pickupPageHeader h1 {
+  margin: 6px 0 0;
+  color: #30312f;
+  font-size: clamp(40px, 5vw, 64px);
+  line-height: 1.08;
+}
+
+.pickupTabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.pickupTab {
+  min-height: 126px;
+  padding: 20px;
+  border: 1px solid rgba(105, 105, 95, 0.13);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.68);
+  color: #666760;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 14px 34px rgba(74, 72, 64, 0.035);
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.pickupTab:hover {
+  transform: translateY(-2px);
+  border-color: rgba(112, 145, 124, 0.38);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 38px rgba(74, 72, 64, 0.065);
+}
+
+.pickupTab.active {
+  border-color: #87aa93;
+  background: #edf4ef;
+  color: #41634c;
+  box-shadow: 0 16px 38px rgba(75, 112, 91, 0.11);
+}
+
+.pickupTab strong {
+  color: inherit;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pickupTab span {
+  color: #888981;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.pickupTab.active span {
+  color: #6f8475;
+}
+
+.pickupCurrentSection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.pickupCurrentSection h2 {
+  margin: 5px 0 0;
+  color: #3d3e3a;
+  font-size: 28px;
+}
+
+.pickupPanel {
+  min-height: 420px;
+  padding: 30px;
+  border: 1px solid rgba(105, 105, 95, 0.12);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 18px 42px rgba(74, 72, 64, 0.05);
+}
+
+.pickupEmptyState {
+  min-height: 356px;
+  padding: 40px;
+  border: 1px dashed rgba(111, 115, 107, 0.2);
+  border-radius: 22px;
+  background: rgba(247, 245, 240, 0.48);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.pickupEmptyState__icon {
+  font-size: 44px;
+  line-height: 1;
+}
+
+.pickupEmptyState h2 {
+  margin: 8px 0 0;
+  color: #454742;
+  font-size: 26px;
+}
+
+.pickupEmptyState p {
+  max-width: 620px;
+  margin: 0;
+  color: #898a83;
+  font-size: 15px;
+  line-height: 1.9;
+}
+
+@media (max-width: 1100px) {
+  .pickupTabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .pickupPage {
+    padding-bottom: 42px;
+  }
+
+  .pickupPageHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pickupTabs {
+    grid-template-columns: 1fr;
+  }
+
+  .pickupTab {
+    min-height: 108px;
+  }
+
+  .pickupPanel {
+    min-height: 360px;
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .pickupEmptyState {
+    min-height: 320px;
+    padding: 28px 20px;
+  }
+}
