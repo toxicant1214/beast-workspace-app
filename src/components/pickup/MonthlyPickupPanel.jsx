@@ -13,6 +13,17 @@ const WEEKDAYS = [
 
 const STUDENTS_PER_PDF_PAGE = 30;
 
+const GRADE_ORDER = {
+  "幼兒園": 0,
+  "一年級": 1,
+  "二年級": 2,
+  "三年級": 3,
+  "四年級": 4,
+  "五年級": 5,
+  "六年級": 6,
+  "畢業生": 7,
+};
+
 const GRADE_GROUP_MAP = {
   "一年級": "LOW",
   "二年級": "LOW",
@@ -53,10 +64,10 @@ const pdfDayHeaderStyle = {
   padding: "2px 0",
   textAlign: "center",
   verticalAlign: "middle",
-  borderTop: "1px solid #8fa097",
-  borderRight: "1px solid #aebbb5",
-  borderBottom: "1px solid #8fa097",
-  background: "#eef2ef",
+  borderTop: "1px solid #aebdb5",
+  borderRight: "1px solid #c6d0ca",
+  borderBottom: "1px solid #aebdb5",
+  background: "#e8efe9",
 };
 
 function pdfFixedHeaderStyle(width) {
@@ -64,7 +75,7 @@ function pdfFixedHeaderStyle(width) {
     ...pdfDayHeaderStyle,
     width: `${width}px`,
     padding: "2px 4px",
-    borderLeft: "1px solid #8fa097",
+    borderLeft: "1px solid #aebdb5",
   };
 }
 
@@ -72,7 +83,7 @@ function pdfTextCellStyle(width, borderTop) {
   return {
     boxSizing: "border-box",
     width: `${width}px`,
-    height: "19px",
+    height: "20px",
     padding: "1px 4px",
     overflow: "hidden",
     whiteSpace: "nowrap",
@@ -233,7 +244,25 @@ function MonthlyPickupPanel() {
       groups.get(student.school).push(student);
     });
 
-    return Array.from(groups.entries());
+    return Array.from(groups.entries()).map(
+      ([schoolName, schoolStudents]) => [
+        schoolName,
+        [...schoolStudents].sort((a, b) => {
+          const gradeDifference =
+            (GRADE_ORDER[a.current_grade] ?? 999) -
+            (GRADE_ORDER[b.current_grade] ?? 999);
+
+          if (gradeDifference !== 0) {
+            return gradeDifference;
+          }
+
+          return (a.chinese_name || "").localeCompare(
+            b.chinese_name || "",
+            "zh-Hant"
+          );
+        }),
+      ]
+    );
   }, [visibleStudents]);
 
   const pdfPages = useMemo(() => {
@@ -711,12 +740,12 @@ function MonthlyPickupPanel() {
               boxSizing: "border-box",
               width: "1122px",
               height: "794px",
-              padding: "24px 28px 18px",
+              padding: "28px 30px 20px",
               overflow: "hidden",
-              background: "#ffffff",
-              color: "#26332d",
+              background: "#fbfaf7",
+              color: "#31342f",
               fontFamily:
-                '"Noto Sans TC", "Microsoft JhengHei", sans-serif',
+                '"Iansui", "芫荽", "Noto Sans TC", "Microsoft JhengHei", sans-serif',
             }}
           >
             <div
@@ -724,27 +753,28 @@ function MonthlyPickupPanel() {
                 display: "flex",
                 alignItems: "flex-end",
                 justifyContent: "space-between",
-                gap: "16px",
-                paddingBottom: "10px",
-                borderBottom: "2px solid #60776c",
+                gap: "18px",
+                padding: "0 2px 12px",
+                borderBottom: "2px solid #8eaa9b",
               }}
             >
               <div>
                 <div
                   style={{
-                    fontSize: "12px",
-                    letterSpacing: "1.4px",
-                    color: "#77877f",
-                    marginBottom: "3px",
+                    fontSize: "11px",
+                    letterSpacing: "2.1px",
+                    color: "#8c958e",
+                    marginBottom: "5px",
                   }}
                 >
                   BEAST ACADEMY｜MONTHLY PICKUP ROSTER
                 </div>
                 <div
                   style={{
-                    fontSize: "25px",
+                    fontSize: "27px",
                     lineHeight: 1.15,
-                    fontWeight: 800,
+                    fontWeight: 700,
+                    letterSpacing: "0.8px",
                   }}
                 >
                   {page.schoolName}｜{year} 年 {month} 月接車點名表
@@ -753,10 +783,15 @@ function MonthlyPickupPanel() {
 
               <div
                 style={{
+                  minWidth: "145px",
+                  padding: "8px 12px",
+                  border: "1px solid #d9dfda",
+                  borderRadius: "12px",
+                  background: "#f2f5f1",
                   textAlign: "right",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   lineHeight: 1.55,
-                  color: "#637169",
+                  color: "#69746d",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -773,9 +808,12 @@ function MonthlyPickupPanel() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: "14px",
-                padding: "8px 0",
-                fontSize: "11px",
-                color: "#536159",
+                margin: "9px 0",
+                padding: "7px 10px",
+                borderRadius: "10px",
+                background: "#f1f3ef",
+                fontSize: "10px",
+                color: "#626b65",
               }}
             >
               <div>
@@ -790,15 +828,20 @@ function MonthlyPickupPanel() {
               style={{
                 width: "100%",
                 tableLayout: "fixed",
-                borderCollapse: "collapse",
+                borderCollapse: "separate",
+                borderSpacing: 0,
+                overflow: "hidden",
+                border: "1px solid #aebdb5",
+                borderRadius: "8px",
+                background: "#ffffff",
                 fontSize: "10px",
               }}
             >
               <thead>
                 <tr>
-                  <th style={pdfFixedHeaderStyle(56)}>年級</th>
-                  <th style={pdfFixedHeaderStyle(92)}>姓名</th>
-                  <th style={pdfFixedHeaderStyle(98)}>家長電話</th>
+                  <th style={pdfFixedHeaderStyle(58)}>年級</th>
+                  <th style={pdfFixedHeaderStyle(96)}>姓名</th>
+                  <th style={pdfFixedHeaderStyle(104)}>家長電話</th>
                   {monthDays.map((day) => (
                     <th
                       key={day.dateString}
@@ -810,10 +853,10 @@ function MonthlyPickupPanel() {
                             : "1px solid #aebbb5",
                       }}
                     >
-                      <div style={{ fontWeight: 800, fontSize: "10px" }}>
+                      <div style={{ fontWeight: 700, fontSize: "10px" }}>
                         {day.day}
                       </div>
-                      <div style={{ fontSize: "8px", color: "#66756d" }}>
+                      <div style={{ fontSize: "8px", color: "#778078" }}>
                         {day.weekdayLabel}
                       </div>
                     </th>
@@ -833,18 +876,18 @@ function MonthlyPickupPanel() {
 
                   return (
                     <tr key={student.id} style={{ height: "19px" }}>
-                      <td style={pdfTextCellStyle(56, rowTopBorder)}>
+                      <td style={pdfTextCellStyle(58, rowTopBorder)}>
                         {student.current_grade}
                       </td>
                       <td
                         style={{
-                          ...pdfTextCellStyle(92, rowTopBorder),
+                          ...pdfTextCellStyle(96, rowTopBorder),
                           fontWeight: 700,
                         }}
                       >
                         {student.chinese_name}
                       </td>
-                      <td style={pdfTextCellStyle(98, rowTopBorder)}>
+                      <td style={pdfTextCellStyle(104, rowTopBorder)}>
                         {student.primary_parent_phone || "—"}
                       </td>
 
@@ -857,7 +900,7 @@ function MonthlyPickupPanel() {
                           <td
                             key={day.dateString}
                             style={{
-                              height: "19px",
+                              height: "20px",
                               padding: 0,
                               textAlign: "center",
                               verticalAlign: "middle",
@@ -887,11 +930,12 @@ function MonthlyPickupPanel() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginTop: "8px",
-                paddingTop: "6px",
-                borderTop: "1px solid #c8d0cc",
-                fontSize: "10px",
-                color: "#6c7972",
+                marginTop: "9px",
+                padding: "7px 2px 0",
+                borderTop: "1px solid #d8ded9",
+                fontSize: "9px",
+                letterSpacing: "0.3px",
+                color: "#7c857f",
               }}
             >
               <span>倍思學院｜接車點名表</span>
