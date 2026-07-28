@@ -5,6 +5,7 @@ function StudentDrawer({
   onClose,
   onSave,
   onDelete,
+  isSaving = false,
 }) {
   const isOfficialStudent =
     Boolean(selectedStudent) &&
@@ -15,6 +16,15 @@ function StudentDrawer({
       ...currentForm,
       [field]: value,
     }));
+  }
+
+  function handleNationalIdChange(value) {
+    const normalizedValue = value
+      .replace(/\s/g, "")
+      .toUpperCase()
+      .slice(0, 10);
+
+    updateField("national_id", normalizedValue);
   }
 
   return (
@@ -33,7 +43,12 @@ function StudentDrawer({
             </h2>
           </div>
 
-          <button type="button" onClick={onClose}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSaving}
+            aria-label="關閉"
+          >
             ×
           </button>
         </div>
@@ -51,7 +66,7 @@ function StudentDrawer({
                   e.target.value === "TEST"
                 )
               }
-              disabled={isOfficialStudent}
+              disabled={isOfficialStudent || isSaving}
             >
               <option value="OFFICIAL">正式學生</option>
               <option value="TEST">測試學生</option>
@@ -71,33 +86,44 @@ function StudentDrawer({
             />
           </label>
 
-          <label>
-            學生狀態
-            <select
-              value={form.student_status}
-              onChange={(e) =>
-                updateField("student_status", e.target.value)
-              }
-            >
-              <option value="ACTIVE">在學</option>
-              <option value="PAUSED">暫停</option>
-              <option value="WITHDRAWN">退班</option>
-              <option value="GRADUATED">畢業</option>
-            </select>
-          </label>
+          {selectedStudent && (
+            <label>
+              學生狀態
+              <select
+                value={form.student_status}
+                onChange={(e) =>
+                  updateField(
+                    "student_status",
+                    e.target.value
+                  )
+                }
+                disabled={isSaving}
+              >
+                <option value="ACTIVE">在學</option>
+                <option value="PAUSED">暫停</option>
+                <option value="WITHDRAWN">退班</option>
+                <option value="GRADUATED">畢業</option>
+              </select>
+            </label>
+          )}
         </div>
 
         <div className="drawerSection">
           <p className="drawerSectionTitle">基本資料</p>
 
           <label>
-            中文姓名
+            <span>
+              中文姓名
+              <strong className="requiredMark">必填</strong>
+            </span>
+
             <input
               required
               value={form.chinese_name}
               onChange={(e) =>
                 updateField("chinese_name", e.target.value)
               }
+              disabled={isSaving}
             />
           </label>
 
@@ -108,7 +134,38 @@ function StudentDrawer({
               onChange={(e) =>
                 updateField("english_name", e.target.value)
               }
+              disabled={isSaving}
             />
+          </label>
+
+          <label>
+            身分證字號
+            <input
+              value={form.national_id}
+              maxLength={10}
+              placeholder="例如：A123456789"
+              autoComplete="off"
+              onChange={(e) =>
+                handleNationalIdChange(e.target.value)
+              }
+              disabled={isSaving}
+            />
+          </label>
+
+          <label>
+            性別
+            <select
+              value={form.gender}
+              onChange={(e) =>
+                updateField("gender", e.target.value)
+              }
+              disabled={isSaving}
+            >
+              <option value="">未設定</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+              <option value="其他">其他</option>
+            </select>
           </label>
 
           <label>
@@ -119,28 +176,44 @@ function StudentDrawer({
               onChange={(e) =>
                 updateField("birthday", e.target.value)
               }
+              disabled={isSaving}
             />
           </label>
 
           <label>
-            就讀學校
+            <span>
+              就讀學校
+              <strong className="requiredMark">必填</strong>
+            </span>
+
             <input
+              required
               value={form.school}
               onChange={(e) =>
                 updateField("school", e.target.value)
               }
+              disabled={isSaving}
             />
           </label>
 
           <label>
-            年級
+            <span>
+              年級
+              <strong className="requiredMark">必填</strong>
+            </span>
+
             <select
+              required
               value={form.current_grade}
               onChange={(e) =>
-                updateField("current_grade", e.target.value)
+                updateField(
+                  "current_grade",
+                  e.target.value
+                )
               }
+              disabled={isSaving}
             >
-              <option value="">未設定</option>
+              <option value="">請選擇年級</option>
               <option value="幼兒園">幼兒園</option>
               <option value="一年級">一年級</option>
               <option value="二年級">二年級</option>
@@ -158,8 +231,12 @@ function StudentDrawer({
               type="date"
               value={form.enrollment_date}
               onChange={(e) =>
-                updateField("enrollment_date", e.target.value)
+                updateField(
+                  "enrollment_date",
+                  e.target.value
+                )
               }
+              disabled={isSaving}
             />
           </label>
         </div>
@@ -168,31 +245,43 @@ function StudentDrawer({
           <p className="drawerSectionTitle">家長聯絡資料</p>
 
           <label>
-            主要家長稱謂
+            <span>
+              主要家長稱謂
+              <strong className="requiredMark">必填</strong>
+            </span>
+
             <input
               required
               value={form.primary_parent_title}
+              placeholder="例如：媽媽、爸爸、阿嬤"
               onChange={(e) =>
                 updateField(
                   "primary_parent_title",
                   e.target.value
                 )
               }
+              disabled={isSaving}
             />
           </label>
 
           <label>
-            主要家長電話
+            <span>
+              主要家長電話
+              <strong className="requiredMark">必填</strong>
+            </span>
+
             <input
               required
               type="tel"
               value={form.primary_parent_phone}
+              placeholder="例如：0912345678"
               onChange={(e) =>
                 updateField(
                   "primary_parent_phone",
                   e.target.value
                 )
               }
+              disabled={isSaving}
             />
           </label>
 
@@ -200,12 +289,14 @@ function StudentDrawer({
             第二家長稱謂
             <input
               value={form.secondary_parent_title}
+              placeholder="選填"
               onChange={(e) =>
                 updateField(
                   "secondary_parent_title",
                   e.target.value
                 )
               }
+              disabled={isSaving}
             />
           </label>
 
@@ -214,12 +305,14 @@ function StudentDrawer({
             <input
               type="tel"
               value={form.secondary_parent_phone}
+              placeholder="選填"
               onChange={(e) =>
                 updateField(
                   "secondary_parent_phone",
                   e.target.value
                 )
               }
+              disabled={isSaving}
             />
           </label>
         </div>
@@ -236,6 +329,7 @@ function StudentDrawer({
               onChange={(e) =>
                 updateField("note", e.target.value)
               }
+              disabled={isSaving}
             />
           </label>
         </div>
@@ -246,17 +340,30 @@ function StudentDrawer({
               type="button"
               className="danger"
               onClick={onDelete}
+              disabled={isSaving}
             >
               刪除測試學生
             </button>
           )}
 
-          <button type="button" onClick={onClose}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSaving}
+          >
             取消
           </button>
 
-          <button type="submit" className="primary">
-            {selectedStudent ? "儲存修改" : "儲存學生"}
+          <button
+            type="submit"
+            className="primary"
+            disabled={isSaving}
+          >
+            {isSaving
+              ? "儲存中..."
+              : selectedStudent
+                ? "儲存修改"
+                : "儲存學生"}
           </button>
         </div>
       </form>

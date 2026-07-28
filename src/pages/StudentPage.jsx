@@ -11,13 +11,16 @@ function StudentPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [profileStudent, setProfileStudent] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const emptyForm = {
     student_no: "",
     is_test: false,
     chinese_name: "",
     english_name: "",
+    national_id: "",
     birthday: "",
+    gender: "",
     school: "",
     enrollment_date: "",
     primary_parent_title: "媽媽",
@@ -43,6 +46,7 @@ function StudentPage() {
 
     if (error) {
       console.error("讀取學生資料失敗：", error);
+      alert(`讀取學生資料失敗：${error.message}`);
       return;
     }
 
@@ -84,7 +88,9 @@ function StudentPage() {
       is_test: student.is_test ?? false,
       chinese_name: student.chinese_name || "",
       english_name: student.english_name || "",
+      national_id: student.national_id || "",
       birthday: student.birthday || "",
+      gender: student.gender || "",
       school: student.school || "",
       enrollment_date: student.enrollment_date || "",
       primary_parent_title:
@@ -104,21 +110,56 @@ function StudentPage() {
   }
 
   function closeDrawer() {
-    setIsDrawerOpen(false);
-    setSelectedStudent(null);
-    setForm({
-      ...emptyForm,
-    });
+  setIsDrawerOpen(false);
+  setSelectedStudent(null);
+  setForm({
+    ...emptyForm,
+  });
+}
+
+  function validateForm() {
+    if (!form.chinese_name.trim()) {
+      alert("請填寫中文姓名。");
+      return false;
+    }
+
+    if (!form.school.trim()) {
+      alert("請填寫學校。");
+      return false;
+    }
+
+    if (!form.current_grade) {
+      alert("請選擇目前年級。");
+      return false;
+    }
+
+    if (!form.primary_parent_title.trim()) {
+      alert("請填寫主要家長稱謂。");
+      return false;
+    }
+
+    if (!form.primary_parent_phone.trim()) {
+      alert("請填寫主要家長電話。");
+      return false;
+    }
+
+    return true;
   }
 
   async function saveStudent(e) {
     e.preventDefault();
 
+    if (!validateForm()) return;
+
     const normalizedForm = {
       ...form,
+      chinese_name: form.chinese_name.trim(),
       english_name: form.english_name.trim() || null,
+      national_id:
+        form.national_id.trim().toUpperCase() || null,
       birthday: form.birthday || null,
-      school: form.school.trim() || null,
+      gender: form.gender || null,
+      school: form.school.trim(),
       enrollment_date: form.enrollment_date || null,
       primary_parent_title:
         form.primary_parent_title.trim(),
@@ -128,49 +169,71 @@ function StudentPage() {
         form.secondary_parent_title.trim() || null,
       secondary_parent_phone:
         form.secondary_parent_phone.trim() || null,
-      current_grade: form.current_grade || null,
+      current_grade: form.current_grade,
+      student_status: form.student_status || "ACTIVE",
       note: form.note.trim() || null,
     };
 
-    if (selectedStudent) {
-      const { student_no, ...updateData } = normalizedForm;
+    try {
+      setIsSaving(true);
 
-      const { data, error } = await supabase
-        .from("students")
-        .update(updateData)
-        .eq("id", selectedStudent.id)
-        .select("*")
-        .single();
+      if (selectedStudent) {
+        const { student_no, ...updateData } = normalizedForm;
 
-      if (error) {
-        alert("更新失敗：" + error.message);
+        const { data, error } = await supabase
+          .from("students")
+          .update(updateData)
+          .eq("id", selectedStudent.id)
+          .select("*")
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          setProfileStudent((currentProfile) => {
+            if (currentProfile?.id === data.id) {
+              return data;
+            }
+
+            return currentProfile;
+          });
+        }
+      } else {
+        const {
+          student_no,
+          student_status,
+          ...newStudentData
+        } = normalizedForm;
+
+        const { error } = await supabase
+          .from("students")
+          .insert([
+            {
+              ...newStudentData,
+              student_status: "ACTIVE",
+            },
+          ]);
+
+        if (error) throw error;
+      }
+
+      closeDrawer();
+      await loadStudents();
+    } catch (error) {
+      console.error("儲存學生資料失敗：", error);
+
+      if (
+        error.code === "23505" &&
+        error.message?.includes("national_id")
+      ) {
+        alert("儲存失敗：這個身分證字號已經存在。");
         return;
       }
 
-      if (data) {
-        setProfileStudent((currentProfile) => {
-          if (currentProfile?.id === data.id) {
-            return data;
-          }
-
-          return currentProfile;
-        });
-      }
-    } else {
-      const { student_no, ...newStudentData } = normalizedForm;
-
-      const { error } = await supabase
-        .from("students")
-        .insert([newStudentData]);
-
-      if (error) {
-        alert("新增失敗：" + error.message);
-        return;
-      }
+      alert(`儲存失敗：${error.message}`);
+    } finally {
+      setIsSaving(false);
     }
-
-    closeDrawer();
-    await loadStudents();
   }
 
   async function deleteStudent() {
@@ -208,10 +271,13 @@ function StudentPage() {
   const filteredStudents = students.filter((student) => {
     const keyword = searchText.trim().toLowerCase();
 
+    if (!keyword) return true;
+
     return (
       student.student_no?.toLowerCase().includes(keyword) ||
       student.chinese_name?.toLowerCase().includes(keyword) ||
       student.english_name?.toLowerCase().includes(keyword) ||
+      student.national_id?.toLowerCase().includes(keyword) ||
       student.primary_parent_phone?.includes(keyword) ||
       student.secondary_parent_phone?.includes(keyword) ||
       student.school?.toLowerCase().includes(keyword)
@@ -235,6 +301,7 @@ function StudentPage() {
             onClose={closeDrawer}
             onSave={saveStudent}
             onDelete={deleteStudent}
+            isSaving={isSaving}
           />
         )}
       </>
@@ -288,6 +355,7 @@ function StudentPage() {
           onClose={closeDrawer}
           onSave={saveStudent}
           onDelete={deleteStudent}
+          isSaving={isSaving}
         />
       )}
     </>
