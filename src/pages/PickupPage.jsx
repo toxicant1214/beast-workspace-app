@@ -3,7 +3,6 @@ import PickupRulesPanel from "../components/pickup/PickupRulesPanel";
 import PickupClosuresPanel from "../components/pickup/PickupClosuresPanel";
 import PickupStaffPanel from "../components/pickup/PickupStaffPanel";
 import MonthlyPickupPanel from "../components/pickup/MonthlyPickupPanel";
-import PickupPrintPanel from "../components/pickup/PickupPrintPanel";
 import "../App.css";
 
 const PICKUP_TABS = [
@@ -15,12 +14,7 @@ const PICKUP_TABS = [
   {
     key: "monthly",
     label: "月接車表",
-    description: "查看每月各校學生的接車安排",
-  },
-  {
-    key: "print",
-    label: "接車點名表",
-    description: "產生各校 A4 橫式接車點名表",
+    description: "查看每月各校學生的接車安排與列印點名表",
   },
   {
     key: "rules",
@@ -52,7 +46,9 @@ function PickupPage() {
         <section className="pickupPanel">
           <div className="pickupEmptyState">
             <span className="pickupEmptyState__icon">🚌</span>
+
             <h2>今日接車安排</h2>
+
             <p>
               系統將依照接車規則、固定接車老師與停接安排，
               整理今天各學校的接車時間與負責老師。
@@ -64,10 +60,6 @@ function PickupPage() {
 
     if (activeTab === "monthly") {
       return <MonthlyPickupPanel />;
-    }
-
-    if (activeTab === "print") {
-      return <PickupPrintPanel />;
     }
 
     if (activeTab === "rules") {
@@ -90,9 +82,11 @@ function PickupPage() {
       <header className="pickupPageHeader">
         <div>
           <p className="eyebrow">PICKUP MANAGEMENT</p>
+
           <h1>接送管理</h1>
+
           <p className="summary">
-            管理固定接車時間、接車老師、停接日期、月接車表與列印點名表。
+            管理固定接車時間、接車老師、停接日期與每月接車安排。
           </p>
         </div>
       </header>
