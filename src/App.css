@@ -1857,3 +1857,174 @@ tbody tr:hover td {
     justify-content: flex-start;
   }
 }
+/* Pickup rules：每週設定 */
+
+.pickupWeekSettings {
+  display: grid;
+  gap: 9px;
+}
+
+.pickupWeekSettings__title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pickupWeekSettings__title > span {
+  color: #77786f;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pickupWeekSettings__title small {
+  color: #aaa89f;
+  font-size: 11px;
+}
+
+.pickupWeekdayRow {
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid #e4e1da;
+  border-radius: 13px;
+  display: grid;
+  grid-template-columns: 1fr 118px;
+  align-items: center;
+  gap: 12px;
+}
+
+.pickupWeekdayRow.is-enabled {
+  border-color: #b8cec0;
+  background: #f3f7f4;
+}
+
+.pickupWeekdayRow.is-disabled {
+  background: #f8f7f3;
+}
+
+.pickupWeekdayRow input[type="time"] {
+  padding: 8px 10px;
+}
+
+.pickupWeekdayToggle {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 9px !important;
+  cursor: pointer;
+}
+
+.pickupWeekdayToggle input {
+  width: 17px;
+  height: 17px;
+  accent-color: #83a994;
+}
+
+.pickupWeekdayToggle span {
+  color: #555750 !important;
+  font-size: 14px !important;
+}
+
+.pickupNoService {
+  color: #aaa89f;
+  font-size: 13px;
+  text-align: center;
+}
+
+.pickupGradeRuleCards {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.pickupGradeRuleCard {
+  padding: 17px;
+  border: 1px solid #ebe8e1;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.pickupGradeRuleCard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 15px;
+}
+
+.pickupGradeRuleCard__header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pickupGradeRuleCard__header strong {
+  color: #454742;
+  font-size: 18px;
+}
+
+.pickupGradeRuleCard__header span {
+  color: #96958e;
+  font-size: 12px;
+}
+
+.pickupRuleWeekGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(74px, 1fr));
+  gap: 8px;
+}
+
+.pickupRuleDay {
+  min-height: 61px;
+  padding: 9px 7px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.pickupRuleDay span {
+  font-size: 12px;
+}
+
+.pickupRuleDay strong {
+  font-size: 14px;
+}
+
+.pickupRuleDay.has-time {
+  background: #edf4ef;
+  color: #55745f;
+}
+
+.pickupRuleDay.no-time {
+  background: #f5f3ef;
+  color: #aaa79e;
+}
+
+.pickupGradeRuleCard__note {
+  margin: 13px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #efede7;
+  color: #85857d;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (max-width: 720px) {
+  .pickupWeekSettings__title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pickupRuleWeekGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .pickupGradeRuleCard__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

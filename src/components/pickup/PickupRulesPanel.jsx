@@ -1,47 +1,71 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+const GRADE_GROUPS = [
+  { value: "LOW", label: "低年級", description: "一、二年級" },
+  { value: "MIDDLE", label: "中年級", description: "三、四年級" },
+  { value: "HIGH", label: "高年級", description: "五、六年級" },
+];
+
 const WEEKDAYS = [
-  { value: 1, label: "星期一" },
-  { value: 2, label: "星期二" },
-  { value: 3, label: "星期三" },
-  { value: 4, label: "星期四" },
-  { value: 5, label: "星期五" },
+  {
+    key: "monday_time",
+    label: "星期一",
+  },
+  {
+    key: "tuesday_time",
+    label: "星期二",
+  },
+  {
+    key: "wednesday_time",
+    label: "星期三",
+  },
+  {
+    key: "thursday_time",
+    label: "星期四",
+  },
+  {
+    key: "friday_time",
+    label: "星期五",
+  },
 ];
 
-const GRADES = [
-  "一年級",
-  "二年級",
-  "三年級",
-  "四年級",
-  "五年級",
-  "六年級",
-];
+function createEmptyForm() {
+  return {
+    school: "",
+    grade_group: "",
+    monday_time: "",
+    tuesday_time: "",
+    wednesday_time: "",
+    thursday_time: "",
+    friday_time: "",
+    note: "",
+  };
+}
 
-const emptyForm = {
-  school: "",
-  grade: "",
-  weekday: 1,
-  pickup_time: "",
-  note: "",
-};
-
-function formatPickupTime(time) {
-  if (!time) return "—";
+function formatTime(time) {
+  if (!time) return "";
 
   return time.slice(0, 5);
 }
 
-function getWeekdayLabel(weekday) {
+function getGradeGroupLabel(value) {
   return (
-    WEEKDAYS.find((item) => item.value === Number(weekday))
-      ?.label || "—"
+    GRADE_GROUPS.find((item) => item.value === value)?.label ||
+    "未設定"
+  );
+}
+
+function getGradeGroupDescription(value) {
+  return (
+    GRADE_GROUPS.find((item) => item.value === value)
+      ?.description || ""
   );
 }
 
 function PickupRulesPanel() {
   const [rules, setRules] = useState([]);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(createEmptyForm());
 
   const [editingRule, setEditingRule] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,9 +84,8 @@ function PickupRulesPanel() {
       const { data, error } = await supabase
         .from("pickup_rules")
         .select("*")
-        .order("school")
-        .order("grade")
-        .order("weekday");
+        .order("school", { ascending: true })
+        .order("grade_group", { ascending: true });
 
       if (error) {
         throw error;
@@ -71,7 +94,9 @@ function PickupRulesPanel() {
       setRules(data || []);
     } catch (error) {
       console.error("讀取接車規則失敗：", error);
-      setErrorMessage(`讀取接車規則失敗：${error.message}`);
+      setErrorMessage(
+        `讀取接車規則失敗：${error.message}`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -79,7 +104,8 @@ function PickupRulesPanel() {
 
   function resetForm() {
     setEditingRule(null);
-    setForm(emptyForm);
+    setForm(createEmptyForm());
+    setErrorMessage("");
   }
 
   function startEdit(rule) {
@@ -87,11 +113,33 @@ function PickupRulesPanel() {
 
     setForm({
       school: rule.school || "",
-      grade: rule.grade || "",
-      weekday: Number(rule.weekday) || 1,
-      pickup_time: formatPickupTime(rule.pickup_time),
+      grade_group: rule.grade_group || "",
+      monday_time: formatTime(rule.monday_time),
+      tuesday_time: formatTime(rule.tuesday_time),
+      wednesday_time: formatTime(rule.wednesday_time),
+      thursday_time: formatTime(rule.thursday_time),
+      friday_time: formatTime(rule.friday_time),
       note: rule.note || "",
     });
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
+  function updateForm(field, value) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function togglePickupDay(field) {
+    setForm((current) => ({
+      ...current,
+      [field]: current[field] ? "" : "12:00",
+    }));
   }
 
   function validateForm() {
@@ -100,18 +148,17 @@ function PickupRulesPanel() {
       return false;
     }
 
-    if (!form.grade) {
-      alert("請選擇年級。");
+    if (!form.grade_group) {
+      alert("請選擇低年級、中年級或高年級。");
       return false;
     }
 
-    if (!form.weekday) {
-      alert("請選擇星期。");
-      return false;
-    }
+    const hasPickupTime = WEEKDAYS.some(
+      (weekday) => form[weekday.key]
+    );
 
-    if (!form.pickup_time) {
-      alert("請設定接車時間。");
+    if (!hasPickupTime) {
+      alert("請至少設定一天的接車時間。");
       return false;
     }
 
@@ -125,9 +172,12 @@ function PickupRulesPanel() {
 
     const ruleData = {
       school: form.school.trim(),
-      grade: form.grade,
-      weekday: Number(form.weekday),
-      pickup_time: form.pickup_time,
+      grade_group: form.grade_group,
+      monday_time: form.monday_time || null,
+      tuesday_time: form.tuesday_time || null,
+      wednesday_time: form.wednesday_time || null,
+      thursday_time: form.thursday_time || null,
+      friday_time: form.friday_time || null,
       note: form.note.trim() || null,
       is_active: true,
       updated_at: new Date().toISOString(),
@@ -158,11 +208,15 @@ function PickupRulesPanel() {
       console.error("儲存接車規則失敗：", error);
 
       if (error.code === "23505") {
-        alert("這個學校、年級與星期已經有接車規則。");
+        setErrorMessage(
+          "這間學校的這個年級區間已經有接車規則，請直接編輯原有資料。"
+        );
         return;
       }
 
-      setErrorMessage(`儲存接車規則失敗：${error.message}`);
+      setErrorMessage(
+        `儲存接車規則失敗：${error.message}`
+      );
     } finally {
       setIsSaving(false);
     }
@@ -170,8 +224,8 @@ function PickupRulesPanel() {
 
   async function deleteRule(rule) {
     const confirmed = window.confirm(
-      `確定要刪除「${rule.school}／${rule.grade}／${getWeekdayLabel(
-        rule.weekday
+      `確定要刪除「${rule.school}／${getGradeGroupLabel(
+        rule.grade_group
       )}」的接車規則嗎？`
     );
 
@@ -194,7 +248,9 @@ function PickupRulesPanel() {
       await loadRules();
     } catch (error) {
       console.error("刪除接車規則失敗：", error);
-      setErrorMessage(`刪除接車規則失敗：${error.message}`);
+      setErrorMessage(
+        `刪除接車規則失敗：${error.message}`
+      );
     }
   }
 
@@ -207,6 +263,7 @@ function PickupRulesPanel() {
       }
 
       result[school].push(rule);
+
       return result;
     }, {});
   }, [rules]);
@@ -219,15 +276,15 @@ function PickupRulesPanel() {
           onSubmit={saveRule}
         >
           <div className="pickupRuleForm__header">
-            <div>
-              <p className="eyebrow">
-                {editingRule ? "EDIT RULE" : "NEW RULE"}
-              </p>
+            <p className="eyebrow">
+              {editingRule ? "EDIT RULE" : "NEW RULE"}
+            </p>
 
-              <h2>
-                {editingRule ? "編輯接車規則" : "新增接車規則"}
-              </h2>
-            </div>
+            <h2>
+              {editingRule
+                ? "編輯接車規則"
+                : "新增接車規則"}
+            </h2>
           </div>
 
           <label>
@@ -235,91 +292,111 @@ function PickupRulesPanel() {
 
             <input
               type="text"
-              placeholder="例如：林口國小"
+              placeholder="例如：新林國小"
               value={form.school}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  school: event.target.value,
-                }))
+                updateForm("school", event.target.value)
               }
             />
           </label>
 
           <label>
-            <span>年級</span>
+            <span>年級區間</span>
 
             <select
-              value={form.grade}
+              value={form.grade_group}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  grade: event.target.value,
-                }))
+                updateForm(
+                  "grade_group",
+                  event.target.value
+                )
               }
             >
-              <option value="">請選擇年級</option>
+              <option value="">請選擇年級區間</option>
 
-              {GRADES.map((grade) => (
-                <option key={grade} value={grade}>
-                  {grade}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            <span>星期</span>
-
-            <select
-              value={form.weekday}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  weekday: Number(event.target.value),
-                }))
-              }
-            >
-              {WEEKDAYS.map((weekday) => (
+              {GRADE_GROUPS.map((group) => (
                 <option
-                  key={weekday.value}
-                  value={weekday.value}
+                  key={group.value}
+                  value={group.value}
                 >
-                  {weekday.label}
+                  {group.label}（{group.description}）
                 </option>
               ))}
             </select>
           </label>
 
-          <label>
-            <span>接車時間</span>
+          <div className="pickupWeekSettings">
+            <div className="pickupWeekSettings__title">
+              <span>每週接車時間</span>
+              <small>
+                不需要接車的星期可直接關閉
+              </small>
+            </div>
 
-            <input
-              type="time"
-              value={form.pickup_time}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  pickup_time: event.target.value,
-                }))
-              }
-            />
-          </label>
+            {WEEKDAYS.map((weekday) => {
+              const isEnabled = Boolean(
+                form[weekday.key]
+              );
+
+              return (
+                <div
+                  key={weekday.key}
+                  className={`pickupWeekdayRow ${
+                    isEnabled
+                      ? "is-enabled"
+                      : "is-disabled"
+                  }`}
+                >
+                  <label className="pickupWeekdayToggle">
+                    <input
+                      type="checkbox"
+                      checked={isEnabled}
+                      onChange={() =>
+                        togglePickupDay(weekday.key)
+                      }
+                    />
+
+                    <span>{weekday.label}</span>
+                  </label>
+
+                  {isEnabled ? (
+                    <input
+                      type="time"
+                      value={form[weekday.key]}
+                      onChange={(event) =>
+                        updateForm(
+                          weekday.key,
+                          event.target.value
+                        )
+                      }
+                    />
+                  ) : (
+                    <span className="pickupNoService">
+                      不接車
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
           <label>
             <span>備註</span>
 
             <textarea
-              placeholder="可留空，例如：週三為提早放學"
+              placeholder="可留空，例如：星期三為提早放學"
               value={form.note}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  note: event.target.value,
-                }))
+                updateForm("note", event.target.value)
               }
             />
           </label>
+
+          {errorMessage && (
+            <p className="pickupErrorMessage">
+              {errorMessage}
+            </p>
+          )}
 
           <div className="pickupRuleForm__actions">
             {editingRule && (
@@ -354,15 +431,9 @@ function PickupRulesPanel() {
             </div>
 
             <span className="pickupRuleCount">
-              {rules.length} 筆
+              {rules.length} 組
             </span>
           </div>
-
-          {errorMessage && (
-            <p className="pickupErrorMessage">
-              {errorMessage}
-            </p>
-          )}
 
           {isLoading ? (
             <div className="pickupRulesEmpty">
@@ -371,8 +442,9 @@ function PickupRulesPanel() {
           ) : rules.length === 0 ? (
             <div className="pickupRulesEmpty">
               <strong>目前還沒有接車規則</strong>
+
               <span>
-                請先從左側新增第一筆學校、年級與星期設定。
+                請先從左側新增第一組學校與年級設定。
               </span>
             </div>
           ) : (
@@ -385,50 +457,93 @@ function PickupRulesPanel() {
                   >
                     <div className="pickupSchoolGroup__header">
                       <h3>{school}</h3>
-                      <span>{schoolRules.length} 筆規則</span>
+
+                      <span>
+                        {schoolRules.length} 組規則
+                      </span>
                     </div>
 
-                    <div className="pickupRuleRows">
+                    <div className="pickupGradeRuleCards">
                       {schoolRules.map((rule) => (
-                        <div
+                        <article
                           key={rule.id}
-                          className="pickupRuleRow"
+                          className="pickupGradeRuleCard"
                         >
-                          <div className="pickupRuleRow__main">
-                            <strong>{rule.grade}</strong>
+                          <div className="pickupGradeRuleCard__header">
+                            <div>
+                              <strong>
+                                {getGradeGroupLabel(
+                                  rule.grade_group
+                                )}
+                              </strong>
 
-                            <span>
-                              {getWeekdayLabel(rule.weekday)}
-                            </span>
+                              <span>
+                                {getGradeGroupDescription(
+                                  rule.grade_group
+                                )}
+                              </span>
+                            </div>
+
+                            <div className="pickupRuleRow__actions">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  startEdit(rule)
+                                }
+                              >
+                                編輯
+                              </button>
+
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() =>
+                                  deleteRule(rule)
+                                }
+                              >
+                                刪除
+                              </button>
+                            </div>
                           </div>
 
-                          <div className="pickupRuleRow__time">
-                            {formatPickupTime(
-                              rule.pickup_time
-                            )}
+                          <div className="pickupRuleWeekGrid">
+                            {WEEKDAYS.map((weekday) => {
+                              const pickupTime =
+                                formatTime(
+                                  rule[weekday.key]
+                                );
+
+                              return (
+                                <div
+                                  key={weekday.key}
+                                  className={`pickupRuleDay ${
+                                    pickupTime
+                                      ? "has-time"
+                                      : "no-time"
+                                  }`}
+                                >
+                                  <span>
+                                    {weekday.label.replace(
+                                      "星期",
+                                      "週"
+                                    )}
+                                  </span>
+
+                                  <strong>
+                                    {pickupTime ||
+                                      "不接車"}
+                                  </strong>
+                                </div>
+                              );
+                            })}
                           </div>
 
-                          <div className="pickupRuleRow__note">
-                            {rule.note || "—"}
-                          </div>
-
-                          <div className="pickupRuleRow__actions">
-                            <button
-                              type="button"
-                              onClick={() => startEdit(rule)}
-                            >
-                              編輯
-                            </button>
-
-                            <button
-                              type="button"
-                              className="danger"
-                              onClick={() => deleteRule(rule)}
-                            >
-                              刪除
-                            </button>
-                          </div>
-                        </div>
+                          {rule.note && (
+                            <p className="pickupGradeRuleCard__note">
+                              {rule.note}
+                            </p>
+                          )}
+                        </article>
                       ))}
                     </div>
                   </section>
