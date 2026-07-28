@@ -90,6 +90,7 @@ function pdfTextCellStyle(width, borderTop) {
     whiteSpace: "nowrap",
     textOverflow: "clip",
     verticalAlign: "middle",
+    textAlign: "center",
     borderTop,
     borderRight: `1px solid ${PDF_GRID_COLOR}`,
     borderBottom: `1px solid ${PDF_GRID_COLOR}`,
