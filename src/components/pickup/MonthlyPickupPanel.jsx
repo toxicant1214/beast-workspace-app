@@ -796,9 +796,9 @@ function MonthlyPickupPanel() {
             >
               <thead>
                 <tr>
-                  <th style={pdfFixedHeaderStyle(58)}>年級</th>
-                  <th style={pdfFixedHeaderStyle(70)}>姓名</th>
-                  <th style={pdfFixedHeaderStyle(108)}>家長電話</th>
+                  <th style={pdfFixedHeaderStyle(56)}>年級</th>
+                  <th style={pdfFixedHeaderStyle(92)}>姓名</th>
+                  <th style={pdfFixedHeaderStyle(98)}>家長電話</th>
                   {monthDays.map((day) => (
                     <th
                       key={day.dateString}
@@ -833,19 +833,18 @@ function MonthlyPickupPanel() {
 
                   return (
                     <tr key={student.id} style={{ height: "19px" }}>
-                      <td style={pdfTextCellStyle(58, rowTopBorder)}>
+                      <td style={pdfTextCellStyle(56, rowTopBorder)}>
                         {student.current_grade}
                       </td>
                       <td
                         style={{
-                          ...pdfTextCellStyle(70, rowTopBorder),
+                          ...pdfTextCellStyle(92, rowTopBorder),
                           fontWeight: 700,
                         }}
                       >
                         {student.chinese_name}
-                        {student.is_test ? "（測）" : ""}
                       </td>
-                      <td style={pdfTextCellStyle(108, rowTopBorder)}>
+                      <td style={pdfTextCellStyle(98, rowTopBorder)}>
                         {student.primary_parent_phone || "—"}
                       </td>
 
