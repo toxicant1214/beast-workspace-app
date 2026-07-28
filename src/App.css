@@ -2829,10 +2829,16 @@ tbody tr:hover td {
   text-align: left;
 }
 
+.monthlyPickupCell.pickup-noon {
+  background: #e7e7e3;
+}
+
+.monthlyPickupCell.pickup-afternoon {
+  background: #ffffff;
+}
+
 .monthlyPickupCell.has-time {
-  background: #edf5ef;
-  color: #4f705d;
-  font-weight: 800;
+  background: #f3f5f2;
 }
 
 .monthlyPickupCell.is-none {
@@ -2875,4 +2881,54 @@ tbody tr:hover td {
   .monthlyPickupFilters button {
     grid-column: 1 / -1;
   }
+}
+.monthlyPickupLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  color: #77756f;
+  font-size: 13px;
+}
+
+.monthlyPickupLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.legendBox {
+  width: 22px;
+  height: 22px;
+  border: 1px solid #d8d4cd;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-style: normal;
+  font-size: 11px;
+}
+
+.legendBox--noon {
+  background: #e7e7e3;
+}
+
+.legendBox--afternoon {
+  background: #ffffff;
+}
+
+.legendBox--missing {
+  background: #fff2ef;
+  color: #b85d4e;
+}
+
+.legendBox--closed {
+  background: repeating-linear-gradient(
+    45deg,
+    #f0f1ef,
+    #f0f1ef 5px,
+    #e5e7e3 5px,
+    #e5e7e3 10px
+  );
+  color: #747972;
 }

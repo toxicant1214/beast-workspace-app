@@ -218,7 +218,10 @@ function MonthlyPickupPanel() {
       };
     }
 
-    const weekday = WEEKDAYS.find((item) => item.value === day.weekday);
+    const weekday = WEEKDAYS.find(
+      (item) => item.value === day.weekday
+    );
+
     const pickupTime = normalizeTime(rule[weekday.column]);
 
     if (!pickupTime) {
@@ -229,10 +232,26 @@ function MonthlyPickupPanel() {
       };
     }
 
+    if (pickupTime === "12:50") {
+      return {
+        text: "",
+        className: "monthlyPickupCell pickup-noon",
+        title: "12:50 接車",
+      };
+    }
+
+    if (pickupTime === "15:30") {
+      return {
+        text: "",
+        className: "monthlyPickupCell pickup-afternoon",
+        title: "15:30 接車",
+      };
+    }
+
     return {
-      text: pickupTime,
+      text: "",
       className: "monthlyPickupCell has-time",
-      title: `${student.school} ${student.current_grade} ${pickupTime}`,
+      title: `${pickupTime} 接車`,
     };
   }
 
@@ -327,6 +346,35 @@ function MonthlyPickupPanel() {
         <span>
           <strong>{monthDays.length}</strong>
           個平日
+        </span>
+      </div>
+
+      <div className="monthlyPickupLegend" aria-label="月接車表圖例">
+        <span>
+          <i className="legendBox legendBox--noon" aria-hidden="true" />
+          12:50 接
+        </span>
+
+        <span>
+          <i
+            className="legendBox legendBox--afternoon"
+            aria-hidden="true"
+          />
+          15:30 接
+        </span>
+
+        <span>
+          <i className="legendBox legendBox--missing" aria-hidden="true">
+            —
+          </i>
+          尚未設定規則
+        </span>
+
+        <span>
+          <i className="legendBox legendBox--closed" aria-hidden="true">
+            休
+          </i>
+          停接
         </span>
       </div>
 
