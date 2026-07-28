@@ -11,7 +11,7 @@ const WEEKDAYS = [
   { value: 5, label: "五", column: "friday_time" },
 ];
 
-const STUDENTS_PER_PDF_PAGE = 30;
+const STUDENTS_PER_PDF_PAGE = 25;
 
 const GRADE_ORDER = {
   "幼兒園": 0,
@@ -59,23 +59,24 @@ function getMonthDays(year, month) {
   return result;
 }
 
+const PDF_GRID_COLOR = "#727272";
+const PDF_STRONG_GRID_COLOR = "#4f4f4f";
+
 const pdfDayHeaderStyle = {
-  height: "34px",
+  height: "32px",
   padding: "2px 0",
   textAlign: "center",
   verticalAlign: "middle",
-  borderTop: "1px solid #aebdb5",
-  borderRight: "1px solid #c6d0ca",
-  borderBottom: "1px solid #aebdb5",
-  background: "#e8efe9",
+  border: `1px solid ${PDF_GRID_COLOR}`,
+  background: "#f7f7f5",
+  color: "#333333",
 };
 
 function pdfFixedHeaderStyle(width) {
   return {
     ...pdfDayHeaderStyle,
     width: `${width}px`,
-    padding: "2px 4px",
-    borderLeft: "1px solid #aebdb5",
+    padding: "2px 5px",
   };
 }
 
@@ -83,25 +84,26 @@ function pdfTextCellStyle(width, borderTop) {
   return {
     boxSizing: "border-box",
     width: `${width}px`,
-    height: "20px",
-    padding: "1px 4px",
+    height: "23px",
+    padding: "1px 5px",
     overflow: "hidden",
     whiteSpace: "nowrap",
-    textOverflow: "ellipsis",
+    textOverflow: "clip",
     verticalAlign: "middle",
     borderTop,
-    borderRight: "1px solid #bdc7c2",
-    borderBottom: "1px solid #bdc7c2",
-    borderLeft: "1px solid #bdc7c2",
+    borderRight: `1px solid ${PDF_GRID_COLOR}`,
+    borderBottom: `1px solid ${PDF_GRID_COLOR}`,
+    borderLeft: `1px solid ${PDF_GRID_COLOR}`,
     background: "#ffffff",
+    color: "#2f2f2f",
   };
 }
 
 function getPdfCellBackground(className) {
-  if (className.includes("pickup-noon")) return "#d7ddd9";
-  if (className.includes("is-closed")) return "#f2d8d5";
-  if (className.includes("is-missing")) return "#f6ead0";
-  if (className.includes("is-none")) return "#f5f5f5";
+  if (className.includes("pickup-noon")) return "#e4e4e2";
+  if (className.includes("is-closed")) return "#f6dfdc";
+  if (className.includes("is-missing")) return "#f2f2ef";
+  if (className.includes("is-none")) return "#f8f8f6";
   return "#ffffff";
 }
 
@@ -109,7 +111,7 @@ function getPdfCellColor(className) {
   if (className.includes("is-closed")) return "#a3483f";
   if (className.includes("is-missing")) return "#8a6a24";
   if (className.includes("is-none")) return "#89918d";
-  return "#26332d";
+  return "#2f2f2f";
 }
 
 function MonthlyPickupPanel() {
@@ -740,10 +742,10 @@ function MonthlyPickupPanel() {
               boxSizing: "border-box",
               width: "1122px",
               height: "794px",
-              padding: "28px 30px 20px",
+              padding: "20px 24px 16px",
               overflow: "hidden",
-              background: "#fbfaf7",
-              color: "#31342f",
+              background: "#ffffff",
+              color: "#2f2f2f",
               fontFamily:
                 '"Iansui", "芫荽", "Noto Sans TC", "Microsoft JhengHei", sans-serif',
             }}
@@ -753,28 +755,28 @@ function MonthlyPickupPanel() {
                 display: "flex",
                 alignItems: "flex-end",
                 justifyContent: "space-between",
-                gap: "18px",
-                padding: "0 2px 12px",
-                borderBottom: "2px solid #8eaa9b",
+                gap: "16px",
+                padding: "0 0 10px",
+                borderBottom: `1px solid ${PDF_STRONG_GRID_COLOR}`,
               }}
             >
               <div>
                 <div
                   style={{
-                    fontSize: "11px",
-                    letterSpacing: "2.1px",
-                    color: "#8c958e",
-                    marginBottom: "5px",
+                    fontSize: "10px",
+                    letterSpacing: "1.8px",
+                    color: "#777777",
+                    marginBottom: "4px",
                   }}
                 >
                   BEAST ACADEMY｜MONTHLY PICKUP ROSTER
                 </div>
                 <div
                   style={{
-                    fontSize: "27px",
-                    lineHeight: 1.15,
+                    fontSize: "25px",
+                    lineHeight: 1.12,
                     fontWeight: 700,
-                    letterSpacing: "0.8px",
+                    letterSpacing: "0.5px",
                   }}
                 >
                   {page.schoolName}｜{year} 年 {month} 月接車點名表
@@ -783,15 +785,15 @@ function MonthlyPickupPanel() {
 
               <div
                 style={{
-                  minWidth: "145px",
-                  padding: "8px 12px",
-                  border: "1px solid #d9dfda",
-                  borderRadius: "12px",
-                  background: "#f2f5f1",
+                  minWidth: "140px",
+                  padding: "6px 10px",
+                  border: `1px solid ${PDF_GRID_COLOR}`,
+                  borderRadius: "8px",
+                  background: "#ffffff",
                   textAlign: "right",
-                  fontSize: "11px",
-                  lineHeight: 1.55,
-                  color: "#69746d",
+                  fontSize: "10px",
+                  lineHeight: 1.5,
+                  color: "#555555",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -808,12 +810,12 @@ function MonthlyPickupPanel() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: "14px",
-                margin: "9px 0",
-                padding: "7px 10px",
-                borderRadius: "10px",
-                background: "#f1f3ef",
-                fontSize: "10px",
-                color: "#626b65",
+                margin: "7px 0",
+                padding: "4px 0",
+                borderRadius: 0,
+                background: "#ffffff",
+                fontSize: "9px",
+                color: "#555555",
               }}
             >
               <div>
@@ -828,29 +830,24 @@ function MonthlyPickupPanel() {
               style={{
                 width: "100%",
                 tableLayout: "fixed",
-                borderCollapse: "separate",
+                borderCollapse: "collapse",
                 borderSpacing: 0,
-                overflow: "hidden",
-                border: "1px solid #aebdb5",
-                borderRadius: "8px",
+                border: `1px solid ${PDF_GRID_COLOR}`,
                 background: "#ffffff",
                 fontSize: "10px",
               }}
             >
               <thead>
                 <tr>
-                  <th style={pdfFixedHeaderStyle(58)}>年級</th>
-                  <th style={pdfFixedHeaderStyle(96)}>姓名</th>
-                  <th style={pdfFixedHeaderStyle(104)}>家長電話</th>
+                  <th style={pdfFixedHeaderStyle(60)}>年級</th>
+                  <th style={pdfFixedHeaderStyle(92)}>姓名</th>
+                  <th style={pdfFixedHeaderStyle(122)}>家長電話</th>
                   {monthDays.map((day) => (
                     <th
                       key={day.dateString}
                       style={{
                         ...pdfDayHeaderStyle,
-                        borderLeft:
-                          day.weekday === 1 && day.day !== 1
-                            ? "2px solid #7f9188"
-                            : "1px solid #aebbb5",
+                        borderLeft: `1px solid ${PDF_GRID_COLOR}`,
                       }}
                     >
                       <div style={{ fontWeight: 700, fontSize: "10px" }}>
@@ -871,23 +868,29 @@ function MonthlyPickupPanel() {
                     index > 0 &&
                     previousStudent?.current_grade !== student.current_grade;
                   const rowTopBorder = isNewGrade
-                    ? "2px solid #7f9188"
-                    : "1px solid #bdc7c2";
+                    ? `1.5px solid ${PDF_STRONG_GRID_COLOR}`
+                    : `1px solid ${PDF_GRID_COLOR}`;
 
                   return (
-                    <tr key={student.id} style={{ height: "19px" }}>
-                      <td style={pdfTextCellStyle(58, rowTopBorder)}>
+                    <tr key={student.id} style={{ height: "23px" }}>
+                      <td style={pdfTextCellStyle(60, rowTopBorder)}>
                         {student.current_grade}
                       </td>
                       <td
                         style={{
-                          ...pdfTextCellStyle(96, rowTopBorder),
+                          ...pdfTextCellStyle(92, rowTopBorder),
                           fontWeight: 700,
                         }}
                       >
                         {student.chinese_name}
                       </td>
-                      <td style={pdfTextCellStyle(104, rowTopBorder)}>
+                      <td
+                        style={{
+                          ...pdfTextCellStyle(122, rowTopBorder),
+                          fontSize: "9px",
+                          letterSpacing: "0.1px",
+                        }}
+                      >
                         {student.primary_parent_phone || "—"}
                       </td>
 
@@ -900,17 +903,15 @@ function MonthlyPickupPanel() {
                           <td
                             key={day.dateString}
                             style={{
-                              height: "20px",
+                              height: "23px",
                               padding: 0,
                               textAlign: "center",
                               verticalAlign: "middle",
                               fontWeight: 700,
                               borderTop: rowTopBorder,
-                              borderRight: "1px solid #bdc7c2",
-                              borderBottom: "1px solid #bdc7c2",
-                              borderLeft: isWeekStart
-                                ? "2px solid #7f9188"
-                                : "1px solid #bdc7c2",
+                              borderRight: `1px solid ${PDF_GRID_COLOR}`,
+                              borderBottom: `1px solid ${PDF_GRID_COLOR}`,
+                              borderLeft: `1px solid ${PDF_GRID_COLOR}`,
                               background: getPdfCellBackground(cell.className),
                               color: getPdfCellColor(cell.className),
                             }}
@@ -930,12 +931,12 @@ function MonthlyPickupPanel() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginTop: "9px",
-                padding: "7px 2px 0",
-                borderTop: "1px solid #d8ded9",
-                fontSize: "9px",
-                letterSpacing: "0.3px",
-                color: "#7c857f",
+                marginTop: "6px",
+                padding: "5px 0 0",
+                borderTop: `1px solid ${PDF_GRID_COLOR}`,
+                fontSize: "8px",
+                letterSpacing: "0.2px",
+                color: "#666666",
               }}
             >
               <span>倍思學院｜接車點名表</span>
