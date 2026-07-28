@@ -1,6 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+const CLOSURE_SCOPES = [
+  {
+    value: "ALL",
+    label: "全體停接",
+    description: "適用於國定假日、颱風停課或全區共同休假",
+  },
+  {
+    value: "SCHOOL",
+    label: "指定學校停接",
+    description: "適用於單一學校校慶補假、運動會或臨時停課",
+  },
+];
+
 function getTodayString() {
   const now = new Date();
   const offset = now.getTimezoneOffset();
@@ -36,8 +49,16 @@ function getWeekday(dateString) {
   return weekdays[date.getDay()];
 }
 
+function getScopeLabel(scope) {
+  return (
+    CLOSURE_SCOPES.find((item) => item.value === scope)?.label ||
+    "未設定"
+  );
+}
+
 function createEmptyForm() {
   return {
+    closure_scope: "ALL",
     school: "",
     closure_date: getTodayString(),
     reason: "",
@@ -49,9 +70,7 @@ function PickupClosuresPanel() {
   const [closures, setClosures] = useState([]);
   const [form, setForm] = useState(createEmptyForm());
 
-  const [editingClosure, setEditingClosure] =
-    useState(null);
-
+  const [editingClosure, setEditingClosure] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -79,6 +98,7 @@ function PickupClosuresPanel() {
           .from("pickup_closures")
           .select("*")
           .order("closure_date", { ascending: false })
+          .order("closure_scope", { ascending: true })
           .order("school", { ascending: true }),
       ]);
 
@@ -96,10 +116,10 @@ function PickupClosuresPanel() {
       setSchools(uniqueSchools);
       setClosures(closureData || []);
     } catch (error) {
-      console.error("讀取學校停接資料失敗：", error);
+      console.error("讀取停接資料失敗：", error);
 
       setErrorMessage(
-        `讀取學校停接資料失敗：${error.message}`
+        `讀取停接資料失敗：${error.message}`
       );
     } finally {
       setIsLoading(false);
@@ -107,10 +127,18 @@ function PickupClosuresPanel() {
   }
 
   function updateForm(field, value) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setForm((current) => {
+      const nextForm = {
+        ...current,
+        [field]: value,
+      };
+
+      if (field === "closure_scope" && value === "ALL") {
+        nextForm.school = "";
+      }
+
+      return nextForm;
+    });
   }
 
   function resetForm() {
@@ -123,6 +151,7 @@ function PickupClosuresPanel() {
     setEditingClosure(closure);
 
     setForm({
+      closure_scope: closure.closure_scope || "SCHOOL",
       school: closure.school || "",
       closure_date: closure.closure_date || getTodayString(),
       reason: closure.reason || "",
@@ -135,7 +164,15 @@ function PickupClosuresPanel() {
   }
 
   function validateForm() {
-    if (!form.school) {
+    if (!form.closure_scope) {
+      alert("請選擇停接範圍。");
+      return false;
+    }
+
+    if (
+      form.closure_scope === "SCHOOL" &&
+      !form.school
+    ) {
       alert("請選擇停接學校。");
       return false;
     }
@@ -154,7 +191,11 @@ function PickupClosuresPanel() {
     if (!validateForm()) return;
 
     const closureData = {
-      school: form.school,
+      closure_scope: form.closure_scope,
+      school:
+        form.closure_scope === "SCHOOL"
+          ? form.school
+          : null,
       closure_date: form.closure_date,
       reason: form.reason.trim() || null,
       is_active: true,
@@ -183,17 +224,19 @@ function PickupClosuresPanel() {
       resetForm();
       await loadInitialData();
     } catch (error) {
-      console.error("儲存學校停接失敗：", error);
+      console.error("儲存停接資料失敗：", error);
 
       if (error.code === "23505") {
         setErrorMessage(
-          "這間學校在這一天已經有停接紀錄，請直接編輯原有資料。"
+          form.closure_scope === "ALL"
+            ? "這一天已經有全體停接紀錄，請直接編輯原有資料。"
+            : "這間學校在這一天已經有停接紀錄，請直接編輯原有資料。"
         );
         return;
       }
 
       setErrorMessage(
-        `儲存學校停接失敗：${error.message}`
+        `儲存停接資料失敗：${error.message}`
       );
     } finally {
       setIsSaving(false);
@@ -201,8 +244,13 @@ function PickupClosuresPanel() {
   }
 
   async function deleteClosure(closure) {
+    const targetName =
+      closure.closure_scope === "ALL"
+        ? "全體停接"
+        : closure.school;
+
     const confirmed = window.confirm(
-      `確定要刪除「${closure.school}／${formatDate(
+      `確定要刪除「${targetName}／${formatDate(
         closure.closure_date
       )}」的停接紀錄嗎？`
     );
@@ -225,10 +273,10 @@ function PickupClosuresPanel() {
 
       await loadInitialData();
     } catch (error) {
-      console.error("刪除學校停接失敗：", error);
+      console.error("刪除停接資料失敗：", error);
 
       setErrorMessage(
-        `刪除學校停接失敗：${error.message}`
+        `刪除停接資料失敗：${error.message}`
       );
     }
   }
@@ -265,38 +313,76 @@ function PickupClosuresPanel() {
 
             <h2>
               {editingClosure
-                ? "編輯學校停接"
-                : "新增學校停接"}
+                ? "編輯停接安排"
+                : "新增停接安排"}
             </h2>
 
             <p>
-              適用於校慶補假、運動會、臨時停課等整校不需接車的日期。
+              全體停接適用於共同休假；指定學校停接則只影響單一學校。
             </p>
           </div>
 
-          <label>
-            <span>停接學校</span>
+          <div className="pickupClosureScopeOptions">
+            {CLOSURE_SCOPES.map((scope) => {
+              const isActive =
+                form.closure_scope === scope.value;
 
-            <select
-              value={form.school}
-              onChange={(event) =>
-                updateForm("school", event.target.value)
-              }
-            >
-              <option value="">請選擇學校</option>
+              return (
+                <button
+                  key={scope.value}
+                  type="button"
+                  className={
+                    isActive
+                      ? "pickupClosureScopeOption active"
+                      : "pickupClosureScopeOption"
+                  }
+                  onClick={() =>
+                    updateForm(
+                      "closure_scope",
+                      scope.value
+                    )
+                  }
+                >
+                  <strong>{scope.label}</strong>
+                  <span>{scope.description}</span>
+                </button>
+              );
+            })}
+          </div>
 
-              {schools.map((school) => (
-                <option key={school} value={school}>
-                  {school}
-                </option>
-              ))}
-            </select>
-          </label>
+          {form.closure_scope === "SCHOOL" && (
+            <>
+              <label>
+                <span>停接學校</span>
 
-          {schools.length === 0 && !isLoading && (
-            <p className="pickupClosureHint">
-              尚未找到學校，請先到「接車規則」建立學校規則。
-            </p>
+                <select
+                  value={form.school}
+                  onChange={(event) =>
+                    updateForm(
+                      "school",
+                      event.target.value
+                    )
+                  }
+                >
+                  <option value="">請選擇學校</option>
+
+                  {schools.map((school) => (
+                    <option
+                      key={school}
+                      value={school}
+                    >
+                      {school}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {schools.length === 0 && !isLoading && (
+                <p className="pickupClosureHint">
+                  尚未找到學校，請先到「接車規則」建立學校規則。
+                </p>
+              )}
+            </>
           )}
 
           <label>
@@ -318,7 +404,11 @@ function PickupClosuresPanel() {
             <span>停接原因</span>
 
             <textarea
-              placeholder="例如：校慶補假、運動會或臨時停課"
+              placeholder={
+                form.closure_scope === "ALL"
+                  ? "例如：國定假日、颱風停課或全區共同休假"
+                  : "例如：校慶補假、運動會或臨時停課"
+              }
               value={form.reason}
               onChange={(event) =>
                 updateForm("reason", event.target.value)
@@ -346,7 +436,13 @@ function PickupClosuresPanel() {
             <button
               type="submit"
               className="primary"
-              disabled={isSaving || schools.length === 0}
+              disabled={
+                isSaving ||
+                (
+                  form.closure_scope === "SCHOOL" &&
+                  schools.length === 0
+                )
+              }
             >
               {isSaving
                 ? "儲存中…"
@@ -360,8 +456,11 @@ function PickupClosuresPanel() {
         <div className="pickupClosureList">
           <div className="pickupRuleList__header">
             <div>
-              <p className="eyebrow">SCHOOL CLOSURES</p>
-              <h2>學校停接紀錄</h2>
+              <p className="eyebrow">
+                PICKUP CHANGES
+              </p>
+
+              <h2>停接紀錄</h2>
             </div>
 
             <span className="pickupRuleCount">
@@ -371,14 +470,14 @@ function PickupClosuresPanel() {
 
           {isLoading ? (
             <div className="pickupRulesEmpty">
-              正在讀取學校停接資料…
+              正在讀取停接資料…
             </div>
           ) : closures.length === 0 ? (
             <div className="pickupRulesEmpty">
-              <strong>目前沒有學校停接紀錄</strong>
+              <strong>目前沒有停接紀錄</strong>
 
               <span>
-                遇到學校補假或臨時停課時，再從左側新增即可。
+                遇到共同休假或學校補假時，再從左側新增即可。
               </span>
             </div>
           ) : (
@@ -390,7 +489,9 @@ function PickupClosuresPanel() {
                     className="pickupClosureMonthGroup"
                   >
                     <div className="pickupClosureMonthGroup__header">
-                      <h3>{month.replace("-", " 年 ")} 月</h3>
+                      <h3>
+                        {month.replace("-", " 年 ")} 月
+                      </h3>
 
                       <span>
                         {monthClosures.length} 筆
@@ -398,56 +499,75 @@ function PickupClosuresPanel() {
                     </div>
 
                     <div className="pickupClosureRows">
-                      {monthClosures.map((closure) => (
-                        <article
-                          key={closure.id}
-                          className="pickupClosureRow"
-                        >
-                          <div className="pickupClosureDate">
-                            <strong>
-                              {formatDate(
-                                closure.closure_date
-                              )}
-                            </strong>
+                      {monthClosures.map((closure) => {
+                        const isAll =
+                          closure.closure_scope === "ALL";
 
-                            <span>
-                              {getWeekday(
-                                closure.closure_date
-                              )}
-                            </span>
-                          </div>
+                        return (
+                          <article
+                            key={closure.id}
+                            className={
+                              isAll
+                                ? "pickupClosureRow is-all"
+                                : "pickupClosureRow"
+                            }
+                          >
+                            <div className="pickupClosureDate">
+                              <strong>
+                                {formatDate(
+                                  closure.closure_date
+                                )}
+                              </strong>
 
-                          <div className="pickupClosureInfo">
-                            <strong>{closure.school}</strong>
+                              <span>
+                                {getWeekday(
+                                  closure.closure_date
+                                )}
+                              </span>
+                            </div>
 
-                            <span>
-                              {closure.reason ||
-                                "未填寫停接原因"}
-                            </span>
-                          </div>
+                            <div className="pickupClosureInfo">
+                              <div className="pickupClosureScopeBadge">
+                                {getScopeLabel(
+                                  closure.closure_scope
+                                )}
+                              </div>
 
-                          <div className="pickupRuleRow__actions">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                startEdit(closure)
-                              }
-                            >
-                              編輯
-                            </button>
+                              <strong>
+                                {isAll
+                                  ? "所有學校"
+                                  : closure.school}
+                              </strong>
 
-                            <button
-                              type="button"
-                              className="danger"
-                              onClick={() =>
-                                deleteClosure(closure)
-                              }
-                            >
-                              刪除
-                            </button>
-                          </div>
-                        </article>
-                      ))}
+                              <span>
+                                {closure.reason ||
+                                  "未填寫停接原因"}
+                              </span>
+                            </div>
+
+                            <div className="pickupRuleRow__actions">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  startEdit(closure)
+                                }
+                              >
+                                編輯
+                              </button>
+
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() =>
+                                  deleteClosure(closure)
+                                }
+                              >
+                                刪除
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
                     </div>
                   </section>
                 )
