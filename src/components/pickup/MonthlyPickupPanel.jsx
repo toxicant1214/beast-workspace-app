@@ -47,6 +47,12 @@ function getMonthDays(year, month) {
 function MonthlyPickupPanel() {
   const now = new Date();
 
+    const printDate = new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [school, setSchool] = useState("ALL");
@@ -269,6 +275,20 @@ function MonthlyPickupPanel() {
 
   return (
     <section className="pickupPanel monthlyPickupPanel">
+        <div className="monthlyPickupPrintHeader">
+  <h1>
+    {school === "ALL" ? "各校" : school}
+    {year} 年 {month} 月接車點名表
+  </h1>
+
+  <p>
+    灰色：12:50 接車　｜　白色：15:30 接車　｜　休：停接　｜　—：不接或尚未設定
+  </p>
+</div>
+<div className="monthlyPickupPrintFooter">
+  <span>倍思學院｜接車點名表</span>
+  <span>列印日期：{printDate}</span>
+</div>
       <div className="monthlyPickupToolbar">
         <div>
           <p className="eyebrow">MONTHLY PICKUP ROSTER</p>
@@ -324,9 +344,23 @@ function MonthlyPickupPanel() {
             </select>
           </label>
 
-          <button type="button" onClick={loadData}>
-            重新整理
-          </button>
+          <div className="monthlyPickupActions">
+  <button
+    type="button"
+    className="secondaryButton"
+    onClick={loadData}
+  >
+    重新整理
+  </button>
+
+  <button
+    type="button"
+    className="primaryButton"
+    onClick={() => window.print()}
+  >
+    🖨 列印點名表
+  </button>
+</div>
         </div>
       </div>
 
@@ -335,19 +369,35 @@ function MonthlyPickupPanel() {
       )}
 
       <div className="monthlyPickupSummary">
-        <span>
-          <strong>{visibleStudents.length}</strong>
-          位在學學生
-        </span>
-        <span>
-          <strong>{groupedStudents.length}</strong>
-          所學校
-        </span>
-        <span>
-          <strong>{monthDays.length}</strong>
-          個平日
-        </span>
-      </div>
+
+  <div className="summaryCard">
+    <div className="summaryCardIcon">👧🏻</div>
+
+    <div>
+      <h3>{visibleStudents.length}</h3>
+      <p>位在學學生</p>
+    </div>
+  </div>
+
+  <div className="summaryCard">
+    <div className="summaryCardIcon">🏫</div>
+
+    <div>
+      <h3>{groupedStudents.length}</h3>
+      <p>所學校</p>
+    </div>
+  </div>
+
+  <div className="summaryCard">
+    <div className="summaryCardIcon">📅</div>
+
+    <div>
+      <h3>{monthDays.length}</h3>
+      <p>個平日</p>
+    </div>
+  </div>
+
+</div>
 
       <div className="monthlyPickupLegend" aria-label="月接車表圖例">
         <span>
@@ -389,62 +439,96 @@ function MonthlyPickupPanel() {
           {groupedStudents.map(([schoolName, schoolStudents]) => (
             <div key={schoolName} className="monthlyPickupSchoolGroup">
               <div className="monthlyPickupSchoolHeader">
-                <div>
-                  <p className="eyebrow">SCHOOL</p>
-                  <h3>{schoolName}</h3>
-                </div>
-                <span>{schoolStudents.length} 位學生</span>
-              </div>
+  <div className="monthlyPickupSchoolTitle">
+    <span className="monthlyPickupSchoolIcon">🏫</span>
+
+    <div>
+      <h3>{schoolName}</h3>
+      <p>{year} 年 {month} 月接車安排</p>
+    </div>
+  </div>
+
+  <span className="monthlyPickupSchoolCount">
+    {schoolStudents.length} 位學生
+  </span>
+</div>
 
               <div className="monthlyPickupTableWrap">
                 <table className="monthlyPickupTable">
                   <thead>
                     <tr>
-                      <th className="studentColumn">學生</th>
                       <th className="gradeColumn">年級</th>
-                      <th className="phoneColumn">家長電話</th>
+<th className="studentColumn">姓名</th>
+<th className="phoneColumn">家長電話</th>
 
-                      {monthDays.map((day) => (
-                        <th key={day.dateString} title={day.dateString}>
-                          <strong>{day.day}</strong>
-                          <span>{day.weekdayLabel}</span>
-                        </th>
-                      ))}
+                      {monthDays.map((day) => {
+  const isWeekStart = day.weekday === 1 && day.day !== 1;
+
+  return (
+    <th
+      key={day.dateString}
+      title={day.dateString}
+      className={isWeekStart ? "weekStartColumn" : ""}
+    >
+      <strong>{day.day}</strong>
+      <span>{day.weekdayLabel}</span>
+    </th>
+  );
+})}
                     </tr>
                   </thead>
 
                   <tbody>
-                    {schoolStudents.map((student) => (
-                      <tr key={student.id}>
-                        <td className="studentColumn">
-                          <strong>{student.chinese_name}</strong>
-                          {student.is_test && <small>測試</small>}
-                        </td>
+                    {schoolStudents.map((student, index) => {
+  const previousStudent = schoolStudents[index - 1];
 
+  const isNewGrade =
+    index > 0 &&
+    previousStudent?.current_grade !== student.current_grade;
+
+  return (
+    <tr
+      key={student.id}
+      className={isNewGrade ? "gradeDividerRow" : ""}
+    >
                         <td className="gradeColumn">
-                          {student.current_grade}
-                        </td>
+  {student.current_grade}
+</td>
 
-                        <td className="phoneColumn">
-                          {student.primary_parent_phone || "—"}
-                        </td>
+<td className="studentColumn">
+  <strong>{student.chinese_name}</strong>
+  {student.is_test && <small>測試</small>}
+</td>
+
+<td className="phoneColumn">
+  {student.primary_parent_phone || "—"}
+</td>
 
                         {monthDays.map((day) => {
-                          const cell = getCell(student, day);
+  const cell = getCell(student, day);
+  const isWeekStart = day.weekday === 1 && day.day !== 1;
 
-                          return (
-                            <td
-                              key={day.dateString}
-                              className={cell.className}
-                              title={cell.title}
-                            >
-                              {cell.text}
-                            </td>
-                          );
-                        })}
+  const cellClassName = [
+    cell.className,
+    isWeekStart ? "weekStartColumn" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <td
+      key={day.dateString}
+      className={cellClassName}
+      title={cell.title}
+    >
+      {cell.text}
+    </td>
+  );
+})}
                       </tr>
-                    ))}
-                  </tbody>
+    );
+  })}
+</tbody>
                 </table>
               </div>
             </div>

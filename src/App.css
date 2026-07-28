@@ -2932,3 +2932,366 @@ tbody tr:hover td {
   );
   color: #747972;
 }
+.monthlyPickupSummary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin: 20px 0 24px;
+}
+
+.summaryCard {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  padding: 18px 22px;
+
+  background: #fff;
+  border: 1px solid #e8ecef;
+  border-radius: 16px;
+
+  box-shadow: 0 6px 18px rgba(0,0,0,.05);
+}
+
+.summaryCardIcon {
+  width: 56px;
+  height: 56px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #f4f8f6;
+
+  font-size: 26px;
+}
+
+.summaryCard h3 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #23343d;
+}
+
+.summaryCard p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #7a8893;
+}
+.monthlyPickupSchoolGroup {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e7ece9;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(32, 52, 61, 0.06);
+}
+
+.monthlyPickupSchoolHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  padding: 20px 24px;
+
+  background: #f7faf8;
+  border-bottom: 1px solid #e7ece9;
+}
+
+.monthlyPickupSchoolTitle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.monthlyPickupSchoolIcon {
+  width: 46px;
+  height: 46px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  background: #eaf3ee;
+  border-radius: 14px;
+
+  font-size: 22px;
+}
+
+.monthlyPickupSchoolTitle h3 {
+  margin: 0;
+  color: #263b34;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.monthlyPickupSchoolTitle p {
+  margin: 4px 0 0;
+  color: #7b8983;
+  font-size: 13px;
+}
+
+.monthlyPickupSchoolCount {
+  flex-shrink: 0;
+
+  padding: 7px 12px;
+
+  color: #48645a;
+  background: #eaf3ee;
+  border-radius: 999px;
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.monthlyPickupSchoolGroups {
+  display: grid;
+  gap: 24px;
+}
+.monthlyPickupTable .gradeColumn {
+  min-width: 76px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.monthlyPickupTable .studentColumn {
+  min-width: 92px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.monthlyPickupTable .phoneColumn {
+  min-width: 126px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.monthlyPickupTable tbody .studentColumn strong {
+  color: #283b34;
+  font-size: 14px;
+}
+
+.monthlyPickupTable tbody .studentColumn small {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 2px 6px;
+  color: #93634d;
+  background: #f8eee8;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.monthlyPickupTable tbody tr.gradeDividerRow > td {
+  border-top: 3px solid #aebdb5;
+}
+.monthlyPickupTable th.weekStartColumn,
+.monthlyPickupTable td.weekStartColumn {
+  border-left: 2px solid #aebbb5;
+}
+.monthlyPickupPrintHeader {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  body {
+    margin: 0;
+    background: #fff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .monthlyPickupPanel,
+  .monthlyPickupPanel * {
+    visibility: visible;
+  }
+
+  .monthlyPickupPanel {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: #fff;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .monthlyPickupToolbar,
+  .monthlyPickupSummary,
+  .monthlyPickupLegend,
+  .pickupErrorMessage {
+    display: none !important;
+  }
+
+  .monthlyPickupPrintHeader {
+    display: block;
+    margin-bottom: 5mm;
+    text-align: center;
+  }
+
+  .monthlyPickupPrintHeader h1 {
+    margin: 0;
+    color: #000;
+    font-size: 20pt;
+    font-weight: 700;
+  }
+
+  .monthlyPickupPrintHeader p {
+    margin: 2mm 0 0;
+    color: #333;
+    font-size: 8.5pt;
+  }
+
+  .monthlyPickupSchoolGroups {
+    display: block;
+  }
+
+  .monthlyPickupSchoolGroup {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .monthlyPickupSchoolGroup:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .monthlyPickupSchoolHeader {
+    padding: 0 0 3mm;
+    background: transparent;
+    border: 0;
+  }
+
+  .monthlyPickupSchoolIcon {
+    display: none;
+  }
+
+  .monthlyPickupSchoolTitle h3 {
+    color: #000;
+    font-size: 15pt;
+  }
+
+  .monthlyPickupSchoolTitle p {
+    color: #333;
+    font-size: 9pt;
+  }
+
+  .monthlyPickupSchoolCount {
+    padding: 0;
+    color: #000;
+    background: transparent;
+    font-size: 9pt;
+  }
+
+  .monthlyPickupTableWrap {
+    overflow: visible;
+  }
+
+  .monthlyPickupTable {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 7.5pt;
+  }
+
+  .monthlyPickupTable thead {
+    display: table-header-group;
+  }
+
+  .monthlyPickupTable tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .monthlyPickupTable th,
+  .monthlyPickupTable td {
+    height: 7mm;
+    padding: 1mm;
+    color: #000;
+    border: 0.25mm solid #777;
+  }
+
+  .monthlyPickupTable .gradeColumn {
+    width: 16mm;
+    min-width: 0;
+  }
+
+  .monthlyPickupTable .studentColumn {
+    width: 19mm;
+    min-width: 0;
+  }
+
+  .monthlyPickupTable .phoneColumn {
+    width: 29mm;
+    min-width: 0;
+  }
+
+  .monthlyPickupTable th:not(.gradeColumn):not(.studentColumn):not(.phoneColumn) {
+    width: auto;
+  }
+
+  .monthlyPickupTable th strong {
+    display: block;
+    font-size: 7.5pt;
+  }
+
+  .monthlyPickupTable th span {
+    display: block;
+    font-size: 6.5pt;
+  }
+
+  .monthlyPickupTable tbody .studentColumn strong {
+    color: #000;
+    font-size: 8pt;
+  }
+
+  .monthlyPickupTable tbody .studentColumn small {
+    display: none;
+  }
+
+  .monthlyPickupTable tbody tr.gradeDividerRow > td {
+    border-top: 0.7mm solid #000;
+  }
+
+  .monthlyPickupTable th.weekStartColumn,
+  .monthlyPickupTable td.weekStartColumn {
+    border-left: 0.6mm solid #000;
+  }
+
+  .monthlyPickupCell.pickup-noon {
+    background: #cfcfcf !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .monthlyPickupCell.pickup-afternoon {
+    background: #fff !important;
+  }
+
+  .monthlyPickupCell.is-closed {
+    background: #ededed !important;
+    font-weight: 700;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .monthlyPickupCell.is-missing {
+    color: #000;
+    font-weight: 700;
+  }
+}
