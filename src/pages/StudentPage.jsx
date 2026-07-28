@@ -355,7 +355,7 @@ function StudentPage() {
             type="button"
             onClick={openImportDialog}
           >
-            ↑ Excel 匯入
+            Excel 匯入
           </button>
 
           <button
