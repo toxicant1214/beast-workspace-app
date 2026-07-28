@@ -3,12 +3,16 @@ import { supabase } from "../lib/supabase";
 import StudentTable from "../components/StudentTable";
 import StudentDrawer from "../components/StudentDrawer";
 import StudentProfile from "../components/StudentProfile";
+import ImportStudentsDialog from "../components/ImportStudentsDialog";
 import "../App.css";
 
 function StudentPage() {
   const [students, setStudents] = useState([]);
   const [searchText, setSearchText] = useState("");
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [profileStudent, setProfileStudent] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -66,9 +70,11 @@ function StudentPage() {
 
   function openNewStudentDrawer() {
     setSelectedStudent(null);
+
     setForm({
       ...emptyForm,
     });
+
     setIsDrawerOpen(true);
   }
 
@@ -110,12 +116,26 @@ function StudentPage() {
   }
 
   function closeDrawer() {
-  setIsDrawerOpen(false);
-  setSelectedStudent(null);
-  setForm({
-    ...emptyForm,
-  });
-}
+    setIsDrawerOpen(false);
+    setSelectedStudent(null);
+
+    setForm({
+      ...emptyForm,
+    });
+  }
+
+  function openImportDialog() {
+    setIsImportOpen(true);
+  }
+
+  function closeImportDialog() {
+    setIsImportOpen(false);
+  }
+
+  async function handleImported() {
+    setIsImportOpen(false);
+    await loadStudents();
+  }
 
   function validateForm() {
     if (!form.chinese_name.trim()) {
@@ -273,13 +293,23 @@ function StudentPage() {
 
     if (!keyword) return true;
 
+    const normalizedKeyword = keyword.replace(/[-\s]/g, "");
+
+    const primaryPhone = (
+      student.primary_parent_phone || ""
+    ).replace(/[-\s]/g, "");
+
+    const secondaryPhone = (
+      student.secondary_parent_phone || ""
+    ).replace(/[-\s]/g, "");
+
     return (
       student.student_no?.toLowerCase().includes(keyword) ||
       student.chinese_name?.toLowerCase().includes(keyword) ||
       student.english_name?.toLowerCase().includes(keyword) ||
       student.national_id?.toLowerCase().includes(keyword) ||
-      student.primary_parent_phone?.includes(keyword) ||
-      student.secondary_parent_phone?.includes(keyword) ||
+      primaryPhone.includes(normalizedKeyword) ||
+      secondaryPhone.includes(normalizedKeyword) ||
       student.school?.toLowerCase().includes(keyword)
     );
   });
@@ -314,18 +344,28 @@ function StudentPage() {
         <div>
           <p className="eyebrow">STUDENT CENTER</p>
           <h1>學生資料中心</h1>
+
           <p className="summary">
             目前共 {students.length} 位學生
           </p>
         </div>
 
-        <button
-          type="button"
-          className="primary"
-          onClick={openNewStudentDrawer}
-        >
-          ＋ 新增學生
-        </button>
+        <div className="topbarActions">
+          <button
+            type="button"
+            onClick={openImportDialog}
+          >
+            ↑ Excel 匯入
+          </button>
+
+          <button
+            type="button"
+            className="primary"
+            onClick={openNewStudentDrawer}
+          >
+            ＋ 新增學生
+          </button>
+        </div>
       </header>
 
       <section className="card">
@@ -358,6 +398,12 @@ function StudentPage() {
           isSaving={isSaving}
         />
       )}
+
+      <ImportStudentsDialog
+        open={isImportOpen}
+        onClose={closeImportDialog}
+        onImported={handleImported}
+      />
     </>
   );
 }
