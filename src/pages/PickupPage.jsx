@@ -3,6 +3,7 @@ import PickupRulesPanel from "../components/pickup/PickupRulesPanel";
 import PickupClosuresPanel from "../components/pickup/PickupClosuresPanel";
 import PickupStaffPanel from "../components/pickup/PickupStaffPanel";
 import MonthlyPickupPanel from "../components/pickup/MonthlyPickupPanel";
+import PickupPrintPanel from "../components/pickup/PickupPrintPanel";
 import "../App.css";
 
 const PICKUP_TABS = [
@@ -14,7 +15,12 @@ const PICKUP_TABS = [
   {
     key: "monthly",
     label: "月接車表",
-    description: "產生每月學生接車名單並列印或輸出",
+    description: "查看每月各校學生的接車安排",
+  },
+  {
+    key: "print",
+    label: "接車點名表",
+    description: "產生各校 A4 橫式接車點名表",
   },
   {
     key: "rules",
@@ -60,6 +66,10 @@ function PickupPage() {
       return <MonthlyPickupPanel />;
     }
 
+    if (activeTab === "print") {
+      return <PickupPrintPanel />;
+    }
+
     if (activeTab === "rules") {
       return <PickupRulesPanel />;
     }
@@ -82,7 +92,7 @@ function PickupPage() {
           <p className="eyebrow">PICKUP MANAGEMENT</p>
           <h1>接送管理</h1>
           <p className="summary">
-            管理固定接車時間、接車老師、停接日期與每月接車表。
+            管理固定接車時間、接車老師、停接日期、月接車表與列印點名表。
           </p>
         </div>
       </header>
