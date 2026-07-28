@@ -257,35 +257,57 @@ function StudentPage() {
   }
 
   async function deleteStudent() {
-    if (!selectedStudent) return;
+    if (!selectedStudent || isSaving) return;
 
-    if (!selectedStudent.is_test) {
-      alert("正式學生不可永久刪除。");
-      return;
-    }
+    const studentName = selectedStudent.chinese_name || "";
+    const studentType = selectedStudent.is_test
+      ? "測試學生"
+      : "正式學生";
 
-    const confirmed = window.confirm(
-      `確定要刪除測試學生「${selectedStudent.chinese_name}」嗎？`
+    const firstConfirmed = window.confirm(
+      `確定要永久刪除${studentType}「${studentName}」嗎？\n\n刪除後無法復原。`
     );
 
-    if (!confirmed) return;
+    if (!firstConfirmed) return;
 
-    const { error } = await supabase
-      .from("students")
-      .delete()
-      .eq("id", selectedStudent.id);
+    const typedName = window.prompt(
+      `為避免誤刪，請輸入學生完整姓名「${studentName}」：`
+    );
 
-    if (error) {
-      alert("刪除失敗：" + error.message);
+    if (typedName === null) return;
+
+    if (typedName.trim() !== studentName.trim()) {
+      alert("姓名不一致，已取消刪除。");
       return;
     }
 
-    if (profileStudent?.id === selectedStudent.id) {
-      setProfileStudent(null);
-    }
+    try {
+      setIsSaving(true);
 
-    closeDrawer();
-    await loadStudents();
+      const { error } = await supabase
+        .from("students")
+        .delete()
+        .eq("id", selectedStudent.id);
+
+      if (error) throw error;
+
+      if (profileStudent?.id === selectedStudent.id) {
+        setProfileStudent(null);
+      }
+
+      closeDrawer();
+      await loadStudents();
+
+      alert(`已永久刪除學生「${studentName}」。`);
+    } catch (error) {
+      console.error("刪除學生失敗：", error);
+
+      alert(
+        `刪除失敗：${error.message}\n\n若這位學生已被班級、課程或接車資料使用，可能需要先移除相關紀錄。`
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   const filteredStudents = students.filter((student) => {

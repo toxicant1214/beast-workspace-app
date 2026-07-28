@@ -335,14 +335,16 @@ function StudentDrawer({
         </div>
 
         <div className="drawerActions">
-          {selectedStudent?.is_test && (
+          {selectedStudent && (
             <button
               type="button"
               className="danger"
               onClick={onDelete}
               disabled={isSaving}
             >
-              刪除測試學生
+              {selectedStudent.is_test
+                ? "永久刪除測試學生"
+                : "永久刪除學生"}
             </button>
           )}
 
@@ -360,7 +362,7 @@ function StudentDrawer({
             disabled={isSaving}
           >
             {isSaving
-              ? "儲存中..."
+              ? "處理中..."
               : selectedStudent
                 ? "儲存修改"
                 : "儲存學生"}
