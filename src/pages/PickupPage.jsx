@@ -3,6 +3,7 @@ import PickupRulesPanel from "../components/pickup/PickupRulesPanel";
 import PickupClosuresPanel from "../components/pickup/PickupClosuresPanel";
 import PickupStaffPanel from "../components/pickup/PickupStaffPanel";
 import MonthlyPickupPanel from "../components/pickup/MonthlyPickupPanel";
+import TodayPickupPanel from "../components/pickup/TodayPickupPanel";
 import "../App.css";
 
 const PICKUP_TABS = [
@@ -42,20 +43,7 @@ function PickupPage() {
 
   function renderTabContent() {
     if (activeTab === "today") {
-      return (
-        <section className="pickupPanel">
-          <div className="pickupEmptyState">
-            <span className="pickupEmptyState__icon">🚌</span>
-
-            <h2>今日接車安排</h2>
-
-            <p>
-              系統將依照接車規則、固定接車老師與停接安排，
-              整理今天各學校的接車時間與負責老師。
-            </p>
-          </div>
-        </section>
-      );
+      return <TodayPickupPanel />;
     }
 
     if (activeTab === "monthly") {
