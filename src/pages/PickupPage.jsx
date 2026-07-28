@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PickupRulesPanel from "../components/pickup/PickupRulesPanel";
 import "../App.css";
 
 const PICKUP_TABS = [
@@ -63,19 +64,8 @@ function PickupPage() {
     }
 
     if (activeTab === "rules") {
-      return (
-        <section className="pickupPanel">
-          <div className="pickupEmptyState">
-            <span className="pickupEmptyState__icon">📍</span>
-            <h2>接車規則</h2>
-            <p>
-              設定不同學校、年級與星期的固定接車時段，
-              包含中午接車、下午接車或不接車。
-            </p>
-          </div>
-        </section>
-      );
-    }
+  return <PickupRulesPanel />;
+}
 
     return (
       <section className="pickupPanel">
