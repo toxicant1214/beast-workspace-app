@@ -1,5 +1,6 @@
 import { useState } from "react";
 import PickupRulesPanel from "../components/pickup/PickupRulesPanel";
+import PickupClosuresPanel from "../components/pickup/PickupClosuresPanel";
 import "../App.css";
 
 const PICKUP_TABS = [
@@ -37,8 +38,12 @@ function PickupPage() {
       return (
         <section className="pickupPanel">
           <div className="pickupEmptyState">
-            <span className="pickupEmptyState__icon">🚌</span>
+            <span className="pickupEmptyState__icon">
+              🚌
+            </span>
+
             <h2>今日接車名單</h2>
+
             <p>
               完成接車規則設定後，系統會依照學生資料、學校、
               年級與例外紀錄，自動產生今天的實際接車名單。
@@ -52,8 +57,12 @@ function PickupPage() {
       return (
         <section className="pickupPanel">
           <div className="pickupEmptyState">
-            <span className="pickupEmptyState__icon">🗓️</span>
+            <span className="pickupEmptyState__icon">
+              🗓️
+            </span>
+
             <h2>月接車表</h2>
+
             <p>
               這裡將產生 A4 橫式月接車表，並支援列印、
               儲存 PDF 與輸出高解析度圖片。
@@ -64,29 +73,26 @@ function PickupPage() {
     }
 
     if (activeTab === "rules") {
-  return <PickupRulesPanel />;
-}
+      return <PickupRulesPanel />;
+    }
 
-    return (
-      <section className="pickupPanel">
-        <div className="pickupEmptyState">
-          <span className="pickupEmptyState__icon">✏️</span>
-          <h2>停接與例外</h2>
-          <p>
-            管理學生請假、家長自接、暫停接車，以及學校停課、
-            校慶補假等特殊日期。
-          </p>
-        </div>
-      </section>
-    );
+    if (activeTab === "exceptions") {
+      return <PickupClosuresPanel />;
+    }
+
+    return null;
   }
 
   return (
     <div className="pickupPage">
       <header className="pickupPageHeader">
         <div>
-          <p className="eyebrow">PICKUP MANAGEMENT</p>
+          <p className="eyebrow">
+            PICKUP MANAGEMENT
+          </p>
+
           <h1>接送管理</h1>
+
           <p className="summary">
             建立固定接車規則，並自動整理每日與每月接車名單。
           </p>
@@ -116,7 +122,10 @@ function PickupPage() {
 
       <div className="pickupCurrentSection">
         <div>
-          <p className="eyebrow">CURRENT SECTION</p>
+          <p className="eyebrow">
+            CURRENT SECTION
+          </p>
+
           <h2>{currentTab?.label}</h2>
         </div>
       </div>
