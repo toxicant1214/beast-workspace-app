@@ -676,7 +676,7 @@ function PickupStaffPanel() {
       await document.fonts?.ready;
 
       const canvas = await html2canvas(pageElement, {
-        scale: 2,
+        scale: 3,
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
@@ -694,8 +694,8 @@ function PickupStaffPanel() {
       });
 
       pdf.addImage(
-        canvas.toDataURL("image/jpeg", 0.95),
-        "JPEG",
+        canvas.toDataURL("image/png"),
+        "PNG",
         0,
         0,
         pdf.internal.pageSize.getWidth(),
@@ -716,9 +716,9 @@ function PickupStaffPanel() {
   }
 
   function renderSummaryTable(isPdf = false) {
-    const borderColor = "#555555";
-    const thinBorder = `1px solid ${borderColor}`;
-    const strongBorder = `2px solid ${borderColor}`;
+    const borderColor = isPdf ? "#9a9a9a" : "#555555";
+    const thinBorder = isPdf ? `0.35px solid ${borderColor}` : `1px solid ${borderColor}`;
+    const strongBorder = isPdf ? `0.55px solid ${borderColor}` : `2px solid ${borderColor}`;
     const labelWidth = isPdf ? 46 : 58;
 
     return (
@@ -739,6 +739,11 @@ function PickupStaffPanel() {
                 width: `${labelWidth}px`,
                 border: strongBorder,
                 padding: "5px 2px",
+                textAlign: "center",
+                verticalAlign: "middle",
+                whiteSpace: "nowrap",
+                textAlign: "center",
+                verticalAlign: "middle",
               }}
             >
               星期
@@ -752,6 +757,10 @@ function PickupStaffPanel() {
                   border: strongBorder,
                   padding: "5px 2px",
                   fontWeight: 700,
+                  textAlign: "center",
+                  verticalAlign: "middle",
+                  textAlign: "center",
+                  verticalAlign: "middle",
                 }}
               >
                 {weekday.label}
@@ -767,6 +776,8 @@ function PickupStaffPanel() {
                     style={{
                       border: strongBorder,
                       padding: "4px 2px",
+                      textAlign: "center",
+                      verticalAlign: "middle",
                     }}
                   >
                     時間
@@ -785,6 +796,8 @@ function PickupStaffPanel() {
                         style={{
                           border: strongBorder,
                           padding: "4px 2px",
+                          textAlign: "center",
+                          verticalAlign: "middle",
                         }}
                       >
                         {times.length > 0
@@ -800,6 +813,8 @@ function PickupStaffPanel() {
                     style={{
                       border: strongBorder,
                       padding: "4px 2px",
+                      textAlign: "center",
+                      verticalAlign: "middle",
                     }}
                   >
                     學校
@@ -811,8 +826,17 @@ function PickupStaffPanel() {
                         key={`${weekday.value}-${period}-${school}`}
                         style={{
                           border: thinBorder,
-                          padding: "4px 1px",
+                          padding: isPdf ? "3px 0" : "4px 1px",
                           fontWeight: 600,
+                          textAlign: "center",
+                          verticalAlign: "middle",
+                          whiteSpace: "nowrap",
+                          wordBreak: "keep-all",
+                          overflow: "hidden",
+                          fontSize: isPdf ? "7px" : "12px",
+                          textAlign: "center",
+                          verticalAlign: "middle",
+                          whiteSpace: "nowrap",
                         }}
                       >
                         {school}
@@ -826,9 +850,22 @@ function PickupStaffPanel() {
                     style={{
                       border: strongBorder,
                       padding: "5px 2px",
+                      textAlign: "center",
+                      verticalAlign: "middle",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    老師
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    >
+                      老師
+                    </span>
                   </th>
 
                   {WEEKDAYS.flatMap((weekday) =>
@@ -874,6 +911,8 @@ function PickupStaffPanel() {
                     style={{
                       border: strongBorder,
                       padding: "4px 2px",
+                      textAlign: "center",
+                      verticalAlign: "middle",
                     }}
                   >
                     人數
@@ -1307,7 +1346,7 @@ function PickupStaffPanel() {
               justifyContent: "space-between",
               marginBottom: "12px",
               paddingBottom: "10px",
-              borderBottom: "1px solid #555555",
+              borderBottom: "0.5px solid #999999",
             }}
           >
             <div>
@@ -1355,7 +1394,7 @@ function PickupStaffPanel() {
               justifyContent: "space-between",
               marginTop: "10px",
               paddingTop: "6px",
-              borderTop: "1px solid #777777",
+              borderTop: "0.5px solid #aaaaaa",
               fontSize: "9px",
               color: "#666666",
             }}
