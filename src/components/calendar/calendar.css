@@ -315,19 +315,25 @@
 }
 
 .semester-school-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
   margin-top: 16px;
 }
 
 .semester-school-tags span {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   border: 1px solid #ded5ca;
-  border-radius: 999px;
+  border-radius: 12px;
   background: #faf7f2;
-  padding: 7px 13px;
+  padding: 8px 12px;
   color: #554e46;
   font-size: 13px;
+  text-align: center;
 }
 
 .semester-next-step {
@@ -434,5 +440,217 @@
 
   .semester-card-heading {
     flex-direction: column;
+  }
+}
+.semester-school-tags {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.semester-school-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.semester-school-heading-actions > span {
+  color: #8b8175;
+  font-size: 12px;
+}
+
+.calendar-text-button {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  color: #62584e;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.calendar-text-button:hover {
+  color: #302b26;
+  text-decoration: underline;
+}
+
+.calendar-modal-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: rgba(39, 35, 31, 0.42);
+  padding: 24px;
+}
+
+.calendar-modal {
+  width: min(680px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  border: 1px solid #e2d9ce;
+  border-radius: 20px;
+  background: #fffdf9;
+  padding: 25px;
+  box-shadow: 0 24px 70px rgba(38, 31, 24, 0.2);
+}
+
+.calendar-modal__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.calendar-modal__header h2 {
+  margin: 0;
+  color: #37322d;
+  font-size: 21px;
+}
+
+.calendar-modal__close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ded5ca;
+  border-radius: 10px;
+  background: #fff;
+  color: #645c53;
+  font-size: 23px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.calendar-school-manager-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 23px;
+}
+
+.calendar-school-option {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 9px;
+  box-sizing: border-box;
+  border: 1px solid #ddd5cb;
+  border-radius: 12px;
+  background: #faf7f2;
+  padding: 9px 11px;
+  cursor: pointer;
+}
+
+.calendar-school-option.is-selected {
+  border-color: #9d8e7d;
+  background: #eee8df;
+}
+
+.calendar-school-option input {
+  width: 16px;
+  height: 16px;
+  accent-color: #514940;
+}
+
+.calendar-school-option__name {
+  flex: 1;
+  color: #4d463f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.calendar-school-option__default {
+  border-radius: 999px;
+  background: #e2dbd2;
+  padding: 3px 7px;
+  color: #746a5f;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.calendar-add-school {
+  margin-top: 23px;
+  border-top: 1px solid #eee7df;
+  padding-top: 20px;
+}
+
+.calendar-add-school__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calendar-add-school__heading strong {
+  color: #48413a;
+  font-size: 14px;
+}
+
+.calendar-add-school__heading span {
+  color: #8a8075;
+  font-size: 12px;
+}
+
+.calendar-add-school__row {
+  display: flex;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.calendar-add-school__row input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid #ddd5cb;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  color: #37322d;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.calendar-add-school__row input:focus {
+  border-color: #998a79;
+  box-shadow: 0 0 0 3px rgba(153, 138, 121, 0.12);
+}
+
+.calendar-default-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 11px;
+  color: #70675e;
+  font-size: 12px;
+  line-height: 1.55;
+  cursor: pointer;
+}
+
+.calendar-default-checkbox input {
+  margin-top: 2px;
+  accent-color: #514940;
+}
+
+.calendar-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+  border-top: 1px solid #eee7df;
+  padding-top: 18px;
+}
+
+@media (max-width: 620px) {
+  .calendar-school-manager-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .calendar-add-school__row {
+    flex-direction: column;
+  }
+
+  .semester-school-heading-actions {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 4px;
   }
 }
