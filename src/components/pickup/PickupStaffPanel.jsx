@@ -716,9 +716,13 @@ function PickupStaffPanel() {
   }
 
   function renderSummaryTable(isPdf = false) {
-    const borderColor = "#555555";
-    const thinBorder = `1px solid ${borderColor}`;
-    const strongBorder = `2px solid ${borderColor}`;
+    const borderColor = isPdf ? "#9a9a94" : "#555555";
+    const thinBorder = isPdf
+      ? `0.45px solid ${borderColor}`
+      : `1px solid ${borderColor}`;
+    const strongBorder = isPdf
+      ? `0.75px solid ${borderColor}`
+      : `2px solid ${borderColor}`;
     const labelWidth = isPdf ? 46 : 58;
 
     return (
@@ -730,6 +734,7 @@ function PickupStaffPanel() {
           fontSize: isPdf ? "10px" : "12px",
           color: "#2f2f2f",
           background: "#ffffff",
+          textAlign: "center",
         }}
       >
         <tbody>
@@ -739,6 +744,8 @@ function PickupStaffPanel() {
                 width: `${labelWidth}px`,
                 border: strongBorder,
                 padding: "5px 2px",
+                textAlign: "center",
+                verticalAlign: "middle",
               }}
             >
               星期
@@ -752,6 +759,8 @@ function PickupStaffPanel() {
                   border: strongBorder,
                   padding: "5px 2px",
                   fontWeight: 700,
+                  textAlign: "center",
+                  verticalAlign: "middle",
                 }}
               >
                 {weekday.label}
@@ -767,6 +776,8 @@ function PickupStaffPanel() {
                     style={{
                       border: strongBorder,
                       padding: "4px 2px",
+                      textAlign: "center",
+                      verticalAlign: "middle",
                     }}
                   >
                     時間
@@ -785,6 +796,8 @@ function PickupStaffPanel() {
                         style={{
                           border: strongBorder,
                           padding: "4px 2px",
+                          textAlign: "center",
+                          verticalAlign: "middle",
                         }}
                       >
                         {times.length > 0
@@ -800,6 +813,8 @@ function PickupStaffPanel() {
                     style={{
                       border: strongBorder,
                       padding: "4px 2px",
+                      textAlign: "center",
+                      verticalAlign: "middle",
                     }}
                   >
                     學校
@@ -813,6 +828,10 @@ function PickupStaffPanel() {
                           border: thinBorder,
                           padding: "4px 1px",
                           fontWeight: 600,
+                          textAlign: "center",
+                          verticalAlign: "middle",
+                          whiteSpace: "nowrap",
+                          wordBreak: "keep-all",
                         }}
                       >
                         {school}
@@ -874,6 +893,8 @@ function PickupStaffPanel() {
                     style={{
                       border: strongBorder,
                       padding: "4px 2px",
+                      textAlign: "center",
+                      verticalAlign: "middle",
                     }}
                   >
                     人數
@@ -1307,7 +1328,7 @@ function PickupStaffPanel() {
               justifyContent: "space-between",
               marginBottom: "12px",
               paddingBottom: "10px",
-              borderBottom: "1px solid #555555",
+              borderBottom: "0.5px solid #9a9a94",
             }}
           >
             <div>
@@ -1355,7 +1376,7 @@ function PickupStaffPanel() {
               justifyContent: "space-between",
               marginTop: "10px",
               paddingTop: "6px",
-              borderTop: "1px solid #777777",
+              borderTop: "0.5px solid #a3a39e",
               fontSize: "9px",
               color: "#666666",
             }}
