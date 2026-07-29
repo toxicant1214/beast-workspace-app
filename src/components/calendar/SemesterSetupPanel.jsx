@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import DayOverridePanel from "./DayOverridePanel";
+import CalendarDayTester from "./CalendarDayTester";
 
 const EMPTY_FORM = {
   name: "",
@@ -716,12 +718,16 @@ function SemesterSetupPanel() {
                 )}
               </div>
 
-              <div className="semester-next-step">
-                <span>下一步</span>
-                <p>
-                  建立這個學期的國定假日、教室休假日與特殊上班日。
-                </p>
-              </div>
+              <DayOverridePanel
+  semesterId={selectedSemester.id}
+  semesterStartDate={selectedSemester.start_date}
+  semesterEndDate={selectedSemester.end_date}
+/>
+<CalendarDayTester
+  semesterId={selectedSemester.id}
+  semesterStartDate={selectedSemester.start_date}
+  semesterEndDate={selectedSemester.end_date}
+/>
             </div>
           ) : (
             <div className="calendar-empty-state calendar-empty-state--large">
