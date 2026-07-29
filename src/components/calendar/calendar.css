@@ -1,0 +1,438 @@
+.calendar-page {
+  width: 100%;
+  padding: 28px 32px 48px;
+  box-sizing: border-box;
+}
+
+.calendar-page__header {
+  margin-bottom: 24px;
+}
+
+.calendar-page__eyebrow,
+.semester-card-kicker {
+  margin: 0 0 6px;
+  color: #8b8175;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.calendar-page__header h1 {
+  margin: 0;
+  color: #302d29;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.calendar-page__description {
+  margin: 9px 0 0;
+  color: #7c746b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.semester-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.semester-list-card,
+.semester-detail-card {
+  border: 1px solid #e8e1d8;
+  border-radius: 18px;
+  background: #fffdf9;
+  box-shadow: 0 10px 30px rgba(70, 60, 48, 0.05);
+}
+
+.semester-list-card {
+  padding: 20px;
+}
+
+.semester-detail-card {
+  min-height: 450px;
+  padding: 26px;
+}
+
+.semester-card-heading,
+.semester-overview__header,
+.semester-section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.semester-card-heading h2,
+.semester-overview__header h2,
+.semester-section-title h3 {
+  margin: 0;
+  color: #37322d;
+}
+
+.semester-card-heading h2,
+.semester-overview__header h2 {
+  font-size: 21px;
+}
+
+.semester-section-title h3 {
+  font-size: 17px;
+}
+
+.calendar-primary-button,
+.calendar-secondary-button {
+  min-height: 39px;
+  border-radius: 10px;
+  padding: 0 15px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.calendar-primary-button {
+  border: 1px solid #49423a;
+  background: #49423a;
+  color: #fff;
+}
+
+.calendar-primary-button:hover:not(:disabled) {
+  background: #332e29;
+}
+
+.calendar-secondary-button {
+  border: 1px solid #dcd4ca;
+  background: #fff;
+  color: #625a51;
+}
+
+.calendar-secondary-button:hover:not(:disabled) {
+  background: #f7f3ed;
+}
+
+.calendar-primary-button:disabled,
+.calendar-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.semester-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.semester-list-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: #f8f5ef;
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.semester-list-item:hover {
+  border-color: #d9d0c5;
+}
+
+.semester-list-item.is-active {
+  border-color: #a99a89;
+  background: #eee8df;
+}
+
+.semester-list-item__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.semester-list-item__top strong {
+  color: #3e3832;
+  font-size: 14px;
+}
+
+.semester-list-item__date {
+  display: block;
+  margin-top: 8px;
+  color: #81786e;
+  font-size: 12px;
+}
+
+.semester-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.semester-status--draft {
+  background: #eee9e2;
+  color: #746b60;
+}
+
+.semester-status--confirmed {
+  background: #e7efe8;
+  color: #54705a;
+}
+
+.semester-status--needs_reconfirmation {
+  background: #f5ead9;
+  color: #956d35;
+}
+
+.semester-status--archived {
+  background: #ececec;
+  color: #707070;
+}
+
+.semester-form {
+  max-width: 760px;
+}
+
+.semester-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 25px;
+}
+
+.calendar-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calendar-field--full {
+  grid-column: 1 / -1;
+}
+
+.calendar-field span {
+  color: #625b53;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.calendar-field input,
+.calendar-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #ddd5cb;
+  border-radius: 11px;
+  background: #fff;
+  padding: 11px 12px;
+  color: #37322d;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.calendar-field input:focus,
+.calendar-field textarea:focus {
+  border-color: #998a79;
+  box-shadow: 0 0 0 3px rgba(153, 138, 121, 0.12);
+}
+
+.calendar-field textarea {
+  resize: vertical;
+}
+
+.semester-form-note {
+  margin-top: 18px;
+  border-radius: 12px;
+  background: #f7f2eb;
+  padding: 13px 15px;
+  color: #796f64;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.semester-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.semester-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 25px;
+}
+
+.semester-summary-item {
+  border-radius: 13px;
+  background: #f7f3ed;
+  padding: 15px;
+}
+
+.semester-summary-item span,
+.semester-notes span,
+.semester-next-step span {
+  display: block;
+  margin-bottom: 6px;
+  color: #877d72;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.semester-summary-item strong {
+  color: #453f38;
+  font-size: 14px;
+}
+
+.semester-notes {
+  margin-top: 16px;
+  border-bottom: 1px solid #eee7df;
+  padding: 4px 2px 19px;
+}
+
+.semester-notes p {
+  margin: 0;
+  color: #5f5850;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.semester-school-section {
+  margin-top: 25px;
+}
+
+.semester-section-title > span {
+  color: #8b8175;
+  font-size: 12px;
+}
+
+.semester-school-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.semester-school-tags span {
+  border: 1px solid #ded5ca;
+  border-radius: 999px;
+  background: #faf7f2;
+  padding: 7px 13px;
+  color: #554e46;
+  font-size: 13px;
+}
+
+.semester-next-step {
+  margin-top: 28px;
+  border-left: 3px solid #b4a28f;
+  background: #f7f2eb;
+  padding: 14px 16px;
+}
+
+.semester-next-step p {
+  margin: 0;
+  color: #655d54;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.calendar-message {
+  margin-bottom: 18px;
+  border-radius: 11px;
+  padding: 11px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.calendar-message--error {
+  border: 1px solid #e8c9c5;
+  background: #fff2f0;
+  color: #9a4c43;
+}
+
+.calendar-message--success {
+  border: 1px solid #cddfce;
+  background: #f0f7f0;
+  color: #4f7654;
+}
+
+.calendar-empty-state {
+  margin-top: 18px;
+  border: 1px dashed #ddd4ca;
+  border-radius: 13px;
+  padding: 22px 16px;
+  text-align: center;
+}
+
+.calendar-empty-state--large {
+  display: flex;
+  min-height: 360px;
+  flex-direction: column;
+  justify-content: center;
+  margin-top: 0;
+}
+
+.calendar-empty-state--small {
+  padding: 16px;
+}
+
+.calendar-empty-state p {
+  margin: 0;
+  color: #514b44;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.calendar-empty-state span,
+.calendar-muted {
+  display: block;
+  margin-top: 7px;
+  color: #91877c;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 960px) {
+  .calendar-page {
+    padding: 22px 20px 40px;
+  }
+
+  .semester-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .semester-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .calendar-page {
+    padding: 18px 14px 32px;
+  }
+
+  .semester-detail-card,
+  .semester-list-card {
+    padding: 18px;
+  }
+
+  .semester-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-field--full {
+    grid-column: auto;
+  }
+
+  .semester-card-heading {
+    flex-direction: column;
+  }
+}
