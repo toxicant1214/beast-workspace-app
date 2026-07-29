@@ -991,17 +991,6 @@ function PickupStaffPanel() {
           >
             重新整理
           </button>
-
-          <button
-            type="button"
-            className="primaryButton"
-            onClick={exportStaffSchedulePdf}
-            disabled={isExporting}
-          >
-            {isExporting
-              ? "正在產生 PDF…"
-              : "下載接車老師週表 PDF"}
-          </button>
         </div>
       </div>
 
@@ -1226,9 +1215,30 @@ function PickupStaffPanel() {
               </h3>
             </div>
 
-            <small style={{ color: "#6f746f" }}>
-              人數依學生年級與接車規則自動計算
-            </small>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: "12px",
+                flexWrap: "wrap",
+              }}
+            >
+              <small style={{ color: "#6f746f" }}>
+                人數依學生年級與接車規則自動計算
+              </small>
+
+              <button
+                type="button"
+                className="primaryButton"
+                onClick={exportStaffSchedulePdf}
+                disabled={isExporting}
+              >
+                {isExporting
+                  ? "正在產生 PDF…"
+                  : "匯出 PDF"}
+              </button>
+            </div>
           </div>
 
           <div
@@ -1237,13 +1247,30 @@ function PickupStaffPanel() {
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
+              maxHeight: "58vh",
               overflowX: "auto",
-              overflowY: "hidden",
+              overflowY: "auto",
+              paddingBottom: "8px",
+              border: "1px solid #deded9",
               borderRadius: "10px",
+              background: "#ffffff",
+              scrollbarGutter: "stable",
+              overscrollBehavior: "contain",
               WebkitOverflowScrolling: "touch",
             }}
           >
-            <div style={{ width: "1500px", minWidth: "1500px" }}>
+            <div
+              style={{
+                width: `${Math.max(
+                  1500,
+                  58 + WEEKDAYS.length * schools.length * 84
+                )}px`,
+                minWidth: `${Math.max(
+                  1500,
+                  58 + WEEKDAYS.length * schools.length * 84
+                )}px`,
+              }}
+            >
               {renderSummaryTable(false)}
             </div>
           </div>

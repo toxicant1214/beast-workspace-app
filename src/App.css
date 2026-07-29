@@ -3295,3 +3295,50 @@ tbody tr:hover td {
     font-weight: 700;
   }
 }
+/* 接車老師週總表：獨立捲動區域 */
+.pickupStaffScrollArea {
+  width: 100%;
+  min-width: 0;
+
+  /*
+   * 限制表格顯示高度，
+   * 讓橫向捲軸不必等到整個網頁最底部才看得到。
+   */
+  max-height: calc(100vh - 210px);
+
+  overflow-x: auto;
+  overflow-y: auto;
+
+  padding-bottom: 10px;
+
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 橫向與直向捲軸加粗，方便拖曳 */
+.pickupStaffScrollArea::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.pickupStaffScrollArea::-webkit-scrollbar-track {
+  background: #f1efe9;
+  border-radius: 999px;
+}
+
+.pickupStaffScrollArea::-webkit-scrollbar-thumb {
+  background: #aaa59b;
+  border: 3px solid #f1efe9;
+  border-radius: 999px;
+}
+
+.pickupStaffScrollArea::-webkit-scrollbar-thumb:hover {
+  background: #858077;
+}
+
+/* Firefox */
+.pickupStaffScrollArea {
+  scrollbar-width: auto;
+  scrollbar-color: #aaa59b #f1efe9;
+}
