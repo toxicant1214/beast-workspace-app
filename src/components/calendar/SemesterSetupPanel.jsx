@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import DayOverridePanel from "./DayOverridePanel";
 import CalendarDayTester from "./CalendarDayTester";
+import SchoolEventPanel from "./SchoolEventPanel";
 
 const EMPTY_FORM = {
   name: "",
@@ -724,6 +725,11 @@ function SemesterSetupPanel() {
   semesterEndDate={selectedSemester.end_date}
 />
 <CalendarDayTester
+  semesterId={selectedSemester.id}
+  semesterStartDate={selectedSemester.start_date}
+  semesterEndDate={selectedSemester.end_date}
+/>
+<SchoolEventPanel
   semesterId={selectedSemester.id}
   semesterStartDate={selectedSemester.start_date}
   semesterEndDate={selectedSemester.end_date}

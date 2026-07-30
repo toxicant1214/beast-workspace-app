@@ -864,3 +864,164 @@
     grid-template-columns: 1fr;
   }
 }
+.school-event-section {
+  margin-top: 28px;
+  border-top: 1px solid #eee7df;
+  padding-top: 24px;
+}
+
+.school-event-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.school-event-heading h3 {
+  margin: 4px 0;
+}
+
+.school-event-heading span {
+  color: #8a8075;
+  font-size: 13px;
+}
+
+.school-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.school-event-item {
+  display: grid;
+  grid-template-columns: 220px 1fr auto;
+  gap: 18px;
+  align-items: center;
+  border: 1px solid #e5ddd3;
+  border-radius: 14px;
+  background: #fcfaf7;
+  padding: 16px;
+}
+
+.school-event-item__date {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.school-event-item__date strong {
+  font-size: 14px;
+}
+
+.school-event-item__date span {
+  color: #847b71;
+  font-size: 12px;
+}
+
+.school-event-item__content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.school-event-item__content > strong {
+  font-size: 15px;
+}
+
+.school-event-item__content p {
+  margin: 0;
+  color: #6d645b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.school-event-item__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.school-event-school,
+.school-event-type,
+.school-event-pickup {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.school-event-school {
+  background: #eee8ff;
+  color: #67568d;
+}
+
+.school-event-type {
+  background: #f3eee6;
+  color: #6d6256;
+}
+
+.school-event-pickup {
+  background: #fff0d8;
+  color: #9a6824;
+}
+
+.school-event-item__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.school-event-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.school-event-date-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.school-event-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #e5ddd3;
+  border-radius: 12px;
+  background: #faf7f2;
+  padding: 13px 14px;
+  cursor: pointer;
+}
+
+.school-event-checkbox input {
+  margin-top: 3px;
+}
+
+.school-event-checkbox span {
+  color: #625a52;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .school-event-heading {
+    flex-direction: column;
+  }
+
+  .school-event-item {
+    grid-template-columns: 1fr;
+  }
+
+  .school-event-item__actions {
+    justify-content: flex-end;
+  }
+
+  .school-event-date-grid {
+    grid-template-columns: 1fr;
+  }
+}
