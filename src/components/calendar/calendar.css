@@ -1184,3 +1184,212 @@
     text-align: center;
   }
 }
+.semester-table-view {
+  min-width: 0;
+}
+
+.semester-table-view__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.semester-table-view__eyebrow {
+  margin: 0 0 5px;
+  color: #8b8175;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.semester-table-view__header h2 {
+  margin: 0;
+  color: #37322d;
+  font-size: 21px;
+}
+
+.semester-table-view__header span {
+  display: block;
+  margin-top: 7px;
+  color: #81786e;
+  font-size: 13px;
+}
+
+.semester-table-view__summary {
+  border-radius: 999px;
+  background: #eee8df;
+  padding: 7px 12px;
+  color: #62594f;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.semester-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #ded6cc;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.semester-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #4d463f;
+  font-size: 12px;
+}
+
+.semester-table th,
+.semester-table td {
+  box-sizing: border-box;
+  border-right: 1px solid #e6dfd6;
+  border-bottom: 1px solid #e6dfd6;
+}
+
+.semester-table th:last-child,
+.semester-table td:last-child {
+  border-right: 0;
+}
+
+.semester-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.semester-table thead th {
+  background: #eee8df;
+  padding: 10px 8px;
+  color: #514a43;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.semester-table thead tr:first-child th {
+  border-bottom-color: #d9d0c5;
+}
+
+.semester-table__month-column {
+  width: 58px;
+  min-width: 58px;
+}
+
+.semester-table__week-column {
+  width: 52px;
+  min-width: 52px;
+}
+
+.semester-table__day-heading {
+  width: 46px;
+  min-width: 46px;
+}
+
+.semester-table__work-heading {
+  width: 180px;
+  min-width: 180px;
+  line-height: 1.45;
+}
+
+.semester-table__month {
+  width: 58px;
+  min-width: 58px;
+  background: #f7f3ed;
+  color: #665d54;
+  font-weight: 700;
+  text-align: center;
+}
+
+.semester-table__week {
+  width: 52px;
+  min-width: 52px;
+  background: #fcfaf7;
+  color: #7b7167;
+  font-weight: 700;
+  text-align: center;
+}
+
+.semester-table__date {
+  width: 46px;
+  min-width: 46px;
+  height: 58px;
+  background: #fff;
+  padding: 7px 4px;
+  text-align: center;
+  vertical-align: top;
+}
+
+.semester-table__date span {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.semester-table__date small {
+  display: block;
+  margin-top: 5px;
+  color: #8e6f48;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.semester-table__date--outside {
+  background: #f3f1ee;
+  color: #bbb3aa;
+}
+
+.semester-table__date--start,
+.semester-table__date--end {
+  background: #f8eddc;
+}
+
+.semester-table__work-cell {
+  width: 180px;
+  min-width: 180px;
+  height: 58px;
+  background: #fffdf9;
+  padding: 7px;
+  vertical-align: top;
+}
+
+.semester-table tbody tr:hover td {
+  background-color: #faf7f2;
+}
+
+.semester-table tbody tr:hover .semester-table__date--outside {
+  background: #f0ede9;
+}
+
+.semester-table-empty {
+  display: flex;
+  min-height: 360px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #dcd4ca;
+  border-radius: 16px;
+  background: #fcfaf7;
+  padding: 28px;
+  text-align: center;
+}
+
+.semester-table-empty h2 {
+  margin: 0;
+  color: #37322d;
+  font-size: 20px;
+}
+
+.semester-table-empty p {
+  margin: 8px 0 0;
+  color: #81786e;
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .semester-table-view__header {
+    flex-direction: column;
+  }
+}

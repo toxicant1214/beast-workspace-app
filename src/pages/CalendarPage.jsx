@@ -1,5 +1,6 @@
 import { useState } from "react";
 import SemesterSetupPanel from "../components/calendar/SemesterSetupPanel";
+import SemesterTableView from "../components/calendar/SemesterTableView";
 import "../components/calendar/calendar.css";
 
 const VIEW_OPTIONS = [
@@ -16,6 +17,13 @@ const VIEW_OPTIONS = [
     label: "管理",
   },
 ];
+
+const CURRENT_SEMESTER = {
+  name: "115 學年度上學期",
+  startDate: "2026-08-25",
+  endDate: "2027-01-20",
+  status: "DRAFT",
+};
 
 function CalendarPage() {
   const [activeView, setActiveView] = useState("semester");
@@ -36,9 +44,17 @@ function CalendarPage() {
         <div className="calendar-workspace__topbar">
           <div className="calendar-workspace__semester">
             <div>
-              <span className="calendar-workspace__label">目前學期</span>
-              <strong>115 學年度上學期</strong>
-              <p>2026/08/25－2027/01/20</p>
+              <span className="calendar-workspace__label">
+                目前學期
+              </span>
+
+              <strong>{CURRENT_SEMESTER.name}</strong>
+
+              <p>
+                {CURRENT_SEMESTER.startDate.replaceAll("-", "/")}
+                －
+                {CURRENT_SEMESTER.endDate.replaceAll("-", "/")}
+              </p>
             </div>
 
             <span className="semester-status semester-status--draft">
@@ -69,29 +85,24 @@ function CalendarPage() {
 
         <div className="calendar-workspace__content">
           {activeView === "semester" && (
-            <section className="calendar-view-panel">
-              <div className="calendar-placeholder">
-                <div className="calendar-placeholder__symbol">▦</div>
-
-                <div>
-                  <h2>學期總表</h2>
-                  <p>
-                    下一步會在這裡建立一學期一張的橫向行事表。
-                  </p>
-                </div>
-              </div>
-            </section>
+            <SemesterTableView
+              semesterName={CURRENT_SEMESTER.name}
+              startDate={CURRENT_SEMESTER.startDate}
+              endDate={CURRENT_SEMESTER.endDate}
+            />
           )}
 
           {activeView === "month" && (
             <section className="calendar-view-panel">
               <div className="calendar-placeholder">
-                <div className="calendar-placeholder__symbol">□</div>
+                <div className="calendar-placeholder__symbol">
+                  □
+                </div>
 
                 <div>
                   <h2>月曆檢視</h2>
                   <p>
-                    後續會在這裡顯示一般月份月曆與每日行事項目。
+                    後續會在這裡顯示月份月曆與每日行事項目。
                   </p>
                 </div>
               </div>

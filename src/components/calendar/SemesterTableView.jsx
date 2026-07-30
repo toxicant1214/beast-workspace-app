@@ -1,0 +1,252 @@
+const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
+
+const WORK_COLUMNS = [
+  "學校重要事務",
+  "行政表單與固定事務",
+  "學科事務安排",
+  "教室活動安排",
+  "臉書發文排程",
+];
+
+function parseLocalDate(dateString) {
+  if (!dateString) return null;
+
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+function addDays(date, amount) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + amount);
+  return result;
+}
+
+function getMonday(date) {
+  const result = new Date(date);
+  const weekday = result.getDay();
+  const daysFromMonday = weekday === 0 ? 6 : weekday - 1;
+
+  result.setDate(result.getDate() - daysFromMonday);
+  return result;
+}
+
+function getSunday(date) {
+  return addDays(getMonday(date), 6);
+}
+
+function formatMonth(date) {
+  return `${date.getMonth() + 1}月`;
+}
+
+function formatDay(date) {
+  return date.getDate();
+}
+
+function formatShortDate(dateString) {
+  const date = parseLocalDate(dateString);
+
+  if (!date) return "—";
+
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}/${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function isSameDate(dateA, dateB) {
+  return (
+    dateA.getFullYear() === dateB.getFullYear() &&
+    dateA.getMonth() === dateB.getMonth() &&
+    dateA.getDate() === dateB.getDate()
+  );
+}
+
+function buildSemesterWeeks(startDateString, endDateString) {
+  const semesterStart = parseLocalDate(startDateString);
+  const semesterEnd = parseLocalDate(endDateString);
+
+  if (!semesterStart || !semesterEnd || semesterStart > semesterEnd) {
+    return [];
+  }
+
+  const tableStart = getMonday(semesterStart);
+  const tableEnd = getSunday(semesterEnd);
+
+  const weeks = [];
+  let currentMonday = new Date(tableStart);
+  let weekNumber = 1;
+  let previousMonthKey = null;
+
+  while (currentMonday <= tableEnd) {
+    const days = Array.from({ length: 7 }, (_, index) =>
+      addDays(currentMonday, index)
+    );
+
+    const firstSemesterDay =
+      days.find(
+        (date) => date >= semesterStart && date <= semesterEnd
+      ) ?? days[0];
+
+    const monthKey = `${firstSemesterDay.getFullYear()}-${
+      firstSemesterDay.getMonth() + 1
+    }`;
+
+    weeks.push({
+      weekNumber,
+      monthLabel:
+        monthKey !== previousMonthKey ? formatMonth(firstSemesterDay) : "",
+      days,
+    });
+
+    previousMonthKey = monthKey;
+    currentMonday = addDays(currentMonday, 7);
+    weekNumber += 1;
+  }
+
+  return weeks;
+}
+
+function SemesterTableView({
+  semesterName,
+  startDate,
+  endDate,
+}) {
+  const semesterStart = parseLocalDate(startDate);
+  const semesterEnd = parseLocalDate(endDate);
+  const weeks = buildSemesterWeeks(startDate, endDate);
+
+  if (!semesterStart || !semesterEnd || weeks.length === 0) {
+    return (
+      <section className="semester-table-empty">
+        <h2>尚未建立學期總表</h2>
+        <p>請先到「管理」建立有效的學期起訖日期。</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="semester-table-view">
+      <header className="semester-table-view__header">
+        <div>
+          <p className="semester-table-view__eyebrow">SEMESTER OVERVIEW</p>
+          <h2>{semesterName}</h2>
+          <span>
+            {formatShortDate(startDate)}－{formatShortDate(endDate)}
+          </span>
+        </div>
+
+        <div className="semester-table-view__summary">
+          共 {weeks.length} 週
+        </div>
+      </header>
+
+      <div className="semester-table-scroll">
+        <table className="semester-table">
+          <thead>
+            <tr>
+              <th
+                className="semester-table__month-column"
+                rowSpan="2"
+              >
+                月份
+              </th>
+
+              <th
+                className="semester-table__week-column"
+                rowSpan="2"
+              >
+                週次
+              </th>
+
+              <th colSpan="7">日期</th>
+
+              {WORK_COLUMNS.map((column) => (
+                <th
+                  key={column}
+                  className="semester-table__work-heading"
+                  rowSpan="2"
+                >
+                  {column}
+                </th>
+              ))}
+            </tr>
+
+            <tr>
+              {WEEKDAY_LABELS.map((weekday) => (
+                <th
+                  key={weekday}
+                  className="semester-table__day-heading"
+                >
+                  {weekday}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {weeks.map((week) => (
+              <tr key={week.weekNumber}>
+                <td className="semester-table__month">
+                  {week.monthLabel}
+                </td>
+
+                <td className="semester-table__week">
+                  {week.weekNumber}
+                </td>
+
+                {week.days.map((date) => {
+                  const outsideSemester =
+                    date < semesterStart || date > semesterEnd;
+
+                  const isSemesterStart = isSameDate(
+                    date,
+                    semesterStart
+                  );
+
+                  const isSemesterEnd = isSameDate(
+                    date,
+                    semesterEnd
+                  );
+
+                  return (
+                    <td
+                      key={date.toISOString()}
+                      className={[
+                        "semester-table__date",
+                        outsideSemester
+                          ? "semester-table__date--outside"
+                          : "",
+                        isSemesterStart
+                          ? "semester-table__date--start"
+                          : "",
+                        isSemesterEnd
+                          ? "semester-table__date--end"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <span>{formatDay(date)}</span>
+
+                      {isSemesterStart && <small>開始</small>}
+                      {isSemesterEnd && <small>結束</small>}
+                    </td>
+                  );
+                })}
+
+                {WORK_COLUMNS.map((column) => (
+                  <td
+                    key={`${week.weekNumber}-${column}`}
+                    className="semester-table__work-cell"
+                  />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+export default SemesterTableView;
