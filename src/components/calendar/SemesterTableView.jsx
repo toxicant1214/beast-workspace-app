@@ -1,18 +1,54 @@
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "../../lib/supabase";
+
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 
 const WORK_COLUMNS = [
-  "學校重要事務",
-  "行政表單與固定事務",
-  "學科事務安排",
-  "教室活動安排",
-  "臉書發文排程",
+  {
+    key: "SCHOOL",
+    label: "學校重要事務",
+  },
+  {
+    key: "ADMIN",
+    label: "行政表單與固定事務",
+  },
+  {
+    key: "ACADEMIC",
+    label: "學科事務安排",
+  },
+  {
+    key: "CLASSROOM",
+    label: "教室活動安排",
+  },
+  {
+    key: "SOCIAL",
+    label: "臉書發文排程",
+  },
 ];
+
+const EVENT_TYPE_LABELS = {
+  OPENING_DAY: "開學日",
+  EXAM: "考試",
+  SPORTS_DAY: "運動會",
+  SCHOOL_ANNIVERSARY: "校慶",
+  PARENT_MEETING: "親師活動",
+  GRADUATION: "畢業活動",
+  OTHER: "其他",
+};
 
 function parseLocalDate(dateString) {
   if (!dateString) return null;
 
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+function formatDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function addDays(date, amount) {
@@ -94,8 +130,12 @@ function buildSemesterWeeks(startDateString, endDateString) {
     weeks.push({
       weekNumber,
       monthLabel:
-        monthKey !== previousMonthKey ? formatMonth(firstSemesterDay) : "",
+        monthKey !== previousMonthKey
+          ? formatMonth(firstSemesterDay)
+          : "",
       days,
+      startDate: formatDateKey(days[0]),
+      endDate: formatDateKey(days[6]),
     });
 
     previousMonthKey = monthKey;
@@ -106,14 +146,136 @@ function buildSemesterWeeks(startDateString, endDateString) {
   return weeks;
 }
 
+function getEventTitle(eventItem) {
+  if (eventItem.event_type === "OTHER") {
+    return eventItem.title || "其他行事";
+  }
+
+  return (
+    EVENT_TYPE_LABELS[eventItem.event_type] ||
+    eventItem.title ||
+    "行事項目"
+  );
+}
+
+function eventOverlapsWeek(eventItem, week) {
+  const eventStart = eventItem.start_date;
+  const eventEnd = eventItem.end_date || eventItem.start_date;
+
+  return eventStart <= week.endDate && eventEnd >= week.startDate;
+}
+
 function SemesterTableView({
+  semesterId,
   semesterName,
   startDate,
   endDate,
 }) {
+  const [events, setEvents] = useState([]);
+  const [schoolNames, setSchoolNames] = useState({});
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [eventError, setEventError] = useState("");
+
   const semesterStart = parseLocalDate(startDate);
   const semesterEnd = parseLocalDate(endDate);
-  const weeks = buildSemesterWeeks(startDate, endDate);
+
+  const weeks = useMemo(
+    () => buildSemesterWeeks(startDate, endDate),
+    [startDate, endDate]
+  );
+
+  useEffect(() => {
+    if (!semesterId) {
+      setEvents([]);
+      setSchoolNames({});
+      return;
+    }
+
+    loadSemesterEvents();
+  }, [semesterId]);
+
+  async function loadSemesterEvents() {
+    try {
+      setLoadingEvents(true);
+      setEventError("");
+
+      const [eventResult, schoolResult] = await Promise.all([
+        supabase
+          .from("calendar_school_events")
+          .select(
+            `
+              id,
+              semester_id,
+              school_id,
+              applies_to_all_schools,
+              start_date,
+              end_date,
+              title,
+              event_type,
+              category,
+              display_order,
+              notes,
+              affects_pickup
+            `
+          )
+          .eq("semester_id", semesterId)
+          .order("start_date", { ascending: true })
+          .order("display_order", { ascending: true }),
+
+        supabase
+          .from("calendar_semester_schools")
+          .select(
+            `
+              school_id,
+              calendar_schools (
+                id,
+                name
+              )
+            `
+          )
+          .eq("semester_id", semesterId),
+      ]);
+
+      if (eventResult.error) {
+        throw eventResult.error;
+      }
+
+      if (schoolResult.error) {
+        throw schoolResult.error;
+      }
+
+      const nextSchoolNames = Object.fromEntries(
+        (schoolResult.data || [])
+          .map((item) => item.calendar_schools)
+          .filter(Boolean)
+          .map((school) => [school.id, school.name])
+      );
+
+      setEvents(eventResult.data || []);
+      setSchoolNames(nextSchoolNames);
+    } catch (error) {
+      console.error("讀取學期行事失敗：", error);
+
+      setEventError(
+        error?.message
+          ? `讀取學期行事失敗：${error.message}`
+          : "讀取學期行事失敗，請稍後再試。"
+      );
+    } finally {
+      setLoadingEvents(false);
+    }
+  }
+
+  function getWeekEvents(week, category) {
+    return events.filter((eventItem) => {
+      const eventCategory = eventItem.category || "SCHOOL";
+
+      return (
+        eventCategory === category &&
+        eventOverlapsWeek(eventItem, week)
+      );
+    });
+  }
 
   if (!semesterStart || !semesterEnd || weeks.length === 0) {
     return (
@@ -128,10 +290,15 @@ function SemesterTableView({
     <section className="semester-table-view">
       <header className="semester-table-view__header">
         <div>
-          <p className="semester-table-view__eyebrow">SEMESTER OVERVIEW</p>
+          <p className="semester-table-view__eyebrow">
+            SEMESTER OVERVIEW
+          </p>
+
           <h2>{semesterName}</h2>
+
           <span>
-            {formatShortDate(startDate)}－{formatShortDate(endDate)}
+            {formatShortDate(startDate)}－
+            {formatShortDate(endDate)}
           </span>
         </div>
 
@@ -139,6 +306,18 @@ function SemesterTableView({
           共 {weeks.length} 週
         </div>
       </header>
+
+      {loadingEvents && (
+        <div className="calendar-message">
+          正在讀取學期行事……
+        </div>
+      )}
+
+      {eventError && (
+        <div className="calendar-message calendar-message--error">
+          {eventError}
+        </div>
+      )}
 
       <div className="semester-table-scroll">
         <table className="semester-table">
@@ -162,11 +341,11 @@ function SemesterTableView({
 
               {WORK_COLUMNS.map((column) => (
                 <th
-                  key={column}
+                  key={column.key}
                   className="semester-table__work-heading"
                   rowSpan="2"
                 >
-                  {column}
+                  {column.label}
                 </th>
               ))}
             </tr>
@@ -234,12 +413,42 @@ function SemesterTableView({
                   );
                 })}
 
-                {WORK_COLUMNS.map((column) => (
-                  <td
-                    key={`${week.weekNumber}-${column}`}
-                    className="semester-table__work-cell"
-                  />
-                ))}
+                {WORK_COLUMNS.map((column) => {
+                  const weekEvents = getWeekEvents(
+                    week,
+                    column.key
+                  );
+
+                  return (
+                    <td
+                      key={`${week.weekNumber}-${column.key}`}
+                      className="semester-table__work-cell"
+                    >
+                      {weekEvents.map((eventItem) => {
+                        const schoolLabel =
+                          eventItem.applies_to_all_schools
+                            ? "全部學校"
+                            : schoolNames[eventItem.school_id] ||
+                              "";
+
+                        return (
+                          <div
+                            key={eventItem.id}
+                            className="semester-table-event"
+                          >
+                            <strong>
+                              {getEventTitle(eventItem)}
+                            </strong>
+
+                            {schoolLabel && (
+                              <span>{schoolLabel}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

@@ -19,6 +19,7 @@ const VIEW_OPTIONS = [
 ];
 
 const CURRENT_SEMESTER = {
+  id: "cd88fd29-fb4c-41b0-8e69-6007f9c76db7",
   name: "115 學年度上學期",
   startDate: "2026-08-25",
   endDate: "2027-01-20",
@@ -86,10 +87,11 @@ function CalendarPage() {
         <div className="calendar-workspace__content">
           {activeView === "semester" && (
             <SemesterTableView
-              semesterName={CURRENT_SEMESTER.name}
-              startDate={CURRENT_SEMESTER.startDate}
-              endDate={CURRENT_SEMESTER.endDate}
-            />
+  semesterId={CURRENT_SEMESTER.id}
+  semesterName={CURRENT_SEMESTER.name}
+  startDate={CURRENT_SEMESTER.startDate}
+  endDate={CURRENT_SEMESTER.endDate}
+/>
           )}
 
           {activeView === "month" && (

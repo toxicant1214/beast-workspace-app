@@ -1393,3 +1393,28 @@
     flex-direction: column;
   }
 }
+.semester-table-event {
+  margin-bottom: 6px;
+  border: 1px solid #e4d9ca;
+  border-radius: 8px;
+  background: #f8f1e7;
+  padding: 6px 7px;
+  line-height: 1.4;
+}
+
+.semester-table-event:last-child {
+  margin-bottom: 0;
+}
+
+.semester-table-event strong {
+  display: block;
+  color: #4f463d;
+  font-size: 11px;
+}
+
+.semester-table-event span {
+  display: block;
+  margin-top: 2px;
+  color: #8a7d70;
+  font-size: 9px;
+}
