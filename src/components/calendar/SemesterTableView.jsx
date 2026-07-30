@@ -111,7 +111,6 @@ function buildSemesterWeeks(startDateString, endDateString) {
   const weeks = [];
   let currentMonday = new Date(tableStart);
   let weekNumber = 1;
-  let previousMonthKey = null;
 
   while (currentMonday <= tableEnd) {
     const days = Array.from({ length: 7 }, (_, index) =>
@@ -128,21 +127,38 @@ function buildSemesterWeeks(startDateString, endDateString) {
     }`;
 
     weeks.push({
-      weekNumber,
-      monthLabel:
-        monthKey !== previousMonthKey
-          ? formatMonth(firstSemesterDay)
-          : "",
-      days,
-      startDate: formatDateKey(days[0]),
-      endDate: formatDateKey(days[6]),
-    });
+  weekNumber,
+  monthKey,
+  monthLabel: formatMonth(firstSemesterDay),
+  days,
+  startDate: formatDateKey(days[0]),
+  endDate: formatDateKey(days[6]),
+});
 
-    previousMonthKey = monthKey;
     currentMonday = addDays(currentMonday, 7);
     weekNumber += 1;
   }
+weeks.forEach((week, index) => {
+  const isFirstWeekOfMonth =
+    index === 0 ||
+    weeks[index - 1].monthKey !== week.monthKey;
 
+  if (!isFirstWeekOfMonth) {
+    week.monthRowSpan = 0;
+    return;
+  }
+
+  let rowSpan = 1;
+
+  while (
+    index + rowSpan < weeks.length &&
+    weeks[index + rowSpan].monthKey === week.monthKey
+  ) {
+    rowSpan += 1;
+  }
+
+  week.monthRowSpan = rowSpan;
+});
   return weeks;
 }
 
@@ -365,9 +381,14 @@ function SemesterTableView({
           <tbody>
             {weeks.map((week) => (
               <tr key={week.weekNumber}>
-                <td className="semester-table__month">
-                  {week.monthLabel}
-                </td>
+                {week.monthRowSpan > 0 && (
+  <td
+    className="semester-table__month"
+    rowSpan={week.monthRowSpan}
+  >
+    {week.monthLabel}
+  </td>
+)}
 
                 <td className="semester-table__week">
                   {week.weekNumber}

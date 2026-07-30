@@ -1418,3 +1418,76 @@
   color: #8a7d70;
   font-size: 9px;
 }
+/* 學期總表：緊湊顯示，方便整張輸出 */
+.semester-table th {
+  padding: 7px 6px;
+}
+
+.semester-table__month-column {
+  width: 48px;
+  min-width: 48px;
+}
+
+.semester-table__week-column {
+  width: 44px;
+  min-width: 44px;
+}
+
+.semester-table__day-heading {
+  width: 40px;
+  min-width: 40px;
+}
+
+.semester-table__work-heading {
+  width: 155px;
+  min-width: 155px;
+}
+
+.semester-table__month {
+  width: 48px;
+  min-width: 48px;
+  font-size: 12px;
+}
+
+.semester-table__week {
+  width: 44px;
+  min-width: 44px;
+  font-size: 12px;
+}
+
+.semester-table__date {
+  width: 40px;
+  min-width: 40px;
+  height: 42px;
+  padding: 4px 3px;
+}
+
+.semester-table__date span {
+  font-size: 12px;
+}
+
+.semester-table__date small {
+  margin-top: 2px;
+  font-size: 8px;
+}
+
+.semester-table__work-cell {
+  width: 155px;
+  min-width: 155px;
+  height: 42px;
+  padding: 4px;
+}
+
+.semester-table-event {
+  margin-bottom: 3px;
+  padding: 4px 5px;
+}
+
+.semester-table-event strong {
+  font-size: 10px;
+}
+
+.semester-table-event span {
+  margin-top: 1px;
+  font-size: 8px;
+}
