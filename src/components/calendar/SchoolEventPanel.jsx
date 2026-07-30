@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+const ALL_SCHOOLS_VALUE = "__ALL_SCHOOLS__";
+
 const EMPTY_FORM = {
   schoolId: "",
   startDate: "",
@@ -226,6 +228,13 @@ function SchoolEventPanel({
       return "請選擇學校。";
     }
 
+    if (
+      form.schoolId === ALL_SCHOOLS_VALUE &&
+      schools.length === 0
+    ) {
+      return "目前學期沒有可以新增行事的學校。";
+    }
+
     if (!form.startDate) {
       return "請選擇開始日期。";
     }
@@ -266,6 +275,19 @@ function SchoolEventPanel({
     return "";
   }
 
+  function createBasePayload() {
+    return {
+      semester_id: semesterId,
+      start_date: form.startDate,
+      end_date: form.endDate || null,
+      title: form.title.trim(),
+      event_type: form.eventType,
+      notes: form.notes.trim() || null,
+      affects_pickup: form.affectsPickup,
+      updated_at: new Date().toISOString(),
+    };
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -277,17 +299,7 @@ function SchoolEventPanel({
       return;
     }
 
-    const payload = {
-      semester_id: semesterId,
-      school_id: form.schoolId,
-      start_date: form.startDate,
-      end_date: form.endDate || null,
-      title: form.title.trim(),
-      event_type: form.eventType,
-      notes: form.notes.trim() || null,
-      affects_pickup: form.affectsPickup,
-      updated_at: new Date().toISOString(),
-    };
+    const basePayload = createBasePayload();
 
     try {
       setSaving(true);
@@ -295,6 +307,11 @@ function SchoolEventPanel({
       setSuccessMessage("");
 
       if (editingId) {
+        const payload = {
+          ...basePayload,
+          school_id: form.schoolId,
+        };
+
         const { error } = await supabase
           .from("calendar_school_events")
           .update(payload)
@@ -308,7 +325,31 @@ function SchoolEventPanel({
         setSuccessMessage(
           `已更新「${payload.title}」。`
         );
+      } else if (
+        form.schoolId === ALL_SCHOOLS_VALUE
+      ) {
+        const payloads = schools.map((school) => ({
+          ...basePayload,
+          school_id: school.id,
+        }));
+
+        const { error } = await supabase
+          .from("calendar_school_events")
+          .insert(payloads);
+
+        if (error) {
+          throw error;
+        }
+
+        setSuccessMessage(
+          `已替 ${schools.length} 間學校新增「${basePayload.title}」。`
+        );
       } else {
+        const payload = {
+          ...basePayload,
+          school_id: form.schoolId,
+        };
+
         const { error } = await supabase
           .from("calendar_school_events")
           .insert(payload);
@@ -385,6 +426,9 @@ function SchoolEventPanel({
   if (!semesterId) {
     return null;
   }
+
+  const isAllSchoolsSelected =
+    form.schoolId === ALL_SCHOOLS_VALUE;
 
   return (
     <>
@@ -589,6 +633,12 @@ function SchoolEventPanel({
                     請選擇學校
                   </option>
 
+                  {!editingId && schools.length > 1 && (
+                    <option value={ALL_SCHOOLS_VALUE}>
+                      全部學校（一次建立）
+                    </option>
+                  )}
+
                   {schools.map((school) => (
                     <option
                       key={school.id}
@@ -599,6 +649,13 @@ function SchoolEventPanel({
                   ))}
                 </select>
               </label>
+
+              {!editingId && isAllSchoolsSelected && (
+                <div className="calendar-message calendar-message--success">
+                  這筆行事將一次新增到目前學期的{" "}
+                  {schools.length} 間學校。新增後仍可各別修改。
+                </div>
+              )}
 
               <div className="school-event-date-grid">
                 <label className="calendar-field">
@@ -715,7 +772,9 @@ function SchoolEventPanel({
                     ? "儲存中…"
                     : editingId
                       ? "儲存修改"
-                      : "新增行事"}
+                      : isAllSchoolsSelected
+                        ? `新增至 ${schools.length} 間學校`
+                        : "新增行事"}
                 </button>
               </footer>
             </form>
