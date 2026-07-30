@@ -3,28 +3,55 @@ import { supabase } from "../../lib/supabase";
 
 const ALL_SCHOOLS_VALUE = "__ALL_SCHOOLS__";
 
-const EVENT_TYPE_OPTIONS = [
-  { value: "OPENING_DAY", label: "開學日" },
-  { value: "EXAM", label: "考試" },
-  { value: "SPORTS_DAY", label: "運動會" },
-  { value: "SCHOOL_ANNIVERSARY", label: "校慶" },
-  { value: "PARENT_MEETING", label: "親師活動" },
-  { value: "GRADUATION", label: "畢業活動" },
-  { value: "OTHER", label: "其他" },
+const CATEGORY_OPTIONS = [
+  { value: "SCHOOL", label: "學校重要事務" },
+  { value: "ADMIN", label: "行政表單與固定事務" },
+  { value: "ACADEMIC", label: "學科事務安排" },
+  { value: "CLASSROOM", label: "教室活動安排" },
+  { value: "SOCIAL", label: "臉書發文排程" },
 ];
 
-const EVENT_TYPE_LABELS = Object.fromEntries(
-  EVENT_TYPE_OPTIONS.map((option) => [
-    option.value,
-    option.label,
-  ])
+const EVENT_TYPE_OPTIONS_BY_CATEGORY = {
+  SCHOOL: [
+    { value: "OPENING_DAY", label: "開學日" },
+    { value: "MIDTERM_EXAM", label: "期中考" },
+    { value: "FINAL_EXAM", label: "期末考" },
+    { value: "SPORTS_DAY", label: "運動會" },
+    { value: "SCHOOL_ANNIVERSARY", label: "校慶" },
+    { value: "PARENT_MEETING", label: "親師活動" },
+    { value: "GRADUATION", label: "畢業活動" },
+    { value: "OTHER", label: "其他" },
+  ],
+  ADMIN: [{ value: "OTHER", label: "自訂行政事項" }],
+  ACADEMIC: [
+    { value: "MOCK_EXAM", label: "模擬考" },
+    { value: "EXAM_REVIEW", label: "考前複習" },
+    { value: "REVIEW_WEEK", label: "複習週" },
+    { value: "OTHER", label: "其他" },
+  ],
+  CLASSROOM: [{ value: "OTHER", label: "自訂教室活動" }],
+  SOCIAL: [{ value: "OTHER", label: "自訂發文項目" }],
+};
+
+const CATEGORY_LABELS = Object.fromEntries(
+  CATEGORY_OPTIONS.map((option) => [option.value, option.label])
 );
 
+const EVENT_TYPE_LABELS = Object.fromEntries(
+  Object.values(EVENT_TYPE_OPTIONS_BY_CATEGORY)
+    .flat()
+    .map((option) => [option.value, option.label])
+);
+
+// 舊資料相容：先前的 EXAM 仍能正常顯示。
+EVENT_TYPE_LABELS.EXAM = "考試";
+
 const EMPTY_FORM = {
+  category: "SCHOOL",
   schoolId: "",
   startDate: "",
   endDate: "",
-  eventType: "EXAM",
+  eventType: "MIDTERM_EXAM",
   customTitle: "",
   notes: "",
   affectsPickup: false,
@@ -78,6 +105,10 @@ function SchoolEventPanel({
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] =
     useState("");
+
+  const currentEventTypeOptions =
+    EVENT_TYPE_OPTIONS_BY_CATEGORY[form.category] ||
+    EVENT_TYPE_OPTIONS_BY_CATEGORY.SCHOOL;
 
   const schoolMap = useMemo(() => {
     return Object.fromEntries(
@@ -163,6 +194,8 @@ function SchoolEventPanel({
                 end_date,
                 title,
                 event_type,
+                category,
+                display_order,
                 notes,
                 affects_pickup,
                 created_at,
@@ -193,12 +226,12 @@ function SchoolEventPanel({
       setSchools(attachedSchools);
       setSchoolEvents(eventResult.data || []);
     } catch (error) {
-      console.error("讀取學校行事失敗：", error);
+      console.error("讀取行事項目失敗：", error);
 
       setErrorMessage(
         error?.message
-          ? `讀取學校行事失敗：${error.message}`
-          : "讀取學校行事失敗，請稍後再試。"
+          ? `讀取行事項目失敗：${error.message}`
+          : "讀取行事項目失敗，請稍後再試。"
       );
     } finally {
       setLoading(false);
@@ -226,6 +259,7 @@ function SchoolEventPanel({
     setEditingId(eventItem.id);
 
     setForm({
+      category: eventItem.category || "SCHOOL",
       schoolId: eventItem.applies_to_all_schools
         ? ALL_SCHOOLS_VALUE
         : eventItem.school_id || "",
@@ -267,6 +301,25 @@ function SchoolEventPanel({
         [name]: type === "checkbox" ? checked : value,
       };
 
+      if (name === "category") {
+        const nextOptions =
+          EVENT_TYPE_OPTIONS_BY_CATEGORY[value] ||
+          EVENT_TYPE_OPTIONS_BY_CATEGORY.SCHOOL;
+
+        nextForm.eventType = nextOptions[0].value;
+        nextForm.customTitle = "";
+
+        if (value !== "SCHOOL") {
+          nextForm.schoolId = "";
+          nextForm.affectsPickup = false;
+        } else {
+          nextForm.schoolId =
+            schools.length > 1
+              ? ALL_SCHOOLS_VALUE
+              : schools[0]?.id || "";
+        }
+      }
+
       if (
         name === "eventType" &&
         value !== "OTHER"
@@ -279,7 +332,7 @@ function SchoolEventPanel({
   }
 
   function validateForm() {
-    if (!form.schoolId) {
+    if (form.category === "SCHOOL" && !form.schoolId) {
       return "請選擇適用學校。";
     }
 
@@ -342,14 +395,19 @@ function SchoolEventPanel({
   }
 
   function createPayload() {
+    const isSchoolCategory = form.category === "SCHOOL";
     const appliesToAllSchools =
+      isSchoolCategory &&
       form.schoolId === ALL_SCHOOLS_VALUE;
 
     return {
       semester_id: semesterId,
-      school_id: appliesToAllSchools
-        ? null
-        : form.schoolId,
+      category: form.category,
+      display_order: 0,
+      school_id:
+        isSchoolCategory && !appliesToAllSchools
+          ? form.schoolId
+          : null,
       applies_to_all_schools: appliesToAllSchools,
       start_date: form.startDate,
       end_date: form.endDate || null,
@@ -403,9 +461,11 @@ function SchoolEventPanel({
         }
 
         const scopeLabel =
-          payload.applies_to_all_schools
-            ? "全部學校"
-            : schoolMap[payload.school_id] || "指定學校";
+          payload.category === "SCHOOL"
+            ? payload.applies_to_all_schools
+              ? "全部學校"
+              : schoolMap[payload.school_id] || "指定學校"
+            : CATEGORY_LABELS[payload.category] || "行事規劃";
 
         setSuccessMessage(
           `已新增「${scopeLabel}－${payload.title}」。`
@@ -418,7 +478,7 @@ function SchoolEventPanel({
 
       await loadPanelData();
     } catch (error) {
-      console.error("儲存學校行事失敗：", error);
+      console.error("儲存行事項目失敗：", error);
 
       setErrorMessage(
         error?.message
@@ -435,10 +495,13 @@ function SchoolEventPanel({
       getEventDisplayTitle(eventItem);
 
     const schoolLabel =
-      eventItem.applies_to_all_schools
-        ? "全部學校"
-        : schoolMap[eventItem.school_id] ||
-          "指定學校";
+      (eventItem.category || "SCHOOL") === "SCHOOL"
+        ? eventItem.applies_to_all_schools
+          ? "全部學校"
+          : schoolMap[eventItem.school_id] ||
+            "指定學校"
+        : CATEGORY_LABELS[eventItem.category] ||
+          "行事規劃";
 
     const confirmed = window.confirm(
       `確定要刪除「${schoolLabel}－${eventTitle}」嗎？`
@@ -491,13 +554,13 @@ function SchoolEventPanel({
         <div className="school-event-heading">
           <div>
             <p className="semester-card-kicker">
-              SCHOOL EVENTS
+              CALENDAR EVENTS
             </p>
 
-            <h3>學校行事</h3>
+            <h3>學期行事規劃</h3>
 
             <span>
-              記錄各校考試、校慶、運動會與其他重要安排。
+              統整學校日程、學科安排、教室活動與行政工作。
             </span>
           </div>
 
@@ -507,7 +570,7 @@ function SchoolEventPanel({
             onClick={openCreateForm}
             disabled={loading || schools.length === 0}
           >
-            ＋新增學校行事
+            ＋新增行事項目
           </button>
         </div>
 
@@ -533,24 +596,29 @@ function SchoolEventPanel({
           </div>
         ) : loading ? (
           <p className="calendar-muted">
-            正在讀取學校行事…
+            正在讀取行事項目…
           </p>
         ) : sortedEvents.length === 0 ? (
           <div className="calendar-empty-state calendar-empty-state--small">
-            <p>目前還沒有學校行事。</p>
+            <p>目前還沒有行事項目。</p>
 
             <span>
-              收到學校公告後，再慢慢新增即可。
+              可依學校公告與倍思內部規劃逐步新增。
             </span>
           </div>
         ) : (
           <div className="school-event-list">
             {sortedEvents.map((eventItem) => {
+              const eventCategory =
+                eventItem.category || "SCHOOL";
+
               const schoolLabel =
-                eventItem.applies_to_all_schools
-                  ? "全部學校"
-                  : schoolMap[eventItem.school_id] ||
-                    "未知學校";
+                eventCategory === "SCHOOL"
+                  ? eventItem.applies_to_all_schools
+                    ? "全部學校"
+                    : schoolMap[eventItem.school_id] ||
+                      "未知學校"
+                  : "";
 
               const eventTitle =
                 getEventDisplayTitle(eventItem);
@@ -582,8 +650,15 @@ function SchoolEventPanel({
                   <div className="school-event-item__content">
                     <div className="school-event-item__badges">
                       <span className="school-event-school">
-                        {schoolLabel}
+                        {CATEGORY_LABELS[eventCategory] ||
+                          "學校重要事務"}
                       </span>
+
+                      {schoolLabel && (
+                        <span className="school-event-school">
+                          {schoolLabel}
+                        </span>
+                      )}
 
                       <span className="school-event-type">
                         {eventTitle}
@@ -654,13 +729,13 @@ function SchoolEventPanel({
             <header className="calendar-modal__header">
               <div>
                 <p className="semester-card-kicker">
-                  SCHOOL EVENT
+                  CALENDAR EVENT
                 </p>
 
                 <h2 id="school-event-form-title">
                   {editingId
-                    ? "修改學校行事"
-                    : "新增學校行事"}
+                    ? "修改行事項目"
+                    : "新增行事項目"}
                 </h2>
               </div>
 
@@ -686,7 +761,28 @@ function SchoolEventPanel({
               onSubmit={handleSubmit}
             >
               <label className="calendar-field">
-                <span>適用學校</span>
+                <span>規劃分類</span>
+
+                <select
+                  name="category"
+                  value={form.category}
+                  onChange={handleFormChange}
+                  disabled={saving}
+                >
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <option
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {form.category === "SCHOOL" && (
+                <label className="calendar-field">
+                  <span>適用學校</span>
 
                 <select
                   name="schoolId"
@@ -712,8 +808,9 @@ function SchoolEventPanel({
                       {school.name}
                     </option>
                   ))}
-                </select>
-              </label>
+                  </select>
+                </label>
+              )}
 
               <div className="school-event-date-grid">
                 <label className="calendar-field">
@@ -760,7 +857,7 @@ function SchoolEventPanel({
                   onChange={handleFormChange}
                   disabled={saving}
                 >
-                  {EVENT_TYPE_OPTIONS.map((option) => (
+                  {currentEventTypeOptions.map((option) => (
                     <option
                       key={option.value}
                       value={option.value}
@@ -773,14 +870,14 @@ function SchoolEventPanel({
 
               {form.eventType === "OTHER" && (
                 <label className="calendar-field">
-                  <span>自訂名稱</span>
+                  <span>事項名稱</span>
 
                   <input
                     type="text"
                     name="customTitle"
                     value={form.customTitle}
                     onChange={handleFormChange}
-                    placeholder="請輸入行事名稱"
+                    placeholder="請輸入事項名稱"
                     disabled={saving}
                   />
                 </label>
@@ -799,19 +896,21 @@ function SchoolEventPanel({
                 />
               </label>
 
-              <label className="school-event-checkbox">
-                <input
-                  type="checkbox"
-                  name="affectsPickup"
-                  checked={form.affectsPickup}
-                  onChange={handleFormChange}
-                  disabled={saving}
-                />
+              {form.category === "SCHOOL" && (
+                <label className="school-event-checkbox">
+                  <input
+                    type="checkbox"
+                    name="affectsPickup"
+                    checked={form.affectsPickup}
+                    onChange={handleFormChange}
+                    disabled={saving}
+                  />
 
-                <span>
-                  這項行事可能影響當天接送安排
-                </span>
-              </label>
+                  <span>
+                    這項行事可能影響當天接送安排
+                  </span>
+                </label>
+              )}
 
               <footer className="calendar-modal__actions">
                 <button
