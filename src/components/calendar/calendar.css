@@ -1025,3 +1025,162 @@
     grid-template-columns: 1fr;
   }
 }
+.calendar-page__header--workspace {
+  margin-bottom: 20px;
+}
+
+.calendar-workspace {
+  overflow: hidden;
+  border: 1px solid #e8e1d8;
+  border-radius: 20px;
+  background: #fffdf9;
+  box-shadow: 0 12px 34px rgba(70, 60, 48, 0.06);
+}
+
+.calendar-workspace__topbar {
+  border-bottom: 1px solid #ece5dc;
+  background: #faf7f2;
+  padding: 22px 24px 0;
+}
+
+.calendar-workspace__semester {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.calendar-workspace__label {
+  display: block;
+  margin-bottom: 6px;
+  color: #8b8175;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.calendar-workspace__semester strong {
+  display: block;
+  color: #37322d;
+  font-size: 20px;
+}
+
+.calendar-workspace__semester p {
+  margin: 6px 0 0;
+  color: #81786e;
+  font-size: 13px;
+}
+
+.calendar-view-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 22px;
+}
+
+.calendar-view-tabs__button {
+  min-height: 42px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  padding: 0 18px;
+  color: #7b7268;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.calendar-view-tabs__button:hover {
+  color: #3f3933;
+}
+
+.calendar-view-tabs__button--active {
+  border-bottom-color: #4d463f;
+  color: #302d29;
+}
+
+.calendar-workspace__content {
+  min-height: 440px;
+  padding: 24px;
+}
+
+.calendar-view-panel {
+  min-height: 390px;
+}
+
+.calendar-view-panel--manage {
+  min-height: auto;
+}
+
+.calendar-placeholder {
+  display: flex;
+  min-height: 390px;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  box-sizing: border-box;
+  border: 1px dashed #dcd4ca;
+  border-radius: 16px;
+  background: #fcfaf7;
+  padding: 28px;
+  text-align: left;
+}
+
+.calendar-placeholder__symbol {
+  display: flex;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: #eee8df;
+  color: #5e554c;
+  font-size: 27px;
+}
+
+.calendar-placeholder h2 {
+  margin: 0;
+  color: #37322d;
+  font-size: 20px;
+}
+
+.calendar-placeholder p {
+  margin: 8px 0 0;
+  color: #81786e;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.calendar-view-panel--manage .semester-layout {
+  margin-top: 0;
+}
+
+@media (max-width: 768px) {
+  .calendar-workspace__topbar {
+    padding: 18px 16px 0;
+  }
+
+  .calendar-workspace__semester {
+    flex-direction: column;
+  }
+
+  .calendar-view-tabs {
+    overflow-x: auto;
+  }
+
+  .calendar-view-tabs__button {
+    flex: 0 0 auto;
+    padding: 0 14px;
+  }
+
+  .calendar-workspace__content {
+    padding: 16px;
+  }
+
+  .calendar-placeholder {
+    min-height: 300px;
+    flex-direction: column;
+    text-align: center;
+  }
+}
