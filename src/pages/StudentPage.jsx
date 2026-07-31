@@ -9,6 +9,7 @@ import "../App.css";
 function StudentPage() {
   const [students, setStudents] = useState([]);
   const [searchText, setSearchText] = useState("");
+  const [studentFilter, setStudentFilter] = useState("NORMAL");
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -42,14 +43,18 @@ function StudentPage() {
 
   useEffect(() => {
     loadStudents();
-  }, []);
+  }, [studentFilter]);
 
   async function loadStudents() {
-    const { data, error } = await supabase
+    let query = supabase
       .from("students")
-      .select("*")
-      .eq("record_scope", "NORMAL")
-      .order("student_no");
+      .select("*");
+
+    if (studentFilter !== "ALL") {
+      query = query.eq("record_scope", studentFilter);
+    }
+
+    const { data, error } = await query.order("student_no");
 
     if (error) {
       console.error("讀取學生資料失敗：", error);
@@ -76,6 +81,11 @@ function StudentPage() {
 
     setForm({
       ...emptyForm,
+      record_scope:
+        studentFilter === "PICKUP_ONLY"
+          ? "PICKUP_ONLY"
+          : "NORMAL",
+      pickup_enabled: true,
     });
 
     setIsDrawerOpen(true);
@@ -260,7 +270,7 @@ function StudentPage() {
 
         if (data.record_scope === "PICKUP_ONLY") {
           alert(
-            `已新增接送專用學生「${data.chinese_name}」。\n\n這位學生不會出現在一般學生列表，之後會顯示在接送管理中。`
+            `已新增接送專用學生「${data.chinese_name}」。\n\n可從學生資料中心的「接送專用」篩選查看。`
           );
         } else {
           alert(`已新增學生「${data.chinese_name}」。`);
@@ -366,6 +376,13 @@ function StudentPage() {
     );
   });
 
+  const currentFilterLabel =
+    studentFilter === "PICKUP_ONLY"
+      ? "接送專用"
+      : studentFilter === "ALL"
+        ? "全部學生"
+        : "一般學生";
+
   if (profileStudent) {
     return (
       <>
@@ -398,7 +415,7 @@ function StudentPage() {
           <h1>學生資料中心</h1>
 
           <p className="summary">
-            目前共 {students.length} 位學生
+            {currentFilterLabel}共 {students.length} 位
           </p>
         </div>
 
@@ -427,6 +444,19 @@ function StudentPage() {
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
           />
+
+          <select
+            value={studentFilter}
+            onChange={(e) => {
+              setSearchText("");
+              setStudentFilter(e.target.value);
+            }}
+            aria-label="學生類型篩選"
+          >
+            <option value="NORMAL">一般學生</option>
+            <option value="PICKUP_ONLY">接送專用</option>
+            <option value="ALL">全部學生</option>
+          </select>
 
           <span>
             {filteredStudents.length} / {students.length} 位學生
