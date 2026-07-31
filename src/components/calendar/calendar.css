@@ -1491,3 +1491,149 @@
   margin-top: 1px;
   font-size: 8px;
 }
+/* 防止學期總表撐開整個網站版面 */
+.calendar-page {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.calendar-workspace {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.calendar-workspace__content {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.calendar-view-panel,
+.semester-table-view {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.semester-table-scroll {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+.semester-table__work-content {
+  display: flex;
+  min-height: 34px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.semester-table-event__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.semester-table-event__heading small {
+  flex: 0 0 auto;
+  color: #9b8d7f;
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.semester-quick-add-button {
+  width: 100%;
+  min-height: 26px;
+  border: 1px dashed transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #aaa095;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.semester-table__work-cell:hover .semester-quick-add-button {
+  border-color: #d8cec1;
+  background: #faf7f2;
+  opacity: 1;
+}
+
+.semester-quick-add-button:focus-visible {
+  border-color: #b7aa9b;
+  opacity: 1;
+  outline: 2px solid rgba(134, 119, 101, 0.18);
+}
+
+.semester-quick-add {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid #d9cdbc;
+  border-radius: 8px;
+  background: #fffdf9;
+  padding: 6px;
+}
+
+.semester-quick-add input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #ddd3c7;
+  border-radius: 6px;
+  background: #fff;
+  padding: 6px 7px;
+  color: #4d463f;
+  font: inherit;
+  font-size: 10px;
+}
+
+.semester-quick-add input:focus {
+  border-color: #9e8f7e;
+  outline: 2px solid rgba(134, 119, 101, 0.12);
+}
+
+.semester-quick-add__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.semester-quick-add__actions button {
+  min-height: 24px;
+  border: 1px solid #d8cec1;
+  border-radius: 6px;
+  background: #fff;
+  padding: 3px 8px;
+  color: #6f655a;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.semester-quick-add__actions button[type="submit"] {
+  border-color: #50483f;
+  background: #50483f;
+  color: #fff;
+}
+
+.semester-quick-add__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

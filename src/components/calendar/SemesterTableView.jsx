@@ -7,32 +7,42 @@ const WORK_COLUMNS = [
   {
     key: "SCHOOL",
     label: "學校重要事務",
+    allowQuickAdd: false,
   },
   {
     key: "ADMIN",
     label: "行政表單與固定事務",
+    allowQuickAdd: true,
   },
   {
     key: "ACADEMIC",
     label: "學科事務安排",
+    allowQuickAdd: true,
   },
   {
     key: "CLASSROOM",
     label: "教室活動安排",
+    allowQuickAdd: true,
   },
   {
     key: "SOCIAL",
     label: "臉書發文排程",
+    allowQuickAdd: true,
   },
 ];
 
 const EVENT_TYPE_LABELS = {
   OPENING_DAY: "開學日",
+  MIDTERM_EXAM: "期中考",
+  FINAL_EXAM: "期末考",
   EXAM: "考試",
   SPORTS_DAY: "運動會",
   SCHOOL_ANNIVERSARY: "校慶",
   PARENT_MEETING: "親師活動",
   GRADUATION: "畢業活動",
+  MOCK_EXAM: "模擬考",
+  EXAM_REVIEW: "考前複習",
+  REVIEW_WEEK: "複習週",
   OTHER: "其他",
 };
 
@@ -89,6 +99,14 @@ function formatShortDate(dateString) {
   )}/${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function formatInlineDate(dateString) {
+  const date = parseLocalDate(dateString);
+
+  if (!date) return "";
+
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
 function isSameDate(dateA, dateB) {
   return (
     dateA.getFullYear() === dateB.getFullYear() &&
@@ -127,38 +145,41 @@ function buildSemesterWeeks(startDateString, endDateString) {
     }`;
 
     weeks.push({
-  weekNumber,
-  monthKey,
-  monthLabel: formatMonth(firstSemesterDay),
-  days,
-  startDate: formatDateKey(days[0]),
-  endDate: formatDateKey(days[6]),
-});
+      weekNumber,
+      monthKey,
+      monthLabel: formatMonth(firstSemesterDay),
+      days,
+      startDate: formatDateKey(days[0]),
+      endDate: formatDateKey(days[6]),
+      firstAvailableDate: formatDateKey(firstSemesterDay),
+    });
 
     currentMonday = addDays(currentMonday, 7);
     weekNumber += 1;
   }
-weeks.forEach((week, index) => {
-  const isFirstWeekOfMonth =
-    index === 0 ||
-    weeks[index - 1].monthKey !== week.monthKey;
 
-  if (!isFirstWeekOfMonth) {
-    week.monthRowSpan = 0;
-    return;
-  }
+  weeks.forEach((week, index) => {
+    const isFirstWeekOfMonth =
+      index === 0 ||
+      weeks[index - 1].monthKey !== week.monthKey;
 
-  let rowSpan = 1;
+    if (!isFirstWeekOfMonth) {
+      week.monthRowSpan = 0;
+      return;
+    }
 
-  while (
-    index + rowSpan < weeks.length &&
-    weeks[index + rowSpan].monthKey === week.monthKey
-  ) {
-    rowSpan += 1;
-  }
+    let rowSpan = 1;
 
-  week.monthRowSpan = rowSpan;
-});
+    while (
+      index + rowSpan < weeks.length &&
+      weeks[index + rowSpan].monthKey === week.monthKey
+    ) {
+      rowSpan += 1;
+    }
+
+    week.monthRowSpan = rowSpan;
+  });
+
   return weeks;
 }
 
@@ -191,6 +212,9 @@ function SemesterTableView({
   const [schoolNames, setSchoolNames] = useState({});
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventError, setEventError] = useState("");
+
+  const [quickAdd, setQuickAdd] = useState(null);
+  const [quickAddSaving, setQuickAddSaving] = useState(false);
 
   const semesterStart = parseLocalDate(startDate);
   const semesterEnd = parseLocalDate(endDate);
@@ -293,6 +317,88 @@ function SemesterTableView({
     });
   }
 
+  function openQuickAdd(week, category) {
+    setQuickAdd({
+      weekNumber: week.weekNumber,
+      category,
+      title: "",
+      date: week.firstAvailableDate,
+    });
+
+    setEventError("");
+  }
+
+  function closeQuickAdd() {
+    if (quickAddSaving) return;
+    setQuickAdd(null);
+  }
+
+  function handleQuickAddChange(event) {
+    const { name, value } = event.target;
+
+    setQuickAdd((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  }
+
+  async function handleQuickAddSubmit(event) {
+    event.preventDefault();
+
+    const title = quickAdd?.title?.trim();
+
+    if (!title) {
+      setEventError("請先輸入事項名稱。");
+      return;
+    }
+
+    if (!quickAdd.date) {
+      setEventError("請選擇日期。");
+      return;
+    }
+
+    try {
+      setQuickAddSaving(true);
+      setEventError("");
+
+      const payload = {
+        semester_id: semesterId,
+        school_id: null,
+        applies_to_all_schools: false,
+        start_date: quickAdd.date,
+        end_date: null,
+        title,
+        event_type: "OTHER",
+        category: quickAdd.category,
+        display_order: 0,
+        notes: null,
+        affects_pickup: false,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from("calendar_school_events")
+        .insert(payload);
+
+      if (error) {
+        throw error;
+      }
+
+      setQuickAdd(null);
+      await loadSemesterEvents();
+    } catch (error) {
+      console.error("快速新增行事失敗：", error);
+
+      setEventError(
+        error?.message
+          ? `新增失敗：${error.message}`
+          : "新增失敗，請稍後再試。"
+      );
+    } finally {
+      setQuickAddSaving(false);
+    }
+  }
+
   if (!semesterStart || !semesterEnd || weeks.length === 0) {
     return (
       <section className="semester-table-empty">
@@ -382,13 +488,13 @@ function SemesterTableView({
             {weeks.map((week) => (
               <tr key={week.weekNumber}>
                 {week.monthRowSpan > 0 && (
-  <td
-    className="semester-table__month"
-    rowSpan={week.monthRowSpan}
-  >
-    {week.monthLabel}
-  </td>
-)}
+                  <td
+                    className="semester-table__month"
+                    rowSpan={week.monthRowSpan}
+                  >
+                    {week.monthLabel}
+                  </td>
+                )}
 
                 <td className="semester-table__week">
                   {week.weekNumber}
@@ -440,33 +546,113 @@ function SemesterTableView({
                     column.key
                   );
 
+                  const isQuickAdding =
+                    quickAdd?.weekNumber === week.weekNumber &&
+                    quickAdd?.category === column.key;
+
                   return (
                     <td
                       key={`${week.weekNumber}-${column.key}`}
                       className="semester-table__work-cell"
                     >
-                      {weekEvents.map((eventItem) => {
-                        const schoolLabel =
-                          eventItem.applies_to_all_schools
-                            ? "全部學校"
-                            : schoolNames[eventItem.school_id] ||
-                              "";
+                      <div className="semester-table__work-content">
+                        {weekEvents.map((eventItem) => {
+                          const schoolLabel =
+                            eventItem.applies_to_all_schools
+                              ? "全部學校"
+                              : schoolNames[eventItem.school_id] ||
+                                "";
 
-                        return (
-                          <div
-                            key={eventItem.id}
-                            className="semester-table-event"
+                          return (
+                            <div
+                              key={eventItem.id}
+                              className="semester-table-event"
+                            >
+                              <div className="semester-table-event__heading">
+                                <strong>
+                                  {getEventTitle(eventItem)}
+                                </strong>
+
+                                <small>
+                                  {formatInlineDate(
+                                    eventItem.start_date
+                                  )}
+                                </small>
+                              </div>
+
+                              {schoolLabel && (
+                                <span>{schoolLabel}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {isQuickAdding ? (
+                          <form
+                            className="semester-quick-add"
+                            onSubmit={handleQuickAddSubmit}
                           >
-                            <strong>
-                              {getEventTitle(eventItem)}
-                            </strong>
+                            <input
+                              type="text"
+                              name="title"
+                              value={quickAdd.title}
+                              onChange={handleQuickAddChange}
+                              placeholder="輸入事項名稱"
+                              autoFocus
+                              disabled={quickAddSaving}
+                            />
 
-                            {schoolLabel && (
-                              <span>{schoolLabel}</span>
-                            )}
-                          </div>
-                        );
-                      })}
+                            <input
+                              type="date"
+                              name="date"
+                              value={quickAdd.date}
+                              min={
+                                week.startDate < startDate
+                                  ? startDate
+                                  : week.startDate
+                              }
+                              max={
+                                week.endDate > endDate
+                                  ? endDate
+                                  : week.endDate
+                              }
+                              onChange={handleQuickAddChange}
+                              disabled={quickAddSaving}
+                            />
+
+                            <div className="semester-quick-add__actions">
+                              <button
+                                type="button"
+                                onClick={closeQuickAdd}
+                                disabled={quickAddSaving}
+                              >
+                                取消
+                              </button>
+
+                              <button
+                                type="submit"
+                                disabled={quickAddSaving}
+                              >
+                                {quickAddSaving
+                                  ? "儲存中…"
+                                  : "儲存"}
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          column.allowQuickAdd && (
+                            <button
+                              type="button"
+                              className="semester-quick-add-button"
+                              onClick={() =>
+                                openQuickAdd(week, column.key)
+                              }
+                            >
+                              ＋新增
+                            </button>
+                          )
+                        )}
+                      </div>
                     </td>
                   );
                 })}
