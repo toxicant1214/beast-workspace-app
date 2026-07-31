@@ -44,9 +44,10 @@ function StudentPage() {
 
   async function loadStudents() {
     const { data, error } = await supabase
-      .from("students")
-      .select("*")
-      .order("student_no");
+  .from("students")
+  .select("*")
+  .eq("record_scope", "NORMAL")
+  .order("student_no");
 
     if (error) {
       console.error("讀取學生資料失敗：", error);
