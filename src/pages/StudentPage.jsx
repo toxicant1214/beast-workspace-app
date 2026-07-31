@@ -20,7 +20,9 @@ function StudentPage() {
   const emptyForm = {
     student_no: "",
     is_test: false,
-    chinese_name: "",
+record_scope: "NORMAL",
+pickup_enabled: true,
+chinese_name: "",
     english_name: "",
     national_id: "",
     birthday: "",
@@ -93,7 +95,9 @@ function StudentPage() {
     setForm({
       student_no: student.student_no || "",
       is_test: student.is_test ?? false,
-      chinese_name: student.chinese_name || "",
+record_scope: student.record_scope || "NORMAL",
+pickup_enabled: student.pickup_enabled ?? true,
+chinese_name: student.chinese_name || "",
       english_name: student.english_name || "",
       national_id: student.national_id || "",
       birthday: student.birthday || "",

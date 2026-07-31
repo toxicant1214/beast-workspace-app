@@ -72,7 +72,41 @@ function StudentDrawer({
               <option value="TEST">測試學生</option>
             </select>
           </label>
+<label>
+  使用範圍
+  <select
+    value={form.record_scope}
+    onChange={(e) =>
+      updateField(
+        "record_scope",
+        e.target.value
+      )
+    }
+    disabled={isSaving}
+  >
+    <option value="NORMAL">一般學生</option>
+    <option value="PICKUP_ONLY">
+      接送專用學生
+    </option>
+  </select>
+</label>
 
+<label>
+  接送狀態
+  <select
+    value={form.pickup_enabled ? "YES" : "NO"}
+    onChange={(e) =>
+      updateField(
+        "pickup_enabled",
+        e.target.value === "YES"
+      )
+    }
+    disabled={isSaving}
+  >
+    <option value="YES">需要接送</option>
+    <option value="NO">不接送</option>
+  </select>
+</label>
           <label>
             學號
             <input
