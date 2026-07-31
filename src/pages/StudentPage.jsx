@@ -20,9 +20,9 @@ function StudentPage() {
   const emptyForm = {
     student_no: "",
     is_test: false,
-record_scope: "NORMAL",
-pickup_enabled: true,
-chinese_name: "",
+    record_scope: "NORMAL",
+    pickup_enabled: true,
+    chinese_name: "",
     english_name: "",
     national_id: "",
     birthday: "",
@@ -46,10 +46,10 @@ chinese_name: "",
 
   async function loadStudents() {
     const { data, error } = await supabase
-  .from("students")
-  .select("*")
-  .eq("record_scope", "NORMAL")
-  .order("student_no");
+      .from("students")
+      .select("*")
+      .eq("record_scope", "NORMAL")
+      .order("student_no");
 
     if (error) {
       console.error("讀取學生資料失敗：", error);
@@ -95,9 +95,9 @@ chinese_name: "",
     setForm({
       student_no: student.student_no || "",
       is_test: student.is_test ?? false,
-record_scope: student.record_scope || "NORMAL",
-pickup_enabled: student.pickup_enabled ?? true,
-chinese_name: student.chinese_name || "",
+      record_scope: student.record_scope || "NORMAL",
+      pickup_enabled: student.pickup_enabled ?? true,
+      chinese_name: student.chinese_name || "",
       english_name: student.english_name || "",
       national_id: student.national_id || "",
       birthday: student.birthday || "",
@@ -178,6 +178,11 @@ chinese_name: student.chinese_name || "",
 
     const normalizedForm = {
       ...form,
+      record_scope:
+        form.record_scope === "PICKUP_ONLY"
+          ? "PICKUP_ONLY"
+          : "NORMAL",
+      pickup_enabled: Boolean(form.pickup_enabled),
       chinese_name: form.chinese_name.trim(),
       english_name: form.english_name.trim() || null,
       national_id:
@@ -230,16 +235,36 @@ chinese_name: student.chinese_name || "",
           ...newStudentData
         } = normalizedForm;
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("students")
           .insert([
             {
               ...newStudentData,
+              record_scope:
+                normalizedForm.record_scope === "PICKUP_ONLY"
+                  ? "PICKUP_ONLY"
+                  : "NORMAL",
+              pickup_enabled:
+                normalizedForm.pickup_enabled,
               student_status: "ACTIVE",
             },
-          ]);
+          ])
+          .select("*")
+          .single();
 
         if (error) throw error;
+
+        if (!data) {
+          throw new Error("學生資料沒有成功寫入資料庫。");
+        }
+
+        if (data.record_scope === "PICKUP_ONLY") {
+          alert(
+            `已新增接送專用學生「${data.chinese_name}」。\n\n這位學生不會出現在一般學生列表，之後會顯示在接送管理中。`
+          );
+        } else {
+          alert(`已新增學生「${data.chinese_name}」。`);
+        }
       }
 
       closeDrawer();
