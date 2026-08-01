@@ -157,14 +157,15 @@ function ClassPage() {
           throw error;
         }
       } else {
-        const { error } = await supabase
-          .from("classes")
-          .insert([payload]);
+  const { data, error } = await supabase
+    .from("classes")
+    .insert([payload])
+    .select();
 
-        if (error) {
-          throw error;
-        }
-      }
+  if (error) {
+    throw error;
+  }
+}
 
       setIsDrawerOpen(false);
       setSelectedClass(null);
