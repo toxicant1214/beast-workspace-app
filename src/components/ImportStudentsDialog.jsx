@@ -185,6 +185,7 @@ function ImportStudentsDialog({
   const [isReading, setIsReading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importAsTest, setImportAsTest] = useState(true);
+  const [recordScope, setRecordScope] = useState("NORMAL");
 
   const analyzedRows = useMemo(() => {
     const nationalIdCount = new Map();
@@ -272,6 +273,7 @@ function ImportStudentsDialog({
     setIsReading(false);
     setIsImporting(false);
     setImportAsTest(true);
+    setRecordScope("NORMAL");
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -451,6 +453,8 @@ function ImportStudentsDialog({
 
       const insertData = analyzedRows.map((row) => ({
         is_test: importAsTest,
+        record_scope: recordScope,
+        pickup_enabled: true,
         chinese_name: row.chinese_name,
         english_name: row.english_name || null,
         national_id: row.national_id || null,
@@ -479,10 +483,14 @@ function ImportStudentsDialog({
         throw error;
       }
 
+      const dataTypeLabel = importAsTest ? "測試資料" : "正式資料";
+      const scopeLabel =
+        recordScope === "PICKUP_ONLY"
+          ? "接送專用學生"
+          : "一般學生";
+
       alert(
-        `匯入完成：成功新增 ${insertData.length} 位${
-          importAsTest ? "測試" : "正式"
-        }學生。`
+        `匯入完成：成功新增 ${insertData.length} 位${scopeLabel}（${dataTypeLabel}）。`
       );
 
       resetImport();
@@ -569,6 +577,56 @@ function ImportStudentsDialog({
                 <small>
                   正式學生不可直接永久刪除
                 </small>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div className="drawerSection">
+          <p className="drawerSectionTitle">
+            學生用途
+          </p>
+
+          <div className="importTypeOptions">
+            <label
+              className={
+                recordScope === "NORMAL"
+                  ? "importTypeCard active"
+                  : "importTypeCard"
+              }
+            >
+              <input
+                type="radio"
+                name="recordScope"
+                checked={recordScope === "NORMAL"}
+                onChange={() => setRecordScope("NORMAL")}
+                disabled={isImporting}
+              />
+
+              <span>
+                <strong>一般學生</strong>
+                <small>平時顯示於學生資料中心，預設需要接送</small>
+              </span>
+            </label>
+
+            <label
+              className={
+                recordScope === "PICKUP_ONLY"
+                  ? "importTypeCard active"
+                  : "importTypeCard"
+              }
+            >
+              <input
+                type="radio"
+                name="recordScope"
+                checked={recordScope === "PICKUP_ONLY"}
+                onChange={() => setRecordScope("PICKUP_ONLY")}
+                disabled={isImporting}
+              />
+
+              <span>
+                <strong>接送專用學生</strong>
+                <small>平時隱藏，可從「接送專用」篩選與接送管理查看</small>
               </span>
             </label>
           </div>
@@ -731,7 +789,11 @@ function ImportStudentsDialog({
             >
               {isImporting
                 ? "匯入中..."
-                : `匯入 ${summary.ready} 位學生`}
+                : `匯入 ${summary.ready} 位${
+                    recordScope === "PICKUP_ONLY"
+                      ? "接送專用學生"
+                      : "一般學生"
+                  }`}
             </button>
           )}
         </div>
