@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import ClassTable from "../components/ClassTable";
 import ClassDrawer from "../components/ClassDrawer";
+import ClassDetailDrawer from "../components/ClassDetailDrawer";
 import "../components/ClassPage.css";
 
 const EMPTY_FORM = {
@@ -21,6 +22,7 @@ function ClassPage() {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
+  const [detailClass, setDetailClass] = useState(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -54,7 +56,13 @@ function ClassPage() {
       setIsLoading(false);
     }
   }
+  function openClassDetail(classItem) {
+  setDetailClass(classItem);
+}
 
+function closeClassDetail() {
+  setDetailClass(null);
+}
   function openNewClassDrawer() {
     setSelectedClass(null);
     setForm({ ...EMPTY_FORM });
@@ -62,6 +70,7 @@ function ClassPage() {
   }
 
   function openEditClassDrawer(classItem) {
+    setDetailClass(null);
     setSelectedClass(classItem);
 
     setForm({

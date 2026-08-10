@@ -19,6 +19,7 @@ function formatDate(dateString) {
 function ClassTable({
   classes,
   isLoading,
+  onOpen,
   onEdit,
   onToggleStatus,
 }) {
@@ -64,7 +65,7 @@ function ClassTable({
                 <button
                   type="button"
                   className="classTable__className"
-                  onClick={() => onEdit(classItem)}
+                  onClick={() => onOpen(classItem)}
                 >
                   {classItem.class_name}
                 </button>
