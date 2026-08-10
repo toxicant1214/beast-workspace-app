@@ -14,14 +14,29 @@ function formatDate(dateString) {
   return `${year}/${month}/${day}`;
 }
 
+function getTodayString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function ClassDetailDrawer({
   classItem,
   onClose,
   onEdit,
 }) {
-  const [isAddStudentsOpen, setIsAddStudentsOpen] = useState(false);
+  const [isAddStudentsOpen, setIsAddStudentsOpen] =
+    useState(false);
+
   const [classStudents, setClassStudents] = useState([]);
-  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
+  const [isLoadingStudents, setIsLoadingStudents] =
+    useState(true);
+
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const [processingId, setProcessingId] = useState(null);
 
   useEffect(() => {
     if (classItem?.id) {
@@ -74,6 +89,7 @@ function ClassDetailDrawer({
   }
 
   function openAddStudents() {
+    setActiveMenuId(null);
     setIsAddStudentsOpen(true);
   }
 
@@ -83,6 +99,122 @@ function ClassDetailDrawer({
 
   async function handleStudentsAdded() {
     await loadClassStudents();
+  }
+
+  function toggleStudentMenu(itemId) {
+    setActiveMenuId((currentId) =>
+      currentId === itemId ? null : itemId
+    );
+  }
+
+  async function removeMistakenStudent(item) {
+    const studentName =
+      item.students?.chinese_name || "這位學生";
+
+    const confirmed = window.confirm(
+      `確定要將「${studentName}」從「${classItem.class_name}」移除嗎？\n\n此操作視為誤加，將永久刪除這筆班級紀錄，不會出現在學生學習歷程中。`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setProcessingId(item.id);
+      setActiveMenuId(null);
+
+      const { error } = await supabase
+        .from("class_students")
+        .delete()
+        .eq("id", item.id);
+
+      if (error) {
+        throw error;
+      }
+
+      await loadClassStudents();
+
+      window.alert(
+        `已移除「${studentName}」，不會保留班級歷程。`
+      );
+    } catch (error) {
+      console.error("移除誤加學生失敗：", error);
+
+      window.alert(
+        `移除失敗：${error.message}`
+      );
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  async function leaveClass(item) {
+    const studentName =
+      item.students?.chinese_name || "這位學生";
+
+    const today = getTodayString();
+
+    const inputDate = window.prompt(
+      `請輸入「${studentName}」退出「${classItem.class_name}」的日期：\n格式：YYYY-MM-DD`,
+      today
+    );
+
+    if (inputDate === null) return;
+
+    const leftAt = inputDate.trim();
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(leftAt)) {
+      window.alert(
+        "日期格式錯誤，請使用 YYYY-MM-DD。"
+      );
+      return;
+    }
+
+    if (
+      item.joined_at &&
+      leftAt < item.joined_at
+    ) {
+      window.alert(
+        "退出日期不可早於加入班級日期。"
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `確定要讓「${studentName}」於 ${leftAt} 退出「${classItem.class_name}」嗎？\n\n這筆紀錄會保留，之後會顯示在學生的班級歷程中。`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setProcessingId(item.id);
+      setActiveMenuId(null);
+
+      const { error } = await supabase
+        .from("class_students")
+        .update({
+          status: "LEFT",
+          left_at: leftAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", item.id);
+
+      if (error) {
+        throw error;
+      }
+
+      await loadClassStudents();
+
+      window.alert(
+        `已將「${studentName}」設為退出班級，歷程已保留。`
+      );
+    } catch (error) {
+      console.error("學生退出班級失敗：", error);
+
+      window.alert(
+        `退出班級失敗：${error.message}`
+      );
+    } finally {
+      setProcessingId(null);
+    }
   }
 
   return (
@@ -105,7 +237,9 @@ function ClassDetailDrawer({
               <h2>{classItem.class_name}</h2>
 
               <p>
-                {classItem.academic_year || "未設定學年度"}
+                {classItem.academic_year ||
+                  "未設定學年度"}
+
                 {classItem.term
                   ? ` ・ ${classItem.term}`
                   : ""}
@@ -142,7 +276,8 @@ function ClassDetailDrawer({
                 <div>
                   <span>學年度</span>
                   <strong>
-                    {classItem.academic_year || "未設定"}
+                    {classItem.academic_year ||
+                      "未設定"}
                   </strong>
                 </div>
 
@@ -156,14 +291,18 @@ function ClassDetailDrawer({
                 <div>
                   <span>開始日期</span>
                   <strong>
-                    {formatDate(classItem.start_date)}
+                    {formatDate(
+                      classItem.start_date
+                    )}
                   </strong>
                 </div>
 
                 <div>
                   <span>結束日期</span>
                   <strong>
-                    {formatDate(classItem.end_date)}
+                    {formatDate(
+                      classItem.end_date
+                    )}
                   </strong>
                 </div>
               </div>
@@ -214,13 +353,17 @@ function ClassDetailDrawer({
 
               {isLoadingStudents ? (
                 <div className="classDetailDrawer__empty">
-                  <strong>正在讀取學生資料……</strong>
+                  <strong>
+                    正在讀取學生資料……
+                  </strong>
                 </div>
               ) : classStudents.length === 0 ? (
                 <div className="classDetailDrawer__empty">
                   <div>＋</div>
 
-                  <strong>目前還沒有學生</strong>
+                  <strong>
+                    目前還沒有學生
+                  </strong>
 
                   <p>
                     可從既有學生資料中批次加入。
@@ -233,12 +376,15 @@ function ClassDetailDrawer({
 
                     if (!student) return null;
 
+                    const isProcessing =
+                      processingId === item.id;
+
                     return (
                       <div
                         key={item.id}
                         className="classDetailDrawer__studentItem"
                       >
-                        <div>
+                        <div className="classDetailDrawer__studentMain">
                           <strong>
                             {student.chinese_name}
                           </strong>
@@ -254,9 +400,56 @@ function ClassDetailDrawer({
                           </span>
                         </div>
 
-                        <small>
-                          加入於 {formatDate(item.joined_at)}
-                        </small>
+                        <div className="classDetailDrawer__studentRight">
+                          <small>
+                            加入於{" "}
+                            {formatDate(
+                              item.joined_at
+                            )}
+                          </small>
+
+                          <div className="classDetailDrawer__studentMenuWrap">
+                            <button
+                              type="button"
+                              className="classDetailDrawer__studentMenuButton"
+                              onClick={() =>
+                                toggleStudentMenu(
+                                  item.id
+                                )
+                              }
+                              disabled={isProcessing}
+                              aria-label="學生班級操作"
+                            >
+                              ⋯
+                            </button>
+
+                            {activeMenuId ===
+                              item.id && (
+                              <div className="classDetailDrawer__studentMenu">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    leaveClass(item)
+                                  }
+                                >
+                                  退出班級
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="classDetailDrawer__studentMenuDanger"
+                                  onClick={() =>
+                                    removeMistakenStudent(
+                                      item
+                                    )
+                                  }
+                                >
+                                  刪除誤加紀錄
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}

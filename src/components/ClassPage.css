@@ -1153,3 +1153,83 @@
     gap: 8px;
   }
 }
+/* =========================
+   Class Student Actions
+========================= */
+
+.classDetailDrawer__studentMain {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.classDetailDrawer__studentRight {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.classDetailDrawer__studentMenuWrap {
+  position: relative;
+}
+
+.classDetailDrawer__studentMenuButton {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2dcd3;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #746e66;
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.classDetailDrawer__studentMenuButton:hover {
+  background: #f7f4ee;
+}
+
+.classDetailDrawer__studentMenu {
+  position: absolute;
+  z-index: 20;
+  top: 38px;
+  right: 0;
+  display: grid;
+  width: 150px;
+  padding: 6px;
+  border: 1px solid #e3ddd4;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(48, 42, 34, 0.12);
+}
+
+.classDetailDrawer__studentMenu button {
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #625d56;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.classDetailDrawer__studentMenu button:hover {
+  background: #f7f4ee;
+}
+
+.classDetailDrawer__studentMenuDanger {
+  color: #a36f63 !important;
+}
+
+@media (max-width: 620px) {
+  .classDetailDrawer__studentRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
