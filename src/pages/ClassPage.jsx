@@ -56,14 +56,17 @@ function ClassPage() {
       setIsLoading(false);
     }
   }
-  function openClassDetail(classItem) {
-  setDetailClass(classItem);
-}
 
-function closeClassDetail() {
-  setDetailClass(null);
-}
+  function openClassDetail(classItem) {
+    setDetailClass(classItem);
+  }
+
+  function closeClassDetail() {
+    setDetailClass(null);
+  }
+
   function openNewClassDrawer() {
+    setDetailClass(null);
     setSelectedClass(null);
     setForm({ ...EMPTY_FORM });
     setIsDrawerOpen(true);
@@ -139,11 +142,7 @@ function closeClassDetail() {
 
     const payload = {
       class_name: className,
-
-      // 班級管理目前只處理安親班級。
-      // 暫時保留此欄位，避免現有 Supabase 資料表發生錯誤。
       course_type: "AFTER_SCHOOL",
-
       academic_year: form.academic_year.trim() || null,
       term: form.term.trim() || null,
       start_date: form.start_date || null,
@@ -166,15 +165,14 @@ function closeClassDetail() {
           throw error;
         }
       } else {
-  const { data, error } = await supabase
-    .from("classes")
-    .insert([payload])
-    .select();
+        const { error } = await supabase
+          .from("classes")
+          .insert([payload]);
 
-  if (error) {
-    throw error;
-  }
-}
+        if (error) {
+          throw error;
+        }
+      }
 
       setIsDrawerOpen(false);
       setSelectedClass(null);
@@ -227,25 +225,15 @@ function closeClassDetail() {
     return classes.filter((classItem) => {
       const matchesKeyword =
         !keyword ||
-        classItem.class_name
-          ?.toLowerCase()
-          .includes(keyword) ||
-        classItem.academic_year
-          ?.toLowerCase()
-          .includes(keyword) ||
-        classItem.term
-          ?.toLowerCase()
-          .includes(keyword) ||
-        classItem.note
-          ?.toLowerCase()
-          .includes(keyword);
+        classItem.class_name?.toLowerCase().includes(keyword) ||
+        classItem.academic_year?.toLowerCase().includes(keyword) ||
+        classItem.term?.toLowerCase().includes(keyword) ||
+        classItem.note?.toLowerCase().includes(keyword);
 
       const matchesStatus =
         statusFilter === "ALL" ||
-        (statusFilter === "ACTIVE" &&
-          classItem.is_active) ||
-        (statusFilter === "INACTIVE" &&
-          !classItem.is_active);
+        (statusFilter === "ACTIVE" && classItem.is_active) ||
+        (statusFilter === "INACTIVE" && !classItem.is_active);
 
       return matchesKeyword && matchesStatus;
     });
@@ -334,10 +322,19 @@ function closeClassDetail() {
         <ClassTable
           classes={filteredClasses}
           isLoading={isLoading}
+          onOpen={openClassDetail}
           onEdit={openEditClassDrawer}
           onToggleStatus={toggleClassStatus}
         />
       </section>
+
+      {detailClass && (
+        <ClassDetailDrawer
+          classItem={detailClass}
+          onClose={closeClassDetail}
+          onEdit={openEditClassDrawer}
+        />
+      )}
 
       {isDrawerOpen && (
         <ClassDrawer
