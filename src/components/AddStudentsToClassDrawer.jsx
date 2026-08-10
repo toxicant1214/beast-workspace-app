@@ -4,37 +4,68 @@ import { supabase } from "../lib/supabase";
 function AddStudentsToClassDrawer({
   classItem,
   onClose,
+  onAdded,
 }) {
   const [students, setStudents] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [existingStudentIds, setExistingStudentIds] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     loadStudents();
-  }, []);
+  }, [classItem?.id]);
 
   async function loadStudents() {
+    if (!classItem?.id) return;
+
     try {
       setIsLoading(true);
 
-      const { data, error } = await supabase
-        .from("students")
-        .select(
-          "id, student_no, chinese_name, english_name, school, current_grade"
-        )
-        .eq("record_scope", "NORMAL")
-        .eq("student_status", "ACTIVE")
-        .order("current_grade")
-        .order("chinese_name");
+      const [
+        { data: studentData, error: studentError },
+        { data: classStudentData, error: classStudentError },
+      ] = await Promise.all([
+        supabase
+          .from("students")
+          .select(
+            "id, student_no, chinese_name, english_name, school, current_grade"
+          )
+          .eq("record_scope", "NORMAL")
+          .eq("student_status", "ACTIVE")
+          .order("current_grade")
+          .order("chinese_name"),
 
-      if (error) {
-        throw error;
+        supabase
+          .from("class_students")
+          .select("student_id")
+          .eq("class_id", classItem.id)
+          .eq("status", "ACTIVE"),
+      ]);
+
+      if (studentError) {
+        throw studentError;
       }
 
-      setStudents(data || []);
+      if (classStudentError) {
+        throw classStudentError;
+      }
+
+      const currentIds = (classStudentData || []).map(
+        (item) => item.student_id
+      );
+
+      setExistingStudentIds(currentIds);
+
+      const availableStudents = (studentData || []).filter(
+        (student) => !currentIds.includes(student.id)
+      );
+
+      setStudents(availableStudents);
     } catch (error) {
       console.error("讀取學生名單失敗：", error);
+
       window.alert(
         `讀取學生名單失敗：${error.message}`
       );
@@ -44,6 +75,8 @@ function AddStudentsToClassDrawer({
   }
 
   function toggleStudent(studentId) {
+    if (isSaving) return;
+
     setSelectedIds((currentIds) => {
       if (currentIds.includes(studentId)) {
         return currentIds.filter(
@@ -53,6 +86,76 @@ function AddStudentsToClassDrawer({
 
       return [...currentIds, studentId];
     });
+  }
+
+  async function handleAddStudents() {
+    if (
+      !classItem?.id ||
+      selectedIds.length === 0 ||
+      isSaving
+    ) {
+      return;
+    }
+
+    const duplicatedIds = selectedIds.filter(
+      (studentId) =>
+        existingStudentIds.includes(studentId)
+    );
+
+    if (duplicatedIds.length > 0) {
+      window.alert(
+        "部分學生已經在這個班級中，請重新整理後再試。"
+      );
+
+      await loadStudents();
+      setSelectedIds([]);
+      return;
+    }
+
+    const joinedAt = new Date()
+      .toISOString()
+      .slice(0, 10);
+
+    const insertData = selectedIds.map(
+      (studentId) => ({
+        class_id: classItem.id,
+        student_id: studentId,
+        joined_at: joinedAt,
+        left_at: null,
+        status: "ACTIVE",
+        note: null,
+      })
+    );
+
+    try {
+      setIsSaving(true);
+
+      const { error } = await supabase
+        .from("class_students")
+        .insert(insertData);
+
+      if (error) {
+        throw error;
+      }
+
+      window.alert(
+        `已成功加入 ${selectedIds.length} 位學生至「${classItem.class_name}」。`
+      );
+
+      if (onAdded) {
+        await onAdded();
+      }
+
+      onClose();
+    } catch (error) {
+      console.error("加入班級學生失敗：", error);
+
+      window.alert(
+        `加入學生失敗：${error.message}`
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   const filteredStudents = useMemo(() => {
@@ -89,7 +192,10 @@ function AddStudentsToClassDrawer({
     <div
       className="classStudentDrawer__backdrop"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (
+          event.target === event.currentTarget &&
+          !isSaving
+        ) {
           onClose();
         }
       }}
@@ -113,6 +219,7 @@ function AddStudentsToClassDrawer({
             className="classStudentDrawer__close"
             onClick={onClose}
             aria-label="關閉"
+            disabled={isSaving}
           >
             ×
           </button>
@@ -129,6 +236,7 @@ function AddStudentsToClassDrawer({
               onChange={(event) =>
                 setSearchText(event.target.value)
               }
+              disabled={isSaving}
             />
           </div>
 
@@ -148,7 +256,7 @@ function AddStudentsToClassDrawer({
             </div>
           ) : filteredStudents.length === 0 ? (
             <div className="classStudentDrawer__empty">
-              找不到符合條件的學生。
+              目前沒有可加入的學生。
             </div>
           ) : (
             <div className="classStudentDrawer__list">
@@ -168,6 +276,7 @@ function AddStudentsToClassDrawer({
                     onClick={() =>
                       toggleStudent(student.id)
                     }
+                    disabled={isSaving}
                   >
                     <span
                       className="classStudentDrawer__checkbox"
@@ -202,6 +311,7 @@ function AddStudentsToClassDrawer({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSaving}
           >
             取消
           </button>
@@ -209,9 +319,15 @@ function AddStudentsToClassDrawer({
           <button
             type="button"
             className="classStudentDrawer__confirm"
-            disabled={selectedIds.length === 0}
+            disabled={
+              selectedIds.length === 0 ||
+              isSaving
+            }
+            onClick={handleAddStudents}
           >
-            加入 {selectedIds.length} 位學生
+            {isSaving
+              ? "加入中……"
+              : `加入 ${selectedIds.length} 位學生`}
           </button>
         </footer>
       </aside>
