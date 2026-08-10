@@ -859,3 +859,234 @@
     grid-template-columns: 1fr;
   }
 }
+/* =========================
+   Add Students To Class Drawer
+========================= */
+
+.classStudentDrawer__backdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(38, 36, 32, 0.34);
+  backdrop-filter: blur(3px);
+}
+
+.classStudentDrawer {
+  display: flex;
+  width: min(560px, 100%);
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fffdf9;
+  box-shadow: -20px 0 55px rgba(48, 42, 34, 0.16);
+}
+
+.classStudentDrawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 28px 30px 24px;
+  border-bottom: 1px solid #eae4db;
+}
+
+.classStudentDrawer__header h2 {
+  margin: 0;
+  color: #34322f;
+  font-size: 30px;
+}
+
+.classStudentDrawer__header p:last-child {
+  margin: 7px 0 0;
+  color: #918b82;
+  font-size: 14px;
+}
+
+.classStudentDrawer__close {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f2efe9;
+  color: #736d65;
+  font: inherit;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.classStudentDrawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 30px;
+}
+
+.classStudentDrawer__search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border: 1px solid #e5dfd6;
+  border-radius: 13px;
+  background: #faf8f4;
+}
+
+.classStudentDrawer__search > span {
+  color: #9a948b;
+  font-size: 21px;
+}
+
+.classStudentDrawer__search input {
+  width: 100%;
+  height: 46px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #403d39;
+  font: inherit;
+}
+
+.classStudentDrawer__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 16px 2px;
+  color: #969087;
+  font-size: 13px;
+}
+
+.classStudentDrawer__summary strong {
+  color: #71917b;
+  font-size: 13px;
+}
+
+.classStudentDrawer__list {
+  display: grid;
+  gap: 9px;
+}
+
+.classStudentDrawer__student {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 15px;
+  border: 1px solid #e8e2d9;
+  border-radius: 14px;
+  background: #fffdf9;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.classStudentDrawer__student:hover {
+  background: #faf8f4;
+}
+
+.classStudentDrawer__student--selected {
+  border-color: #9ab2a1;
+  background: #f0f5f1;
+}
+
+.classStudentDrawer__checkbox {
+  display: flex;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d7d1c8;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.classStudentDrawer__student--selected
+  .classStudentDrawer__checkbox {
+  border-color: #82a58e;
+  background: #82a58e;
+}
+
+.classStudentDrawer__studentInfo {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.classStudentDrawer__studentInfo strong {
+  color: #45413c;
+  font-size: 15px;
+}
+
+.classStudentDrawer__studentInfo small {
+  overflow: hidden;
+  color: #969087;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classStudentDrawer__empty {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  color: #969087;
+  font-size: 14px;
+  text-align: center;
+}
+
+.classStudentDrawer__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 30px;
+  border-top: 1px solid #eae4db;
+  background: #fffdf9;
+}
+
+.classStudentDrawer__footer button {
+  min-width: 105px;
+  padding: 12px 18px;
+  border: 1px solid #ded8cf;
+  border-radius: 13px;
+  background: #ffffff;
+  color: #706960;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.classStudentDrawer__footer
+  .classStudentDrawer__confirm {
+  border-color: #82a58e;
+  background: #82a58e;
+  color: #ffffff;
+}
+
+.classStudentDrawer__confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@media (max-width: 620px) {
+  .classStudentDrawer__header,
+  .classStudentDrawer__body,
+  .classStudentDrawer__footer {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}
