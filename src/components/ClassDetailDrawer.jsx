@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 import AddStudentsToClassDrawer from "./AddStudentsToClassDrawer";
 
 function formatDate(dateString) {
@@ -19,8 +20,58 @@ function ClassDetailDrawer({
   onEdit,
 }) {
   const [isAddStudentsOpen, setIsAddStudentsOpen] = useState(false);
+  const [classStudents, setClassStudents] = useState([]);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
+
+  useEffect(() => {
+    if (classItem?.id) {
+      loadClassStudents();
+    }
+  }, [classItem?.id]);
 
   if (!classItem) return null;
+
+  async function loadClassStudents() {
+    try {
+      setIsLoadingStudents(true);
+
+      const { data, error } = await supabase
+        .from("class_students")
+        .select(`
+          id,
+          student_id,
+          joined_at,
+          status,
+          students (
+            id,
+            student_no,
+            chinese_name,
+            english_name,
+            school,
+            current_grade
+          )
+        `)
+        .eq("class_id", classItem.id)
+        .eq("status", "ACTIVE")
+        .order("joined_at", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      setClassStudents(data || []);
+    } catch (error) {
+      console.error("讀取班級學生失敗：", error);
+
+      window.alert(
+        `讀取班級學生失敗：${error.message}`
+      );
+
+      setClassStudents([]);
+    } finally {
+      setIsLoadingStudents(false);
+    }
+  }
 
   function openAddStudents() {
     setIsAddStudentsOpen(true);
@@ -28,6 +79,10 @@ function ClassDetailDrawer({
 
   function closeAddStudents() {
     setIsAddStudentsOpen(false);
+  }
+
+  async function handleStudentsAdded() {
+    await loadClassStudents();
   }
 
   return (
@@ -142,7 +197,10 @@ function ClassDetailDrawer({
                 <div>
                   <span>CURRENT STUDENTS</span>
                   <h3>目前學生</h3>
-                  <p>目前 0 位學生</p>
+
+                  <p>
+                    目前 {classStudents.length} 位學生
+                  </p>
                 </div>
 
                 <button
@@ -154,13 +212,56 @@ function ClassDetailDrawer({
                 </button>
               </div>
 
-              <div className="classDetailDrawer__empty">
-                <div>＋</div>
-                <strong>目前還沒有學生</strong>
-                <p>
-                  可從既有學生資料中批次加入。
-                </p>
-              </div>
+              {isLoadingStudents ? (
+                <div className="classDetailDrawer__empty">
+                  <strong>正在讀取學生資料……</strong>
+                </div>
+              ) : classStudents.length === 0 ? (
+                <div className="classDetailDrawer__empty">
+                  <div>＋</div>
+
+                  <strong>目前還沒有學生</strong>
+
+                  <p>
+                    可從既有學生資料中批次加入。
+                  </p>
+                </div>
+              ) : (
+                <div className="classDetailDrawer__studentList">
+                  {classStudents.map((item) => {
+                    const student = item.students;
+
+                    if (!student) return null;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="classDetailDrawer__studentItem"
+                      >
+                        <div>
+                          <strong>
+                            {student.chinese_name}
+                          </strong>
+
+                          <span>
+                            {[
+                              student.current_grade,
+                              student.school,
+                              student.english_name,
+                            ]
+                              .filter(Boolean)
+                              .join(" ・ ")}
+                          </span>
+                        </div>
+
+                        <small>
+                          加入於 {formatDate(item.joined_at)}
+                        </small>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </div>
         </aside>
@@ -170,6 +271,7 @@ function ClassDetailDrawer({
         <AddStudentsToClassDrawer
           classItem={classItem}
           onClose={closeAddStudents}
+          onAdded={handleStudentsAdded}
         />
       )}
     </>

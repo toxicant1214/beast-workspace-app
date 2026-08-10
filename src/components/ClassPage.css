@@ -1090,3 +1090,66 @@
     padding-left: 18px;
   }
 }
+/* =========================
+   Class Detail - Student List
+========================= */
+
+.classDetailDrawer__studentList {
+  display: grid;
+  gap: 10px;
+}
+
+.classDetailDrawer__studentItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 15px 17px;
+  border: 1px solid #e8e2d9;
+  border-radius: 14px;
+  background: #fffdf9;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.classDetailDrawer__studentItem:hover {
+  border-color: #d8d0c5;
+  background: #faf8f4;
+}
+
+.classDetailDrawer__studentItem > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.classDetailDrawer__studentItem strong {
+  color: #45413c;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.classDetailDrawer__studentItem span {
+  overflow: hidden;
+  color: #969087;
+  font-size: 12px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classDetailDrawer__studentItem small {
+  flex: 0 0 auto;
+  color: #a39c93;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .classDetailDrawer__studentItem {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
