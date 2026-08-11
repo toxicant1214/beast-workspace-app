@@ -136,3 +136,20 @@
   color: #8d867e;
   font-size: 12px;
 }
+.singleDayCourse__card {
+  width: 100%;
+  padding: 18px 20px;
+  border: 1px solid #e5dfd6;
+  border-radius: 15px;
+  background: #fffdf9;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.singleDayCourse__card:hover {
+  border-color: #cbd8ce;
+  background: #fdfcf9;
+  box-shadow: 0 8px 24px rgba(56, 51, 45, 0.05);
+}
