@@ -291,20 +291,6 @@ def send_teacher_reports_if_due(
                 )
             )
 
-            if (
-                not assignments
-                and not makeups
-            ):
-                skipped_count += 1
-
-                print(
-                    f"老師晨報略過："
-                    f"{teacher_name} "
-                    "今日無提醒資料。"
-                )
-
-                continue
-
             delivery = (
                 claim_notification_delivery(
                     source_type=(
