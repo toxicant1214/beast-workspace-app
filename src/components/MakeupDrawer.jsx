@@ -75,14 +75,16 @@ function MakeupDrawer({
           .order("chinese_name"),
 
         supabase
-          .from("teachers")
-          .select(`
-            id,
-            chinese_name,
-            english_name,
-            position
-          `)
-          .order("chinese_name"),
+  .from("teachers")
+  .select(`
+    id,
+    chinese_name,
+    english_name,
+    position,
+    status
+  `)
+  .eq("status", "active")
+  .order("chinese_name"),
       ]);
 
       if (studentsResult.error) {
