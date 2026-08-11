@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import "./SingleDayCourseDetailDrawer.css";
 
 function formatDate(dateString) {
   if (!dateString) {
