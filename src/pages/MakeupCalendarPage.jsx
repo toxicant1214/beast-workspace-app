@@ -1,4 +1,10 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { supabase } from "../lib/supabase";
+import MakeupDrawer from "../components/MakeupDrawer";
 import "./MakeupCalendarPage.css";
 
 const WEEKDAY_LABELS = [
@@ -11,28 +17,81 @@ const WEEKDAY_LABELS = [
   "六",
 ];
 
-function MakeupCalendarPage() {
-  const [currentMonth, setCurrentMonth] =
-    useState(() => {
-      const today = new Date();
+function formatDateKey(date) {
+  if (!date) return "";
 
-      return new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        1
-      );
-    });
+  const year = date.getFullYear();
+
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
+
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatTime(timeString) {
+  if (!timeString) return "";
+
+  return timeString.slice(0, 5);
+}
+
+function MakeupCalendarPage() {
+  const [
+    currentMonth,
+    setCurrentMonth,
+  ] = useState(() => {
+    const today = new Date();
+
+    return new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      1
+    );
+  });
+
+  const [
+    makeups,
+    setMakeups,
+  ] = useState([]);
+
+  const [
+    isLoading,
+    setIsLoading,
+  ] = useState(true);
+
+  const [
+    isDrawerOpen,
+    setIsDrawerOpen,
+  ] = useState(false);
+
+  useEffect(() => {
+    loadMakeups();
+  }, [currentMonth]);
 
   const calendarDays = useMemo(() => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
+    const year =
+      currentMonth.getFullYear();
 
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(
-      year,
-      month + 1,
-      0
-    );
+    const month =
+      currentMonth.getMonth();
+
+    const firstDay =
+      new Date(
+        year,
+        month,
+        1
+      );
+
+    const lastDay =
+      new Date(
+        year,
+        month + 1,
+        0
+      );
 
     const days = [];
 
@@ -50,20 +109,184 @@ function MakeupCalendarPage() {
       day += 1
     ) {
       days.push(
-        new Date(year, month, day)
+        new Date(
+          year,
+          month,
+          day
+        )
       );
     }
 
-    while (days.length % 7 !== 0) {
+    while (
+      days.length % 7 !== 0
+    ) {
       days.push(null);
     }
 
     return days;
   }, [currentMonth]);
 
-  const monthLabel = `${currentMonth.getFullYear()} 年 ${
-    currentMonth.getMonth() + 1
-  } 月`;
+  const makeupsByDate = useMemo(() => {
+    const grouped = {};
+
+    makeups.forEach((item) => {
+      if (!item.makeup_date) {
+        return;
+      }
+
+      if (!grouped[item.makeup_date]) {
+        grouped[item.makeup_date] = [];
+      }
+
+      grouped[item.makeup_date].push(
+        item
+      );
+    });
+
+    Object.values(grouped).forEach(
+      (items) => {
+        items.sort((a, b) =>
+          String(
+            a.start_time || ""
+          ).localeCompare(
+            String(
+              b.start_time || ""
+            )
+          )
+        );
+      }
+    );
+
+    return grouped;
+  }, [makeups]);
+
+  const monthLabel =
+    `${currentMonth.getFullYear()} 年 ${
+      currentMonth.getMonth() + 1
+    } 月`;
+
+  async function loadMakeups() {
+    const year =
+      currentMonth.getFullYear();
+
+    const month =
+      currentMonth.getMonth();
+
+    const monthStart =
+      formatDateKey(
+        new Date(
+          year,
+          month,
+          1
+        )
+      );
+
+    const monthEnd =
+      formatDateKey(
+        new Date(
+          year,
+          month + 1,
+          0
+        )
+      );
+
+    try {
+      setIsLoading(true);
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("makeup_classes")
+        .select(`
+          id,
+          student_id,
+          makeup_type,
+          english_class_id,
+          course_class_id,
+          makeup_date,
+          original_makeup_date,
+          start_time,
+          original_start_time,
+          end_time,
+          notify_teacher_id,
+          status,
+          note,
+          reschedule_count,
+          last_rescheduled_at,
+          created_at,
+          updated_at,
+          students (
+            id,
+            chinese_name,
+            english_name,
+            current_grade,
+            school
+          ),
+          teachers (
+            id,
+            chinese_name,
+            english_name
+          ),
+          english_classes (
+            id,
+            class_name,
+            academic_year,
+            term
+          ),
+          course_classes (
+            id,
+            class_name,
+            course_id,
+            courses (
+              id,
+              course_name
+            )
+          )
+        `)
+        .gte(
+          "makeup_date",
+          monthStart
+        )
+        .lte(
+          "makeup_date",
+          monthEnd
+        )
+        .order(
+          "makeup_date",
+          {
+            ascending: true,
+          }
+        )
+        .order(
+          "start_time",
+          {
+            ascending: true,
+          }
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      setMakeups(
+        data || []
+      );
+    } catch (error) {
+      console.error(
+        "讀取補課資料失敗：",
+        error
+      );
+
+      window.alert(
+        `讀取補課資料失敗：${error.message}`
+      );
+
+      setMakeups([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   function goPreviousMonth() {
     setCurrentMonth(
@@ -88,7 +311,8 @@ function MakeupCalendarPage() {
   }
 
   function goToday() {
-    const today = new Date();
+    const today =
+      new Date();
 
     setCurrentMonth(
       new Date(
@@ -100,9 +324,12 @@ function MakeupCalendarPage() {
   }
 
   function isToday(date) {
-    if (!date) return false;
+    if (!date) {
+      return false;
+    }
 
-    const today = new Date();
+    const today =
+      new Date();
 
     return (
       date.getFullYear() ===
@@ -114,6 +341,66 @@ function MakeupCalendarPage() {
     );
   }
 
+  function getSourceName(item) {
+    if (
+      item.makeup_type ===
+      "ENGLISH"
+    ) {
+      return (
+        item.english_classes
+          ?.class_name ||
+        "美語補課"
+      );
+    }
+
+    const courseName =
+      item.course_classes
+        ?.courses
+        ?.course_name;
+
+    const className =
+      item.course_classes
+        ?.class_name;
+
+    return (
+      [
+        courseName,
+        className,
+      ]
+        .filter(Boolean)
+        .join("・") ||
+      "才藝補課"
+    );
+  }
+
+  function getStatusLabel(status) {
+    if (
+      status === "COMPLETED"
+    ) {
+      return "已完成";
+    }
+
+    if (
+      status === "CANCELLED"
+    ) {
+      return "已取消";
+    }
+
+    return "待補課";
+  }
+
+  function openDrawer() {
+    setIsDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setIsDrawerOpen(false);
+  }
+
+  async function handleSaved() {
+    await loadMakeups();
+  }
+
   return (
     <div className="makeupCalendar">
       <header className="makeupCalendar__header">
@@ -122,7 +409,9 @@ function MakeupCalendarPage() {
             MAKEUP CALENDAR
           </p>
 
-          <h1>補課系統</h1>
+          <h1>
+            補課系統
+          </h1>
 
           <p className="makeupCalendar__summary">
             管理學生補課安排、日期時間與安親老師提醒。
@@ -132,6 +421,7 @@ function MakeupCalendarPage() {
         <button
           type="button"
           className="makeupCalendar__primaryButton"
+          onClick={openDrawer}
         >
           ＋ 新增補課
         </button>
@@ -141,17 +431,23 @@ function MakeupCalendarPage() {
         <div className="makeupCalendar__monthControl">
           <button
             type="button"
-            onClick={goPreviousMonth}
+            onClick={
+              goPreviousMonth
+            }
             aria-label="上一個月"
           >
             ‹
           </button>
 
-          <h2>{monthLabel}</h2>
+          <h2>
+            {monthLabel}
+          </h2>
 
           <button
             type="button"
-            onClick={goNextMonth}
+            onClick={
+              goNextMonth
+            }
             aria-label="下一個月"
           >
             ›
@@ -167,11 +463,19 @@ function MakeupCalendarPage() {
         </button>
       </section>
 
+      {isLoading && (
+        <div className="makeupCalendar__loading">
+          正在讀取補課資料……
+        </div>
+      )}
+
       <section className="makeupCalendar__calendar">
         <div className="makeupCalendar__weekdays">
           {WEEKDAY_LABELS.map(
             (weekday) => (
-              <div key={weekday}>
+              <div
+                key={weekday}
+              >
                 {weekday}
               </div>
             )
@@ -180,7 +484,10 @@ function MakeupCalendarPage() {
 
         <div className="makeupCalendar__days">
           {calendarDays.map(
-            (date, index) => {
+            (
+              date,
+              index
+            ) => {
               if (!date) {
                 return (
                   <div
@@ -190,10 +497,19 @@ function MakeupCalendarPage() {
                 );
               }
 
+              const dateKey =
+                formatDateKey(
+                  date
+                );
+
+              const dayMakeups =
+                makeupsByDate[
+                  dateKey
+                ] || [];
+
               return (
-                <button
-                  key={date.toISOString()}
-                  type="button"
+                <div
+                  key={dateKey}
                   className={
                     isToday(date)
                       ? "makeupCalendar__day makeupCalendar__day--today"
@@ -205,14 +521,82 @@ function MakeupCalendarPage() {
                   </span>
 
                   <div className="makeupCalendar__events">
-                    {/* 下一步放補課資料 */}
+                    {dayMakeups.map(
+                      (item) => {
+                        const student =
+                          item.students;
+
+                        const hasRescheduled =
+                          Number(
+                            item.reschedule_count ||
+                              0
+                          ) > 0;
+
+                        return (
+                          <div
+                            key={
+                              item.id
+                            }
+                            className={`makeupCalendar__event makeupCalendar__event--${
+                              item.status?.toLowerCase() ||
+                              "pending"
+                            }`}
+                          >
+                            <div className="makeupCalendar__eventTop">
+                              <strong>
+                                {formatTime(
+                                  item.start_time
+                                )}
+                              </strong>
+
+                              {hasRescheduled && (
+                                <span className="makeupCalendar__rescheduled">
+                                  ↻
+                                </span>
+                              )}
+                            </div>
+
+                            <span className="makeupCalendar__studentName">
+                              {student?.chinese_name ||
+                                "未命名學生"}
+                            </span>
+
+                            <small>
+                              {getSourceName(
+                                item
+                              )}
+                            </small>
+
+                            {item.status !==
+                              "PENDING" && (
+                              <small className="makeupCalendar__status">
+                                {getStatusLabel(
+                                  item.status
+                                )}
+                              </small>
+                            )}
+                          </div>
+                        );
+                      }
+                    )}
                   </div>
-                </button>
+                </div>
               );
             }
           )}
         </div>
       </section>
+
+      {isDrawerOpen && (
+        <MakeupDrawer
+          onClose={
+            closeDrawer
+          }
+          onSaved={
+            handleSaved
+          }
+        />
+      )}
     </div>
   );
 }

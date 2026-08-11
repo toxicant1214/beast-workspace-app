@@ -193,3 +193,319 @@
     min-height: 78px;
   }
 }
+/* =========================
+   Makeup Calendar Events
+========================= */
+
+.makeupCalendar__loading {
+  margin: -4px 0 14px;
+  color: #938c83;
+  font-size: 13px;
+}
+
+.makeupCalendar__event {
+  display: grid;
+  gap: 3px;
+  padding: 7px 8px;
+  border: 1px solid #dfe8e1;
+  border-radius: 9px;
+  background: #f3f8f4;
+}
+
+.makeupCalendar__eventTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.makeupCalendar__eventTop strong {
+  color: #5f7867;
+  font-size: 11px;
+}
+
+.makeupCalendar__studentName {
+  color: #45413c;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.makeupCalendar__event small {
+  color: #8d867e;
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.makeupCalendar__rescheduled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: #f1e7d8;
+  color: #9a744e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.makeupCalendar__status {
+  margin-top: 2px;
+  font-weight: 700;
+}
+
+.makeupCalendar__event--completed {
+  border-color: #e2e0da;
+  background: #f5f4f1;
+  opacity: 0.72;
+}
+
+.makeupCalendar__event--completed
+  .makeupCalendar__eventTop strong,
+.makeupCalendar__event--completed
+  .makeupCalendar__studentName {
+  color: #817b73;
+}
+
+.makeupCalendar__event--cancelled {
+  border-color: #ead7d2;
+  background: #fff8f6;
+  opacity: 0.68;
+}
+
+.makeupCalendar__event--cancelled
+  .makeupCalendar__studentName {
+  text-decoration: line-through;
+}
+
+
+/* =========================
+   Makeup Drawer
+========================= */
+
+.makeupDrawer__backdrop {
+  position: fixed;
+  z-index: 1500;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(38, 36, 32, 0.38);
+  backdrop-filter: blur(4px);
+}
+
+.makeupDrawer {
+  display: flex;
+  width: min(620px, 100%);
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fffdf9;
+  box-shadow: -20px 0 55px rgba(48, 42, 34, 0.18);
+}
+
+.makeupDrawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 28px 30px 22px;
+  border-bottom: 1px solid #eae4db;
+}
+
+.makeupDrawer__header p {
+  margin: 0 0 6px;
+  color: #aaa39a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.makeupDrawer__header h2 {
+  margin: 0;
+  color: #37342f;
+  font-size: 30px;
+}
+
+.makeupDrawer__header > button {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f1eee8;
+  color: #706a62;
+  font: inherit;
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.makeupDrawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 30px 40px;
+}
+
+.makeupDrawer__section {
+  padding: 24px 0;
+  border-top: 1px solid #eee8df;
+}
+
+.makeupDrawer__section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.makeupDrawer__section h3 {
+  margin: 0 0 14px;
+  color: #47433e;
+  font-size: 17px;
+}
+
+.makeupDrawer__section > p,
+.makeupDrawer__section > small {
+  display: block;
+  margin: 8px 0 0;
+  color: #969087;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.makeupDrawer__section input,
+.makeupDrawer__section select,
+.makeupDrawer__section textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #ded8cf;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #47433e;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.makeupDrawer__section input,
+.makeupDrawer__section select {
+  height: 46px;
+  padding: 0 13px;
+}
+
+.makeupDrawer__section textarea {
+  min-height: 105px;
+  padding: 12px 13px;
+  resize: vertical;
+}
+
+.makeupDrawer__section input:focus,
+.makeupDrawer__section select:focus,
+.makeupDrawer__section textarea:focus {
+  border-color: #9db4a3;
+  box-shadow: 0 0 0 3px rgba(130, 165, 142, 0.08);
+}
+
+.makeupDrawer__section
+  input[type="search"] {
+  margin-bottom: 10px;
+}
+
+.makeupDrawer__typeButtons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.makeupDrawer__typeButton {
+  min-height: 46px;
+  border: 1px solid #ded8cf;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #777068;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.makeupDrawer__typeButton--active {
+  border-color: #9db4a3;
+  background: #eef4ef;
+  color: #617967;
+}
+
+.makeupDrawer__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.makeupDrawer__grid label {
+  display: grid;
+  gap: 7px;
+}
+
+.makeupDrawer__grid label:first-child {
+  grid-column: 1 / -1;
+}
+
+.makeupDrawer__grid label span {
+  color: #8f887f;
+  font-size: 12px;
+}
+
+.makeupDrawer__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 30px;
+  border-top: 1px solid #eae4db;
+  background: #fffdf9;
+}
+
+.makeupDrawer__footer button {
+  min-width: 110px;
+  padding: 11px 16px;
+  border: 1px solid #ded8cf;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #706960;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.makeupDrawer__save {
+  border-color: #82a58e !important;
+  background: #82a58e !important;
+  color: #ffffff !important;
+}
+
+.makeupDrawer__footer button:disabled,
+.makeupDrawer__header button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@media (max-width: 720px) {
+  .makeupDrawer__header,
+  .makeupDrawer__body,
+  .makeupDrawer__footer {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .makeupDrawer__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .makeupDrawer__grid label:first-child {
+    grid-column: auto;
+  }
+}
