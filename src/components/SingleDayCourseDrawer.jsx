@@ -153,13 +153,13 @@ function SingleDayCourseDrawer({
         supabase
           .from("students")
           .select(`
-            id,
-            chinese_name,
-            english_name,
-            school,
-            grade,
-            status
-          `)
+  id,
+  chinese_name,
+  english_name,
+  school,
+  current_grade,
+  status
+`)
           .neq(
             "status",
             "inactive"
@@ -216,11 +216,11 @@ function SingleDayCourseDrawer({
       return students.filter(
         (student) => {
           const searchableText = [
-            student.chinese_name,
-            student.english_name,
-            student.school,
-            student.grade,
-          ]
+  student.chinese_name,
+  student.english_name,
+  student.school,
+  student.current_grade,
+]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
@@ -872,7 +872,7 @@ function SingleDayCourseDrawer({
                           <small>
                             {[
                               student.school,
-                              student.grade,
+                              student.current_grade,
                             ]
                               .filter(
                                 Boolean
