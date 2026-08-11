@@ -87,26 +87,12 @@ function EnglishClassDrawer({
 
               <input
                 required
+                autoFocus
                 value={form.class_name}
-                placeholder="例如：E3A"
+                placeholder="例如：L3A-1"
                 onChange={(event) =>
                   updateField(
                     "class_name",
-                    event.target.value
-                  )
-                }
-              />
-            </label>
-
-            <label>
-              <span>課程／級別</span>
-
-              <input
-                value={form.course_name}
-                placeholder="例如：Level 3"
-                onChange={(event) =>
-                  updateField(
-                    "course_name",
                     event.target.value
                   )
                 }
@@ -179,10 +165,7 @@ function EnglishClassDrawer({
                 <input
                   type="date"
                   value={form.end_date}
-                  min={
-                    form.start_date ||
-                    undefined
-                  }
+                  min={form.start_date || undefined}
                   onChange={(event) =>
                     updateField(
                       "end_date",
@@ -202,7 +185,7 @@ function EnglishClassDrawer({
 
               <input
                 value={form.teacher_name}
-                placeholder="例如：Frank"
+                placeholder="例如：Apple"
                 onChange={(event) =>
                   updateField(
                     "teacher_name",
@@ -232,86 +215,68 @@ function EnglishClassDrawer({
             </div>
 
             <div className="englishClassDrawer__scheduleList">
-              {schedules.map(
-                (schedule, index) => (
-                  <div
-                    key={index}
-                    className="englishClassDrawer__scheduleItem"
+              {schedules.map((schedule, index) => (
+                <div
+                  key={index}
+                  className="englishClassDrawer__scheduleItem"
+                >
+                  <select
+                    value={schedule.weekday}
+                    onChange={(event) =>
+                      updateSchedule(
+                        index,
+                        "weekday",
+                        event.target.value
+                      )
+                    }
                   >
-                    <select
-                      value={schedule.weekday}
-                      onChange={(event) =>
-                        updateSchedule(
-                          index,
-                          "weekday",
-                          event.target.value
-                        )
-                      }
-                    >
-                      <option value="1">
-                        星期一
-                      </option>
-                      <option value="2">
-                        星期二
-                      </option>
-                      <option value="3">
-                        星期三
-                      </option>
-                      <option value="4">
-                        星期四
-                      </option>
-                      <option value="5">
-                        星期五
-                      </option>
-                      <option value="6">
-                        星期六
-                      </option>
-                      <option value="7">
-                        星期日
-                      </option>
-                    </select>
+                    <option value="1">星期一</option>
+                    <option value="2">星期二</option>
+                    <option value="3">星期三</option>
+                    <option value="4">星期四</option>
+                    <option value="5">星期五</option>
+                    <option value="6">星期六</option>
+                    <option value="7">星期日</option>
+                  </select>
 
-                    <input
-                      type="time"
-                      value={schedule.start_time}
-                      onChange={(event) =>
-                        updateSchedule(
-                          index,
-                          "start_time",
-                          event.target.value
-                        )
-                      }
-                    />
+                  <input
+                    type="time"
+                    value={schedule.start_time}
+                    onChange={(event) =>
+                      updateSchedule(
+                        index,
+                        "start_time",
+                        event.target.value
+                      )
+                    }
+                  />
 
-                    <span>－</span>
+                  <span>－</span>
 
-                    <input
-                      type="time"
-                      value={schedule.end_time}
-                      onChange={(event) =>
-                        updateSchedule(
-                          index,
-                          "end_time",
-                          event.target.value
-                        )
-                      }
-                    />
+                  <input
+                    type="time"
+                    value={schedule.end_time}
+                    onChange={(event) =>
+                      updateSchedule(
+                        index,
+                        "end_time",
+                        event.target.value
+                      )
+                    }
+                  />
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        removeSchedule(index)
-                      }
-                      disabled={
-                        schedules.length === 1
-                      }
-                      aria-label="刪除時段"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )
-              )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      removeSchedule(index)
+                    }
+                    disabled={schedules.length === 1}
+                    aria-label="刪除時段"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
           </section>
 

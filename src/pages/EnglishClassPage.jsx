@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import EnglishClassDrawer from "../components/EnglishClassDrawer";
+import EnglishClassDetailDrawer from "../components/EnglishClassDetailDrawer";
 import "./EnglishClassPage.css";
 
 const EMPTY_FORM = {
   class_name: "",
-  course_name: "",
   academic_year: "",
   term: "",
   start_date: "",
@@ -34,7 +34,8 @@ const WEEKDAY_LABELS = {
 function formatDate(dateString) {
   if (!dateString) return "未設定";
 
-  const [year, month, day] = dateString.split("-");
+  const [year, month, day] =
+    dateString.split("-");
 
   if (!year || !month || !day) {
     return dateString;
@@ -50,16 +51,28 @@ function formatTime(timeString) {
 }
 
 function EnglishClassPage() {
-  const [englishClasses, setEnglishClasses] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [englishClasses, setEnglishClasses] =
+    useState([]);
 
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [form, setForm] = useState({ ...EMPTY_FORM });
-  const [schedules, setSchedules] = useState([
-    { ...EMPTY_SCHEDULE },
-  ]);
+  const [isLoading, setIsLoading] =
+    useState(true);
 
-  const [isSaving, setIsSaving] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] =
+    useState(false);
+
+  const [detailClass, setDetailClass] =
+    useState(null);
+
+  const [form, setForm] =
+    useState({ ...EMPTY_FORM });
+
+  const [schedules, setSchedules] =
+    useState([
+      { ...EMPTY_SCHEDULE },
+    ]);
+
+  const [isSaving, setIsSaving] =
+    useState(false);
 
   useEffect(() => {
     loadEnglishClasses();
@@ -74,7 +87,6 @@ function EnglishClassPage() {
         .select(`
           id,
           class_name,
-          course_name,
           academic_year,
           term,
           start_date,
@@ -92,28 +104,39 @@ function EnglishClassPage() {
             sort_order
           )
         `)
-        .order("is_active", { ascending: false })
-        .order("created_at", { ascending: true });
+        .order("is_active", {
+          ascending: false,
+        })
+        .order("created_at", {
+          ascending: true,
+        });
 
       if (error) {
         throw error;
       }
 
-      const normalizedData = (data || []).map((item) => ({
-        ...item,
-        english_class_schedules:
-          item.english_class_schedules
-            ?.slice()
-            .sort(
-              (a, b) =>
-                (a.sort_order ?? 0) -
-                (b.sort_order ?? 0)
-            ) || [],
-      }));
+      const normalizedData =
+        (data || []).map((item) => ({
+          ...item,
 
-      setEnglishClasses(normalizedData);
+          english_class_schedules:
+            item.english_class_schedules
+              ?.slice()
+              .sort(
+                (a, b) =>
+                  (a.sort_order ?? 0) -
+                  (b.sort_order ?? 0)
+              ) || [],
+        }));
+
+      setEnglishClasses(
+        normalizedData
+      );
     } catch (error) {
-      console.error("讀取美語班失敗：", error);
+      console.error(
+        "讀取美語班失敗：",
+        error
+      );
 
       window.alert(
         `讀取美語班失敗：${error.message}`
@@ -126,8 +149,16 @@ function EnglishClassPage() {
   }
 
   function openNewDrawer() {
-    setForm({ ...EMPTY_FORM });
-    setSchedules([{ ...EMPTY_SCHEDULE }]);
+    setDetailClass(null);
+
+    setForm({
+      ...EMPTY_FORM,
+    });
+
+    setSchedules([
+      { ...EMPTY_SCHEDULE },
+    ]);
+
     setIsDrawerOpen(true);
   }
 
@@ -135,74 +166,114 @@ function EnglishClassPage() {
     if (isSaving) return;
 
     setIsDrawerOpen(false);
-    setForm({ ...EMPTY_FORM });
-    setSchedules([{ ...EMPTY_SCHEDULE }]);
+
+    setForm({
+      ...EMPTY_FORM,
+    });
+
+    setSchedules([
+      { ...EMPTY_SCHEDULE },
+    ]);
   }
 
-  async function saveEnglishClass(event) {
+  function openClassDetail(classItem) {
+    setDetailClass(classItem);
+  }
+
+  function closeClassDetail() {
+    setDetailClass(null);
+  }
+
+  async function saveEnglishClass(
+    event
+  ) {
     event.preventDefault();
 
-    const className = form.class_name.trim();
+    const className =
+      form.class_name.trim();
 
     if (!className) {
-      window.alert("請輸入班級名稱。");
+      window.alert(
+        "請輸入班級名稱。"
+      );
+
       return;
     }
 
     if (
       form.start_date &&
       form.end_date &&
-      form.end_date < form.start_date
+      form.end_date <
+        form.start_date
     ) {
-      window.alert("結束日期不可早於開始日期。");
+      window.alert(
+        "結束日期不可早於開始日期。"
+      );
+
       return;
     }
 
-    const duplicatedClass = englishClasses.find(
-      (item) =>
-        item.class_name
-          ?.trim()
-          .toLowerCase() ===
-          className.toLowerCase() &&
-        (item.academic_year || "")
-          .trim()
-          .toLowerCase() ===
-          form.academic_year
+    const duplicatedClass =
+      englishClasses.find(
+        (item) =>
+          item.class_name
+            ?.trim()
+            .toLowerCase() ===
+            className.toLowerCase() &&
+          (item.academic_year || "")
             .trim()
-            .toLowerCase() &&
-        (item.term || "")
-          .trim()
-          .toLowerCase() ===
-          form.term.trim().toLowerCase()
-    );
+            .toLowerCase() ===
+            form.academic_year
+              .trim()
+              .toLowerCase() &&
+          (item.term || "")
+            .trim()
+            .toLowerCase() ===
+            form.term
+              .trim()
+              .toLowerCase()
+      );
 
     if (duplicatedClass) {
       window.alert(
         `同一學年度與學期已經有「${duplicatedClass.class_name}」這個美語班。`
       );
+
       return;
     }
 
-    const normalizedSchedules = schedules.map(
-      (schedule, index) => ({
-        weekday: Number(schedule.weekday),
-        start_time: schedule.start_time,
-        end_time: schedule.end_time,
-        sort_order: index,
-      })
-    );
+    const normalizedSchedules =
+      schedules.map(
+        (schedule, index) => ({
+          weekday:
+            Number(
+              schedule.weekday
+            ),
 
-    const invalidSchedule = normalizedSchedules.find(
-      (schedule) =>
-        !schedule.start_time ||
-        !schedule.end_time ||
-        schedule.end_time <= schedule.start_time
-    );
+          start_time:
+            schedule.start_time,
+
+          end_time:
+            schedule.end_time,
+
+          sort_order: index,
+        })
+      );
+
+    const invalidSchedule =
+      normalizedSchedules.find(
+        (schedule) =>
+          !schedule.start_time ||
+          !schedule.end_time ||
+          schedule.end_time <=
+            schedule.start_time
+      );
 
     if (invalidSchedule) {
       window.alert(
         "請確認每個上課時段都有開始與結束時間，且結束時間必須晚於開始時間。"
       );
+
       return;
     }
 
@@ -211,18 +282,36 @@ function EnglishClassPage() {
 
       const classPayload = {
         class_name: className,
-        course_name:
-          form.course_name.trim() || null,
+
         academic_year:
-          form.academic_year.trim() || null,
-        term: form.term.trim() || null,
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
+          form.academic_year
+            .trim() || null,
+
+        term:
+          form.term.trim() ||
+          null,
+
+        start_date:
+          form.start_date ||
+          null,
+
+        end_date:
+          form.end_date ||
+          null,
+
         teacher_name:
-          form.teacher_name.trim() || null,
-        is_active: form.is_active,
-        note: form.note.trim() || null,
-        updated_at: new Date().toISOString(),
+          form.teacher_name
+            .trim() || null,
+
+        is_active:
+          form.is_active,
+
+        note:
+          form.note.trim() ||
+          null,
+
+        updated_at:
+          new Date().toISOString(),
       };
 
       const {
@@ -231,7 +320,9 @@ function EnglishClassPage() {
       } = await supabase
         .from("english_classes")
         .insert([classPayload])
-        .select("id, class_name")
+        .select(
+          "id, class_name"
+        )
         .single();
 
       if (classError) {
@@ -239,24 +330,43 @@ function EnglishClassPage() {
       }
 
       const schedulePayload =
-        normalizedSchedules.map((schedule) => ({
-          english_class_id: insertedClass.id,
-          weekday: schedule.weekday,
-          start_time: schedule.start_time,
-          end_time: schedule.end_time,
-          sort_order: schedule.sort_order,
-        }));
+        normalizedSchedules.map(
+          (schedule) => ({
+            english_class_id:
+              insertedClass.id,
 
-      const { error: scheduleError } = await supabase
-        .from("english_class_schedules")
+            weekday:
+              schedule.weekday,
+
+            start_time:
+              schedule.start_time,
+
+            end_time:
+              schedule.end_time,
+
+            sort_order:
+              schedule.sort_order,
+          })
+        );
+
+      const {
+        error: scheduleError,
+      } = await supabase
+        .from(
+          "english_class_schedules"
+        )
         .insert(schedulePayload);
 
       if (scheduleError) {
-        const { error: rollbackError } =
-          await supabase
-            .from("english_classes")
-            .delete()
-            .eq("id", insertedClass.id);
+        const {
+          error: rollbackError,
+        } = await supabase
+          .from("english_classes")
+          .delete()
+          .eq(
+            "id",
+            insertedClass.id
+          );
 
         if (rollbackError) {
           console.error(
@@ -275,8 +385,14 @@ function EnglishClassPage() {
       }
 
       setIsDrawerOpen(false);
-      setForm({ ...EMPTY_FORM });
-      setSchedules([{ ...EMPTY_SCHEDULE }]);
+
+      setForm({
+        ...EMPTY_FORM,
+      });
+
+      setSchedules([
+        { ...EMPTY_SCHEDULE },
+      ]);
 
       await loadEnglishClasses();
 
@@ -284,7 +400,10 @@ function EnglishClassPage() {
         `已建立美語班「${insertedClass.class_name}」。`
       );
     } catch (error) {
-      console.error("建立美語班失敗：", error);
+      console.error(
+        "建立美語班失敗：",
+        error
+      );
 
       window.alert(
         `建立美語班失敗：${error.message}`
@@ -320,13 +439,18 @@ function EnglishClassPage() {
 
       {isLoading ? (
         <section className="englishClassPage__empty">
-          <strong>正在讀取美語班資料……</strong>
+          <strong>
+            正在讀取美語班資料……
+          </strong>
         </section>
-      ) : englishClasses.length === 0 ? (
+      ) : englishClasses.length ===
+        0 ? (
         <section className="englishClassPage__empty">
           <div>ABC</div>
 
-          <strong>尚未建立美語班</strong>
+          <strong>
+            尚未建立美語班
+          </strong>
 
           <p>
             點右上角「＋新增美語班」，建立第一個班級與每週上課時段。
@@ -334,109 +458,129 @@ function EnglishClassPage() {
         </section>
       ) : (
         <section className="englishClassPage__grid">
-          {englishClasses.map((englishClass) => (
-            <article
-              key={englishClass.id}
-              className={
-                englishClass.is_active
-                  ? "englishClassCard"
-                  : "englishClassCard englishClassCard--inactive"
-              }
-            >
-              <div className="englishClassCard__top">
-                <div>
-                  <span>
-                    {englishClass.course_name ||
-                      "未設定級別"}
-                  </span>
+          {englishClasses.map(
+            (englishClass) => (
+              <article
+                key={
+                  englishClass.id
+                }
+                className={
+                  englishClass.is_active
+                    ? "englishClassCard englishClassCard--clickable"
+                    : "englishClassCard englishClassCard--inactive englishClassCard--clickable"
+                }
+                onClick={() =>
+                  openClassDetail(
+                    englishClass
+                  )
+                }
+              >
+                <div className="englishClassCard__top">
+                  <div>
+                    <h2>
+                      {
+                        englishClass.class_name
+                      }
+                    </h2>
+                  </div>
 
-                  <h2>
-                    {englishClass.class_name}
-                  </h2>
-                </div>
-
-                <strong
-                  className={
-                    englishClass.is_active
-                      ? "englishClassCard__status englishClassCard__status--active"
-                      : "englishClassCard__status englishClassCard__status--inactive"
-                  }
-                >
-                  {englishClass.is_active
-                    ? "啟用中"
-                    : "已停用"}
-                </strong>
-              </div>
-
-              <div className="englishClassCard__meta">
-                <span>
-                  {[
-                    englishClass.academic_year,
-                    englishClass.term,
-                  ]
-                    .filter(Boolean)
-                    .join("・") || "未設定學期"}
-                </span>
-
-                <small>
-                  {formatDate(
-                    englishClass.start_date
-                  )}
-                  {" ～ "}
-                  {formatDate(
-                    englishClass.end_date
-                  )}
-                </small>
-              </div>
-
-              {englishClass.teacher_name && (
-                <div className="englishClassCard__teacher">
-                  授課老師：
-                  <strong>
-                    {englishClass.teacher_name}
+                  <strong
+                    className={
+                      englishClass.is_active
+                        ? "englishClassCard__status englishClassCard__status--active"
+                        : "englishClassCard__status englishClassCard__status--inactive"
+                    }
+                  >
+                    {englishClass.is_active
+                      ? "啟用中"
+                      : "已停用"}
                   </strong>
                 </div>
-              )}
 
-              <div className="englishClassCard__scheduleList">
-                {englishClass
-                  .english_class_schedules
-                  .length === 0 ? (
-                  <p>尚未設定上課時段</p>
-                ) : (
-                  englishClass.english_class_schedules.map(
-                    (schedule) => (
-                      <div key={schedule.id}>
-                        <strong>
-                          {
-                            WEEKDAY_LABELS[
-                              schedule.weekday
-                            ]
-                          }
-                        </strong>
+                <div className="englishClassCard__meta">
+                  <span>
+                    {[
+                      englishClass.academic_year,
+                      englishClass.term,
+                    ]
+                      .filter(Boolean)
+                      .join("・") ||
+                      "未設定學期"}
+                  </span>
 
-                        <span>
-                          {formatTime(
-                            schedule.start_time
-                          )}
-                          {"－"}
-                          {formatTime(
-                            schedule.end_time
-                          )}
-                        </span>
-                      </div>
-                    )
-                  )
+                  <small>
+                    {formatDate(
+                      englishClass.start_date
+                    )}
+                    {" ～ "}
+                    {formatDate(
+                      englishClass.end_date
+                    )}
+                  </small>
+                </div>
+
+                {englishClass.teacher_name && (
+                  <div className="englishClassCard__teacher">
+                    授課老師：
+                    <strong>
+                      {
+                        englishClass.teacher_name
+                      }
+                    </strong>
+                  </div>
                 )}
-              </div>
 
-              {englishClass.note && (
-                <p className="englishClassCard__note">
-                  {englishClass.note}
-                </p>
-              )}
-            </article>
-          ))}
+                <div className="englishClassCard__scheduleList">
+                  {englishClass
+                    .english_class_schedules
+                    .length === 0 ? (
+                    <p>
+                      尚未設定上課時段
+                    </p>
+                  ) : (
+                    englishClass.english_class_schedules.map(
+                      (
+                        schedule
+                      ) => (
+                        <div
+                          key={
+                            schedule.id
+                          }
+                        >
+                          <strong>
+                            {
+                              WEEKDAY_LABELS[
+                                schedule
+                                  .weekday
+                              ]
+                            }
+                          </strong>
+
+                          <span>
+                            {formatTime(
+                              schedule.start_time
+                            )}
+                            {"－"}
+                            {formatTime(
+                              schedule.end_time
+                            )}
+                          </span>
+                        </div>
+                      )
+                    )
+                  )}
+                </div>
+
+                {englishClass.note && (
+                  <p className="englishClassCard__note">
+                    {
+                      englishClass.note
+                    }
+                  </p>
+                )}
+              </article>
+            )
+          )}
         </section>
       )}
 
@@ -445,10 +589,25 @@ function EnglishClassPage() {
           form={form}
           setForm={setForm}
           schedules={schedules}
-          setSchedules={setSchedules}
+          setSchedules={
+            setSchedules
+          }
           onClose={closeDrawer}
-          onSave={saveEnglishClass}
+          onSave={
+            saveEnglishClass
+          }
           isSaving={isSaving}
+        />
+      )}
+
+      {detailClass && (
+        <EnglishClassDetailDrawer
+          classItem={
+            detailClass
+          }
+          onClose={
+            closeClassDetail
+          }
         />
       )}
     </div>
