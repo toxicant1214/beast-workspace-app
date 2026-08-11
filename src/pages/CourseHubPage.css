@@ -1,0 +1,147 @@
+.courseHub {
+  width: 100%;
+}
+
+.courseHub__header {
+  margin-bottom: 24px;
+}
+
+.courseHub__eyebrow {
+  margin: 0 0 8px;
+  color: #9b958d;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.courseHub__header h1 {
+  margin: 0;
+  color: #35322e;
+  font-size: 34px;
+}
+
+.courseHub__summary {
+  margin: 8px 0 0;
+  color: #8b857d;
+  font-size: 14px;
+}
+
+.courseHub__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.courseHub__tab {
+  display: flex;
+  min-height: 132px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 18px 20px;
+  border: 1px solid #e5dfd6;
+  border-radius: 18px;
+  background: #fffdf9;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.courseHub__tab:hover {
+  border-color: #d4ccc1;
+  background: #faf8f4;
+  transform: translateY(-1px);
+}
+
+.courseHub__tab > span {
+  color: #aaa39a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.courseHub__tab > strong {
+  margin-top: 7px;
+  color: #44403b;
+  font-size: 18px;
+}
+
+.courseHub__tab > small {
+  margin-top: 7px;
+  color: #969087;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.courseHub__tab--active {
+  border-color: #9eb3a4;
+  background: #f1f5f2;
+}
+
+.courseHub__tab--active > span,
+.courseHub__tab--active > strong {
+  color: #66816d;
+}
+
+.courseHub__content {
+  min-width: 0;
+}
+
+.courseHub__comingSoon {
+  display: flex;
+  min-height: 390px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  border: 1px dashed #dcd5cb;
+  border-radius: 24px;
+  background: #faf8f4;
+  text-align: center;
+}
+
+.courseHub__comingSoon > p {
+  margin: 0;
+  color: #aaa39a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.courseHub__comingSoon h2 {
+  margin: 10px 0 0;
+  color: #45413c;
+  font-size: 27px;
+}
+
+.courseHub__comingSoon > span {
+  margin-top: 8px;
+  color: #918b83;
+  font-size: 14px;
+}
+
+.courseHub__comingSoon > div {
+  margin-top: 24px;
+  padding: 10px 15px;
+  border-radius: 999px;
+  background: #ede9e2;
+  color: #817a72;
+  font-size: 12px;
+}
+
+@media (max-width: 1050px) {
+  .courseHub__tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .courseHub__tabs {
+    grid-template-columns: 1fr;
+  }
+}
