@@ -14,9 +14,36 @@ function formatDate(dateString) {
   return `${year}/${month}/${day}`;
 }
 
+function formatTime(timeString) {
+  if (!timeString) return "";
+
+  return timeString.slice(0, 5);
+}
+
+const WEEKDAY_LABELS = {
+  1: "星期一",
+  2: "星期二",
+  3: "星期三",
+  4: "星期四",
+  5: "星期五",
+  6: "星期六",
+  7: "星期日",
+};
+
 function StudentProfile({ student, onBack, onEdit }) {
   const [classHistory, setClassHistory] = useState([]);
-  const [isLoadingClasses, setIsLoadingClasses] = useState(true);
+  const [isLoadingClasses, setIsLoadingClasses] =
+    useState(true);
+
+  const [
+    englishClassRecords,
+    setEnglishClassRecords,
+  ] = useState([]);
+
+  const [
+    isLoadingEnglishClasses,
+    setIsLoadingEnglishClasses,
+  ] = useState(true);
 
   const statusLabels = {
     ACTIVE: "在學",
@@ -25,7 +52,8 @@ function StudentProfile({ student, onBack, onEdit }) {
     GRADUATED: "畢業",
   };
 
-  const gradeLabel = student.current_grade || "年級未設定";
+  const gradeLabel =
+    student.current_grade || "年級未設定";
 
   const statusLabel =
     statusLabels[student.student_status] ||
@@ -35,6 +63,7 @@ function StudentProfile({ student, onBack, onEdit }) {
   useEffect(() => {
     if (student?.id) {
       loadClassHistory();
+      loadEnglishClasses();
     }
   }, [student?.id]);
 
@@ -60,7 +89,9 @@ function StudentProfile({ student, onBack, onEdit }) {
           )
         `)
         .eq("student_id", student.id)
-        .order("joined_at", { ascending: false });
+        .order("joined_at", {
+          ascending: false,
+        });
 
       if (error) {
         throw error;
@@ -68,7 +99,10 @@ function StudentProfile({ student, onBack, onEdit }) {
 
       setClassHistory(data || []);
     } catch (error) {
-      console.error("讀取學生班級歷程失敗：", error);
+      console.error(
+        "讀取學生班級歷程失敗：",
+        error
+      );
 
       window.alert(
         `讀取學生班級歷程失敗：${error.message}`
@@ -77,6 +111,84 @@ function StudentProfile({ student, onBack, onEdit }) {
       setClassHistory([]);
     } finally {
       setIsLoadingClasses(false);
+    }
+  }
+
+  async function loadEnglishClasses() {
+    try {
+      setIsLoadingEnglishClasses(true);
+
+      const { data, error } = await supabase
+        .from("english_class_students")
+        .select(`
+          id,
+          joined_at,
+          left_at,
+          status,
+          english_classes (
+            id,
+            class_name,
+            academic_year,
+            term,
+            start_date,
+            end_date,
+            teacher_name,
+            is_active,
+            english_class_schedules (
+              id,
+              weekday,
+              start_time,
+              end_time,
+              sort_order
+            )
+          )
+        `)
+        .eq("student_id", student.id)
+        .order("joined_at", {
+          ascending: false,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      const normalizedData = (data || []).map(
+        (item) => ({
+          ...item,
+
+          english_classes:
+            item.english_classes
+              ? {
+                  ...item.english_classes,
+
+                  english_class_schedules:
+                    item.english_classes
+                      .english_class_schedules
+                      ?.slice()
+                      .sort(
+                        (a, b) =>
+                          (a.sort_order ?? 0) -
+                          (b.sort_order ?? 0)
+                      ) || [],
+                }
+              : null,
+        })
+      );
+
+      setEnglishClassRecords(normalizedData);
+    } catch (error) {
+      console.error(
+        "讀取學生美語班資料失敗：",
+        error
+      );
+
+      window.alert(
+        `讀取學生美語班資料失敗：${error.message}`
+      );
+
+      setEnglishClassRecords([]);
+    } finally {
+      setIsLoadingEnglishClasses(false);
     }
   }
 
@@ -100,6 +212,14 @@ function StudentProfile({ student, onBack, onEdit }) {
     [classHistory]
   );
 
+  const currentEnglishClassRecords = useMemo(
+    () =>
+      englishClassRecords.filter(
+        (item) => item.status === "ACTIVE"
+      ),
+    [englishClassRecords]
+  );
+
   const timelineItems = useMemo(() => {
     const items = [];
 
@@ -107,7 +227,8 @@ function StudentProfile({ student, onBack, onEdit }) {
       items.push({
         date: student.enrollment_date,
         title: "加入倍思",
-        description: "建立學生資料並開始就讀。",
+        description:
+          "建立學生資料並開始就讀。",
         type: "STUDENT",
       });
     }
@@ -155,7 +276,18 @@ function StudentProfile({ student, onBack, onEdit }) {
 
       return b.date.localeCompare(a.date);
     });
-  }, [student.enrollment_date, classHistory]);
+  }, [
+    student.enrollment_date,
+    classHistory,
+  ]);
+
+  const isLoadingEnrollments =
+    isLoadingClasses ||
+    isLoadingEnglishClasses;
+
+  const hasCurrentEnrollments =
+    currentClassRecords.length > 0 ||
+    currentEnglishClassRecords.length > 0;
 
   return (
     <div className="studentProfile">
@@ -184,7 +316,8 @@ function StudentProfile({ student, onBack, onEdit }) {
           </div>
 
           <p className="studentProfile__studentNo">
-            {student.student_no || "尚未建立學號"}
+            {student.student_no ||
+              "尚未建立學號"}
 
             {student.english_name
               ? `・${student.english_name}`
@@ -220,13 +353,17 @@ function StudentProfile({ student, onBack, onEdit }) {
       <div className="studentProfile__overview">
         <div>
           <span>入班日期</span>
+
           <strong>
-            {formatDate(student.enrollment_date)}
+            {formatDate(
+              student.enrollment_date
+            )}
           </strong>
         </div>
 
         <div>
           <span>就讀學校</span>
+
           <strong>
             {displayValue(student.school)}
           </strong>
@@ -234,6 +371,7 @@ function StudentProfile({ student, onBack, onEdit }) {
 
         <div>
           <span>出生年月日</span>
+
           <strong>
             {formatDate(student.birthday)}
           </strong>
@@ -241,6 +379,7 @@ function StudentProfile({ student, onBack, onEdit }) {
 
         <div>
           <span>主要聯絡人</span>
+
           <strong>
             {displayValue(
               student.primary_parent_title
@@ -259,6 +398,7 @@ function StudentProfile({ student, onBack, onEdit }) {
           <div className="studentProfile__detailList">
             <div>
               <span>中文姓名</span>
+
               <strong>
                 {displayValue(
                   student.chinese_name
@@ -268,6 +408,7 @@ function StudentProfile({ student, onBack, onEdit }) {
 
             <div>
               <span>英文姓名</span>
+
               <strong>
                 {displayValue(
                   student.english_name
@@ -277,20 +418,27 @@ function StudentProfile({ student, onBack, onEdit }) {
 
             <div>
               <span>出生年月日</span>
+
               <strong>
-                {formatDate(student.birthday)}
+                {formatDate(
+                  student.birthday
+                )}
               </strong>
             </div>
 
             <div>
               <span>就讀學校</span>
+
               <strong>
-                {displayValue(student.school)}
+                {displayValue(
+                  student.school
+                )}
               </strong>
             </div>
 
             <div>
               <span>目前年級</span>
+
               <strong>
                 {displayValue(
                   student.current_grade
@@ -300,6 +448,7 @@ function StudentProfile({ student, onBack, onEdit }) {
 
             <div>
               <span>入班日期</span>
+
               <strong>
                 {formatDate(
                   student.enrollment_date
@@ -318,6 +467,7 @@ function StudentProfile({ student, onBack, onEdit }) {
           <div className="studentProfile__detailList">
             <div>
               <span>主要聯絡人</span>
+
               <strong>
                 {displayValue(
                   student.primary_parent_title
@@ -327,6 +477,7 @@ function StudentProfile({ student, onBack, onEdit }) {
 
             <div>
               <span>主要聯絡電話</span>
+
               <strong>
                 {displayValue(
                   student.primary_parent_phone
@@ -336,6 +487,7 @@ function StudentProfile({ student, onBack, onEdit }) {
 
             <div>
               <span>第二聯絡人</span>
+
               <strong>
                 {displayValue(
                   student.secondary_parent_title
@@ -345,6 +497,7 @@ function StudentProfile({ student, onBack, onEdit }) {
 
             <div>
               <span>第二聯絡電話</span>
+
               <strong>
                 {displayValue(
                   student.secondary_parent_phone
@@ -360,57 +513,151 @@ function StudentProfile({ student, onBack, onEdit }) {
             <h2>目前班級</h2>
           </div>
 
-          {isLoadingClasses ? (
+          {isLoadingEnrollments ? (
             <div className="studentProfile__emptyState">
-              <strong>正在讀取班級資料……</strong>
+              <strong>
+                正在讀取班級資料……
+              </strong>
             </div>
-          ) : currentClassRecords.length === 0 ? (
+          ) : !hasCurrentEnrollments ? (
             <div className="studentProfile__emptyState">
               <div className="studentProfile__emptyIcon">
                 ＋
               </div>
 
-              <strong>目前尚未加入班級</strong>
+              <strong>
+                目前尚未加入班級
+              </strong>
 
               <span>
-                可從班級管理將學生加入安親班級。
+                可從班級管理或美語班管理將學生加入班級。
               </span>
             </div>
           ) : (
             <div className="studentProfile__enrollmentList">
-              {currentClassRecords.map((item) => {
-                const classItem = item.classes;
+              {currentClassRecords.map(
+                (item) => {
+                  const classItem =
+                    item.classes;
 
-                if (!classItem) return null;
+                  if (!classItem) {
+                    return null;
+                  }
 
-                return (
-                  <div
-                    key={item.id}
-                    className="studentProfile__enrollmentItem"
-                  >
-                    <div>
-                      <strong>
-                        {classItem.class_name}
-                      </strong>
+                  return (
+                    <div
+                      key={`after-school-${item.id}`}
+                      className="studentProfile__enrollmentItem"
+                    >
+                      <div>
+                        <span>
+                          安親班級
+                        </span>
 
-                      <span>
-                        {[
-                          classItem.academic_year,
-                          classItem.term,
-                        ]
-                          .filter(Boolean)
-                          .join("・")}
-                      </span>
+                        <strong>
+                          {
+                            classItem.class_name
+                          }
+                        </strong>
+
+                        <span>
+                          {[
+                            classItem.academic_year,
+                            classItem.term,
+                          ]
+                            .filter(Boolean)
+                            .join("・")}
+                        </span>
+                      </div>
+
+                      <small>
+                        {formatDate(
+                          item.joined_at
+                        )}
+                        {" ～ "}
+                        至今
+                      </small>
                     </div>
+                  );
+                }
+              )}
 
-                    <small>
-                      {formatDate(item.joined_at)}
-                      {" ～ "}
-                      至今
-                    </small>
-                  </div>
-                );
-              })}
+              {currentEnglishClassRecords.map(
+                (item) => {
+                  const englishClass =
+                    item.english_classes;
+
+                  if (!englishClass) {
+                    return null;
+                  }
+
+                  const scheduleText =
+                    (
+                      englishClass
+                        .english_class_schedules ||
+                      []
+                    )
+                      .map(
+                        (schedule) =>
+                          `${
+                            WEEKDAY_LABELS[
+                              schedule.weekday
+                            ] || ""
+                          } ${formatTime(
+                            schedule.start_time
+                          )}－${formatTime(
+                            schedule.end_time
+                          )}`
+                      )
+                      .filter(Boolean)
+                      .join(" ・ ");
+
+                  return (
+                    <div
+                      key={`english-${item.id}`}
+                      className="studentProfile__enrollmentItem"
+                    >
+                      <div>
+                        <span>
+                          美語班級
+                        </span>
+
+                        <strong>
+                          {
+                            englishClass.class_name
+                          }
+                        </strong>
+
+                        <span>
+                          {[
+                            englishClass.academic_year,
+                            englishClass.term,
+                            englishClass.teacher_name
+                              ? `授課老師 ${englishClass.teacher_name}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join("・")}
+                        </span>
+
+                        {scheduleText && (
+                          <span>
+                            {scheduleText}
+                          </span>
+                        )}
+                      </div>
+
+                      <small>
+                        {formatDate(
+                          item.joined_at
+                        )}
+                        {" ～ "}
+                        至今
+                      </small>
+                    </div>
+                  );
+                }
+              )}
             </div>
           )}
         </section>
@@ -423,11 +670,16 @@ function StudentProfile({ student, onBack, onEdit }) {
 
           {isLoadingClasses ? (
             <div className="studentProfile__emptyState">
-              <strong>正在讀取班級歷程……</strong>
+              <strong>
+                正在讀取班級歷程……
+              </strong>
             </div>
-          ) : pastClassRecords.length === 0 ? (
+          ) : pastClassRecords.length ===
+            0 ? (
             <div className="studentProfile__emptyState">
-              <strong>目前沒有歷史班級紀錄</strong>
+              <strong>
+                目前沒有歷史班級紀錄
+              </strong>
 
               <span>
                 正式退出或轉班後，歷史紀錄會保留在這裡。
@@ -435,39 +687,50 @@ function StudentProfile({ student, onBack, onEdit }) {
             </div>
           ) : (
             <div className="studentProfile__enrollmentList">
-              {pastClassRecords.map((item) => {
-                const classItem = item.classes;
+              {pastClassRecords.map(
+                (item) => {
+                  const classItem =
+                    item.classes;
 
-                if (!classItem) return null;
+                  if (!classItem) {
+                    return null;
+                  }
 
-                return (
-                  <div
-                    key={item.id}
-                    className="studentProfile__enrollmentItem"
-                  >
-                    <div>
-                      <strong>
-                        {classItem.class_name}
-                      </strong>
+                  return (
+                    <div
+                      key={item.id}
+                      className="studentProfile__enrollmentItem"
+                    >
+                      <div>
+                        <strong>
+                          {
+                            classItem.class_name
+                          }
+                        </strong>
 
-                      <span>
-                        {[
-                          classItem.academic_year,
-                          classItem.term,
-                        ]
-                          .filter(Boolean)
-                          .join("・")}
-                      </span>
+                        <span>
+                          {[
+                            classItem.academic_year,
+                            classItem.term,
+                          ]
+                            .filter(Boolean)
+                            .join("・")}
+                        </span>
+                      </div>
+
+                      <small>
+                        {formatDate(
+                          item.joined_at
+                        )}
+                        {" ～ "}
+                        {formatDate(
+                          item.left_at
+                        )}
+                      </small>
                     </div>
-
-                    <small>
-                      {formatDate(item.joined_at)}
-                      {" ～ "}
-                      {formatDate(item.left_at)}
-                    </small>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
             </div>
           )}
         </section>
@@ -484,7 +747,10 @@ function StudentProfile({ student, onBack, onEdit }) {
                 <span className="studentProfile__timelineDot" />
 
                 <div>
-                  <strong>等待更多紀錄</strong>
+                  <strong>
+                    等待更多紀錄
+                  </strong>
+
                   <p>
                     未來會顯示班級、課程與狀態變更。
                   </p>
@@ -500,10 +766,15 @@ function StudentProfile({ student, onBack, onEdit }) {
                     <span className="studentProfile__timelineDot" />
 
                     <div>
-                      <strong>{item.title}</strong>
+                      <strong>
+                        {item.title}
+                      </strong>
 
                       <p>
-                        {formatDate(item.date)}
+                        {formatDate(
+                          item.date
+                        )}
+
                         {item.description
                           ? `・${item.description}`
                           : ""}
@@ -525,7 +796,10 @@ function StudentProfile({ student, onBack, onEdit }) {
           <div className="studentProfile__auditList">
             <div className="studentProfile__auditItem">
               <div>
-                <strong>學生資料已建立</strong>
+                <strong>
+                  學生資料已建立
+                </strong>
+
                 <p>
                   系統資料建立時間。
                 </p>
@@ -535,7 +809,9 @@ function StudentProfile({ student, onBack, onEdit }) {
                 {student.created_at
                   ? new Date(
                       student.created_at
-                    ).toLocaleDateString("zh-TW")
+                    ).toLocaleDateString(
+                      "zh-TW"
+                    )
                   : "尚未記錄"}
               </span>
             </div>
@@ -549,7 +825,8 @@ function StudentProfile({ student, onBack, onEdit }) {
           </div>
 
           <div className="studentProfile__note">
-            {student.note || "目前沒有備註。"}
+            {student.note ||
+              "目前沒有備註。"}
           </div>
         </section>
       </div>
