@@ -1,0 +1,138 @@
+.singleDayCourse {
+  display: grid;
+  gap: 24px;
+}
+
+.singleDayCourse__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.singleDayCourse__eyebrow {
+  margin: 0 0 6px;
+  color: #aaa39a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.singleDayCourse__header h1 {
+  margin: 0;
+  color: #37342f;
+  font-size: 30px;
+}
+
+.singleDayCourse__summary {
+  margin: 8px 0 0;
+  color: #8f887f;
+  font-size: 14px;
+}
+
+.singleDayCourse__primaryButton {
+  flex: 0 0 auto;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 11px;
+  background: #82a58e;
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.singleDayCourse__loading {
+  padding: 24px 0;
+  color: #999289;
+  font-size: 13px;
+}
+
+.singleDayCourse__empty {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  padding: 40px;
+  border: 1px dashed #ded8cf;
+  border-radius: 18px;
+  background: #fffdf9;
+  text-align: center;
+}
+
+.singleDayCourse__empty > div {
+  margin-bottom: 12px;
+  color: #b3aca2;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.singleDayCourse__empty strong {
+  color: #45413c;
+  font-size: 18px;
+}
+
+.singleDayCourse__empty p {
+  margin: 8px 0 0;
+  color: #918a81;
+  font-size: 13px;
+}
+
+.singleDayCourse__list {
+  display: grid;
+  gap: 12px;
+}
+
+.singleDayCourse__card {
+  padding: 18px 20px;
+  border: 1px solid #e5dfd6;
+  border-radius: 15px;
+  background: #fffdf9;
+}
+
+.singleDayCourse__cardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.singleDayCourse__cardTop span {
+  color: #938c83;
+  font-size: 12px;
+}
+
+.singleDayCourse__cardTop h2 {
+  margin: 5px 0 0;
+  color: #423e39;
+  font-size: 20px;
+}
+
+.singleDayCourse__status {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #eef4ef;
+  color: #667d6b !important;
+  font-size: 11px !important;
+  font-weight: 700;
+}
+
+.singleDayCourse__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 14px;
+  color: #847d74;
+  font-size: 12px;
+}
+
+.singleDayCourse__partner {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eee8df;
+  color: #8d867e;
+  font-size: 12px;
+}

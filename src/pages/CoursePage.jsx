@@ -2,6 +2,7 @@ import { useState } from "react";
 import TalentCoursePage from "./TalentCoursePage";
 import EnglishClassPage from "./EnglishClassPage";
 import MakeupCalendarPage from "./MakeupCalendarPage";
+import SingleDayCoursePage from "./SingleDayCoursePage";
 import "./CourseHubPage.css";
 
 const COURSE_SECTIONS = [
@@ -34,10 +35,6 @@ const COURSE_SECTIONS = [
 function CoursePage() {
   const [activeSection, setActiveSection] =
     useState("TALENT");
-
-  const activeInfo = COURSE_SECTIONS.find(
-    (section) => section.key === activeSection
-  );
 
   return (
     <div className="courseHub">
@@ -81,32 +78,20 @@ function CoursePage() {
 
       <section className="courseHub__content">
         {activeSection === "TALENT" && (
-  <TalentCoursePage />
-)}
+          <TalentCoursePage />
+        )}
 
-{activeSection === "ENGLISH" && (
-  <EnglishClassPage />
-)}
+        {activeSection === "SINGLE_DAY" && (
+          <SingleDayCoursePage />
+        )}
 
-{activeSection === "MAKEUP" && (
-  <MakeupCalendarPage />
-)}
+        {activeSection === "ENGLISH" && (
+          <EnglishClassPage />
+        )}
 
-{activeSection === "SINGLE_DAY" && (
-  <div className="courseHub__comingSoon">
-    <p>{activeInfo?.english}</p>
-
-    <h2>{activeInfo?.label}</h2>
-
-    <span>
-      {activeInfo?.description}
-    </span>
-
-    <div>
-      這個區域下一步開始建立。
-    </div>
-  </div>
-)}
+        {activeSection === "MAKEUP" && (
+          <MakeupCalendarPage />
+        )}
       </section>
     </div>
   );
