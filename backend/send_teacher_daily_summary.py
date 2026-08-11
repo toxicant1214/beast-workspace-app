@@ -1,4 +1,3 @@
-import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -8,7 +7,9 @@ from services.teacher_service import supabase
 from services.teacher_assignment_service import (
     get_teacher_assignments_by_teacher_id,
 )
-from services.line_service import send_line_message_to_user
+from services.line_service import (
+    send_line_message_to_user,
+)
 
 
 load_dotenv()
@@ -167,16 +168,11 @@ def build_teacher_daily_summary(
         f"☀️ {today.strftime('%m/%d')} 今日工作摘要",
         "",
         f"{teacher_name}老師您好：",
+        "",
+        "📋 老師任務",
     ]
 
     if assignments:
-        lines.extend(
-            [
-                "",
-                "📋 今日老師任務",
-            ]
-        )
-
         for member in assignments:
             assignment = (
                 member.get(
@@ -205,22 +201,32 @@ def build_teacher_daily_summary(
             if member.get(
                 "teacher_completed"
             ):
-                status_text = "等待主管確認"
+                status_text = (
+                    "等待主管確認"
+                )
             else:
-                status_text = "未完成"
+                status_text = (
+                    "未完成"
+                )
 
             lines.append(
-                f"・{title}{deadline_text}｜{status_text}"
+                f"・{title}"
+                f"{deadline_text}"
+                f"｜{status_text}"
             )
-
-    if makeups:
-        lines.extend(
-            [
-                "",
-                "🎒 今日補課提醒",
-            ]
+    else:
+        lines.append(
+            "目前沒有未完成的老師任務。"
         )
 
+    lines.extend(
+        [
+            "",
+            "🎒 今日補課",
+        ]
+    )
+
+    if makeups:
         for item in makeups:
             student = (
                 item.get("students")
@@ -255,8 +261,10 @@ def build_teacher_daily_summary(
             )
 
             lines.append(
-                f"・{rescheduled_mark}{time_text} "
-                f"{student_name}｜{source_name}"
+                f"・{rescheduled_mark}"
+                f"{time_text} "
+                f"{student_name}"
+                f"｜{source_name}"
             )
 
         lines.extend(
@@ -265,13 +273,9 @@ def build_teacher_daily_summary(
                 "請於補課時間協助提醒學生前往上課。",
             ]
         )
-
-    if not assignments and not makeups:
-        lines.extend(
-            [
-                "",
-                "今天沒有需要提醒的老師任務或學生補課。",
-            ]
+    else:
+        lines.append(
+            "今天沒有補課安排。"
         )
 
     return "\n".join(lines)
@@ -282,9 +286,13 @@ def main():
         TAIPEI_TZ
     )
 
-    today_date = now.date().isoformat()
+    today_date = (
+        now.date().isoformat()
+    )
 
-    teachers = get_active_line_teachers()
+    teachers = (
+        get_active_line_teachers()
+    )
 
     print(
         f"找到 {len(teachers)} 位"
@@ -293,8 +301,11 @@ def main():
 
     for teacher in teachers:
         teacher_id = teacher["id"]
+
         line_user_id = (
-            teacher.get("line_user_id")
+            teacher.get(
+                "line_user_id"
+            )
         )
 
         assignments = (
@@ -310,18 +321,6 @@ def main():
             )
         )
 
-        if (
-            not assignments
-            and not makeups
-        ):
-            print(
-                "略過：",
-                teacher.get("chinese_name"),
-                "今日無資料。",
-            )
-
-            continue
-
         message = (
             build_teacher_daily_summary(
                 teacher=teacher,
@@ -333,7 +332,9 @@ def main():
 
         print(
             "發送老師晨報：",
-            teacher.get("chinese_name"),
+            teacher.get(
+                "chinese_name"
+            ),
         )
 
         send_line_message_to_user(
