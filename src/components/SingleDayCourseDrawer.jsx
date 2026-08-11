@@ -151,22 +151,17 @@ function SingleDayCourseDrawer({
           ),
 
         supabase
-          .from("students")
-          .select(`
-  id,
-  chinese_name,
-  english_name,
-  school,
-  current_grade,
-  status
-`)
-          .neq(
-            "status",
-            "inactive"
-          )
-          .order(
-            "chinese_name"
-          ),
+  .from("students")
+  .select(`
+    id,
+    chinese_name,
+    english_name,
+    school,
+    current_grade
+  `)
+  .order(
+    "chinese_name"
+  ),
       ]);
 
       if (
