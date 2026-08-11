@@ -45,6 +45,16 @@ function StudentProfile({ student, onBack, onEdit }) {
     setIsLoadingEnglishClasses,
   ] = useState(true);
 
+  const [
+    talentClassRecords,
+    setTalentClassRecords,
+  ] = useState([]);
+
+  const [
+    isLoadingTalentClasses,
+    setIsLoadingTalentClasses,
+  ] = useState(true);
+
   const statusLabels = {
     ACTIVE: "在學",
     PAUSED: "暫停",
@@ -64,6 +74,7 @@ function StudentProfile({ student, onBack, onEdit }) {
     if (student?.id) {
       loadClassHistory();
       loadEnglishClasses();
+      loadTalentClasses();
     }
   }, [student?.id]);
 
@@ -192,6 +203,61 @@ function StudentProfile({ student, onBack, onEdit }) {
     }
   }
 
+  async function loadTalentClasses() {
+    try {
+      setIsLoadingTalentClasses(true);
+
+      const { data, error } = await supabase
+        .from("course_class_students")
+        .select(`
+          id,
+          joined_at,
+          left_at,
+          is_active,
+          note,
+          course_classes (
+            id,
+            course_id,
+            class_name,
+            weekday,
+            start_time,
+            end_time,
+            first_lesson_date,
+            total_sessions,
+            is_active,
+            courses (
+              id,
+              course_name,
+              is_active
+            )
+          )
+        `)
+        .eq("student_id", student.id)
+        .order("joined_at", {
+          ascending: false,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      setTalentClassRecords(data || []);
+    } catch (error) {
+      console.error(
+        "讀取學生才藝班資料失敗：",
+        error
+      );
+
+      window.alert(
+        `讀取學生才藝班資料失敗：${error.message}`
+      );
+
+      setTalentClassRecords([]);
+    } finally {
+      setIsLoadingTalentClasses(false);
+    }
+  }
+
   function displayValue(value) {
     return value || "尚未設定";
   }
@@ -218,6 +284,14 @@ function StudentProfile({ student, onBack, onEdit }) {
         (item) => item.status === "ACTIVE"
       ),
     [englishClassRecords]
+  );
+
+  const currentTalentClassRecords = useMemo(
+    () =>
+      talentClassRecords.filter(
+        (item) => item.is_active
+      ),
+    [talentClassRecords]
   );
 
   const timelineItems = useMemo(() => {
@@ -270,6 +344,89 @@ function StudentProfile({ student, onBack, onEdit }) {
       }
     });
 
+    englishClassRecords.forEach((item) => {
+      const englishClass = item.english_classes;
+
+      if (!englishClass) return;
+
+      if (item.joined_at) {
+        items.push({
+          date: item.joined_at,
+          title: `加入美語班 ${englishClass.class_name}`,
+          description: [
+            englishClass.academic_year,
+            englishClass.term,
+          ]
+            .filter(Boolean)
+            .join("・"),
+          type: "ENGLISH_JOIN",
+        });
+      }
+
+      if (
+        item.status !== "ACTIVE" &&
+        item.left_at
+      ) {
+        items.push({
+          date: item.left_at,
+          title: `退出美語班 ${englishClass.class_name}`,
+          description: [
+            englishClass.academic_year,
+            englishClass.term,
+          ]
+            .filter(Boolean)
+            .join("・"),
+          type: "ENGLISH_LEFT",
+        });
+      }
+    });
+
+    talentClassRecords.forEach((item) => {
+      const talentClass = item.course_classes;
+
+      if (!talentClass) return;
+
+      const courseName =
+        talentClass.courses?.course_name ||
+        "才藝課程";
+
+      const classDescription = [
+        talentClass.class_name,
+        WEEKDAY_LABELS[talentClass.weekday],
+        talentClass.start_time &&
+        talentClass.end_time
+          ? `${formatTime(
+              talentClass.start_time
+            )}－${formatTime(
+              talentClass.end_time
+            )}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("・");
+
+      if (item.joined_at) {
+        items.push({
+          date: item.joined_at,
+          title: `加入才藝課程 ${courseName}`,
+          description: classDescription,
+          type: "TALENT_JOIN",
+        });
+      }
+
+      if (
+        !item.is_active &&
+        item.left_at
+      ) {
+        items.push({
+          date: item.left_at,
+          title: `退出才藝課程 ${courseName}`,
+          description: classDescription,
+          type: "TALENT_LEFT",
+        });
+      }
+    });
+
     return items.sort((a, b) => {
       if (!a.date) return 1;
       if (!b.date) return -1;
@@ -279,15 +436,19 @@ function StudentProfile({ student, onBack, onEdit }) {
   }, [
     student.enrollment_date,
     classHistory,
+    englishClassRecords,
+    talentClassRecords,
   ]);
 
   const isLoadingEnrollments =
     isLoadingClasses ||
-    isLoadingEnglishClasses;
+    isLoadingEnglishClasses ||
+    isLoadingTalentClasses;
 
   const hasCurrentEnrollments =
     currentClassRecords.length > 0 ||
-    currentEnglishClassRecords.length > 0;
+    currentEnglishClassRecords.length > 0 ||
+    currentTalentClassRecords.length > 0;
 
   return (
     <div className="studentProfile">
@@ -510,7 +671,7 @@ function StudentProfile({ student, onBack, onEdit }) {
         <section className="studentProfile__panel studentProfile__panel--wide">
           <div className="studentProfile__sectionHeading">
             <p>ENROLLMENTS</p>
-            <h2>目前班級</h2>
+            <h2>目前班級與課程</h2>
           </div>
 
           {isLoadingEnrollments ? (
@@ -530,7 +691,7 @@ function StudentProfile({ student, onBack, onEdit }) {
               </strong>
 
               <span>
-                可從班級管理或美語班管理將學生加入班級。
+                可從安親班、美語班或才藝班管理將學生加入班級與課程。
               </span>
             </div>
           ) : (
@@ -638,6 +799,73 @@ function StudentProfile({ student, onBack, onEdit }) {
                           ]
                             .filter(Boolean)
                             .join("・")}
+                        </span>
+
+                        {scheduleText && (
+                          <span>
+                            {scheduleText}
+                          </span>
+                        )}
+                      </div>
+
+                      <small>
+                        {formatDate(
+                          item.joined_at
+                        )}
+                        {" ～ "}
+                        至今
+                      </small>
+                    </div>
+                  );
+                }
+              )}
+
+              {currentTalentClassRecords.map(
+                (item) => {
+                  const talentClass =
+                    item.course_classes;
+
+                  if (!talentClass) {
+                    return null;
+                  }
+
+                  const courseName =
+                    talentClass.courses
+                      ?.course_name ||
+                    "才藝課程";
+
+                  const scheduleText = [
+                    WEEKDAY_LABELS[
+                      talentClass.weekday
+                    ],
+                    talentClass.start_time &&
+                    talentClass.end_time
+                      ? `${formatTime(
+                          talentClass.start_time
+                        )}－${formatTime(
+                          talentClass.end_time
+                        )}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+
+                  return (
+                    <div
+                      key={`talent-${item.id}`}
+                      className="studentProfile__enrollmentItem"
+                    >
+                      <div>
+                        <span>
+                          才藝課程
+                        </span>
+
+                        <strong>
+                          {courseName}
+                        </strong>
+
+                        <span>
+                          {talentClass.class_name}
                         </span>
 
                         {scheduleText && (
