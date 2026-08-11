@@ -2736,33 +2736,35 @@ function CoursePage() {
 
   return (
     <div className="coursePage">
-      <header className="coursePage__header">
-        <div>
-          <p className="coursePage__eyebrow">COURSE CENTER</p>
-          <h1>課程管理</h1>
-          <p className="coursePage__summary">
-            建立倍思的才藝課程種類，並在各課程底下管理實際開設的班級。
-          </p>
-        </div>
+      <header className="coursePage__header coursePage__header--embedded">
+  <div>
+    <p className="coursePage__eyebrow">TALENT CLASSES</p>
 
-        <div className="courseCard__actions">
-          <button
-            type="button"
-            className="courseCard__editButton"
-            onClick={openExclusionDrawer}
-          >
-            共用休假設定
-          </button>
+    <h1>才藝班</h1>
 
-          <button
-            type="button"
-            className="coursePage__primaryButton"
-            onClick={openNewCourseDrawer}
-          >
-            ＋ 新增課程
-          </button>
-        </div>
-      </header>
+    <p className="coursePage__summary">
+      建立才藝課程種類，並在各課程底下管理實際開設的班級。
+    </p>
+  </div>
+
+  <div className="courseCard__actions">
+    <button
+      type="button"
+      className="courseCard__editButton"
+      onClick={openExclusionDrawer}
+    >
+      共用休假設定
+    </button>
+
+    <button
+      type="button"
+      className="coursePage__primaryButton"
+      onClick={openNewCourseDrawer}
+    >
+      ＋ 新增課程
+    </button>
+  </div>
+</header>
 
       <section className="coursePage__stats">
         <div className="coursePage__statCard">

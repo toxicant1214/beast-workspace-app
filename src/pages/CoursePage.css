@@ -806,3 +806,10 @@ overflow: hidden;
 .courseCard__actions--class button {
   min-width: 110px;
 }
+/* 操作按鈕文字固定單行，不自動換行 */
+.coursePage button,
+.courseCard button {
+  white-space: nowrap;
+  word-break: keep-all;
+  flex-shrink: 0;
+}
