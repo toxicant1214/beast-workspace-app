@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import SingleDayCourseDrawer from "../components/SingleDayCourseDrawer";
+import SingleDayCourseDetailDrawer from "../components/SingleDayCourseDetailDrawer";
 import "./SingleDayCoursePage.css";
 
 function formatDate(dateString) {
-  if (!dateString) return "未設定";
+  if (!dateString) {
+    return "未設定";
+  }
 
   const [year, month, day] =
     dateString.split("-");
@@ -16,7 +20,9 @@ function formatDate(dateString) {
 }
 
 function formatTime(timeString) {
-  if (!timeString) return "";
+  if (!timeString) {
+    return "";
+  }
 
   return timeString.slice(0, 5);
 }
@@ -34,9 +40,26 @@ function getStatusLabel(status) {
 }
 
 function SingleDayCoursePage() {
-  const [courses, setCourses] = useState([]);
+  const [courses, setCourses] =
+    useState([]);
+
   const [isLoading, setIsLoading] =
     useState(true);
+
+  const [
+    isDrawerOpen,
+    setIsDrawerOpen,
+  ] = useState(false);
+
+  const [
+    selectedCourse,
+    setSelectedCourse,
+  ] = useState(null);
+
+  const [
+    editingCourse,
+    setEditingCourse,
+  ] = useState(null);
 
   useEffect(() => {
     loadCourses();
@@ -70,7 +93,14 @@ function SingleDayCoursePage() {
           ),
           single_day_course_students (
             id,
-            student_id
+            student_id,
+            students (
+              id,
+              chinese_name,
+              english_name,
+              school,
+              current_grade
+            )
           )
         `)
         .order(
@@ -90,9 +120,27 @@ function SingleDayCoursePage() {
         throw error;
       }
 
+      const nextCourses =
+        data || [];
+
       setCourses(
-        data || []
+        nextCourses
       );
+
+      if (selectedCourse) {
+        const refreshedCourse =
+          nextCourses.find(
+            (item) =>
+              item.id ===
+              selectedCourse.id
+          );
+
+        if (refreshedCourse) {
+          setSelectedCourse(
+            refreshedCourse
+          );
+        }
+      }
     } catch (error) {
       console.error(
         "讀取單日課程失敗：",
@@ -107,6 +155,38 @@ function SingleDayCoursePage() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function handleCourseCreated() {
+    await loadCourses();
+  }
+
+  async function handleCourseUpdated() {
+    await loadCourses();
+  }
+
+  function openCreateCourse() {
+    setEditingCourse(null);
+    setIsDrawerOpen(true);
+  }
+
+  function openCourseDetail(course) {
+    setSelectedCourse(course);
+  }
+
+  function closeCourseDetail() {
+    setSelectedCourse(null);
+  }
+
+  function openEditCourse(course) {
+    setSelectedCourse(null);
+    setEditingCourse(course);
+    setIsDrawerOpen(true);
+  }
+
+  function closeCourseDrawer() {
+    setIsDrawerOpen(false);
+    setEditingCourse(null);
   }
 
   return (
@@ -129,6 +209,9 @@ function SingleDayCoursePage() {
         <button
           type="button"
           className="singleDayCourse__primaryButton"
+          onClick={
+            openCreateCourse
+          }
         >
           ＋ 新增單日課程
         </button>
@@ -149,79 +232,124 @@ function SingleDayCoursePage() {
           </strong>
 
           <p>
-            下一步會加入課程建立、學生名單與合作單位設定。
+            建立第一堂單日課程後，課程資訊會顯示在這裡。
           </p>
         </section>
       ) : (
         <section className="singleDayCourse__list">
-          {courses.map((course) => {
-            const teacher =
-              course.teachers;
+          {courses.map(
+            (course) => {
+              const teacher =
+                course.teachers;
 
-            const studentCount =
-              course
-                .single_day_course_students
-                ?.length || 0;
+              const studentCount =
+                course
+                  .single_day_course_students
+                  ?.length || 0;
 
-            return (
-              <article
-                key={course.id}
-                className="singleDayCourse__card"
-              >
-                <div className="singleDayCourse__cardTop">
-                  <div>
+              return (
+                <button
+                  key={course.id}
+                  type="button"
+                  className="singleDayCourse__card"
+                  onClick={() =>
+                    openCourseDetail(
+                      course
+                    )
+                  }
+                >
+                  <div className="singleDayCourse__cardTop">
+                    <div>
+                      <span>
+                        {formatDate(
+                          course.course_date
+                        )}
+                      </span>
+
+                      <h2>
+                        {
+                          course.course_name
+                        }
+                      </h2>
+                    </div>
+
+                    <span className="singleDayCourse__status">
+                      {getStatusLabel(
+                        course.status
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="singleDayCourse__meta">
                     <span>
-                      {formatDate(
-                        course.course_date
+                      {formatTime(
+                        course.start_time
+                      )}
+                      {"－"}
+                      {formatTime(
+                        course.end_time
                       )}
                     </span>
 
-                    <h2>
-                      {course.course_name}
-                    </h2>
+                    <span>
+                      授課老師：
+                      {teacher?.chinese_name ||
+                        teacher?.english_name ||
+                        "未設定"}
+                    </span>
+
+                    <span>
+                      參加學生：
+                      {studentCount} 位
+                    </span>
                   </div>
 
-                  <span className="singleDayCourse__status">
-                    {getStatusLabel(
-                      course.status
-                    )}
-                  </span>
-                </div>
-
-                <div className="singleDayCourse__meta">
-                  <span>
-                    {formatTime(
-                      course.start_time
-                    )}
-                    {"－"}
-                    {formatTime(
-                      course.end_time
-                    )}
-                  </span>
-
-                  <span>
-                    授課老師：
-                    {teacher?.chinese_name ||
-                      teacher?.english_name ||
-                      "未設定"}
-                  </span>
-
-                  <span>
-                    參加學生：
-                    {studentCount} 位
-                  </span>
-                </div>
-
-                {course.partner_name && (
-                  <div className="singleDayCourse__partner">
-                    合作單位：
-                    {course.partner_name}
-                  </div>
-                )}
-              </article>
-            );
-          })}
+                  {course.partner_name && (
+                    <div className="singleDayCourse__partner">
+                      合作單位：
+                      {
+                        course.partner_name
+                      }
+                    </div>
+                  )}
+                </button>
+              );
+            }
+          )}
         </section>
+      )}
+
+      <SingleDayCourseDrawer
+        isOpen={isDrawerOpen}
+        onClose={
+          closeCourseDrawer
+        }
+        onCreated={
+          handleCourseCreated
+        }
+        onUpdated={
+          handleCourseUpdated
+        }
+        course={
+          editingCourse
+        }
+      />
+
+      {selectedCourse && (
+        <SingleDayCourseDetailDrawer
+          course={
+            selectedCourse
+          }
+          onClose={
+            closeCourseDetail
+          }
+          onChanged={
+            loadCourses
+          }
+          onEdit={
+            openEditCourse
+          }
+        />
       )}
     </div>
   );
