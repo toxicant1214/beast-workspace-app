@@ -1,6 +1,7 @@
 import { useState } from "react";
 import TalentCoursePage from "./TalentCoursePage";
 import EnglishClassPage from "./EnglishClassPage";
+import MakeupCalendarPage from "./MakeupCalendarPage";
 import "./CourseHubPage.css";
 
 const COURSE_SECTIONS = [
@@ -80,29 +81,32 @@ function CoursePage() {
 
       <section className="courseHub__content">
         {activeSection === "TALENT" && (
-          <TalentCoursePage />
-        )}
+  <TalentCoursePage />
+)}
 
-        {activeSection === "ENGLISH" && (
-          <EnglishClassPage />
-        )}
+{activeSection === "ENGLISH" && (
+  <EnglishClassPage />
+)}
 
-        {activeSection !== "TALENT" &&
-          activeSection !== "ENGLISH" && (
-            <div className="courseHub__comingSoon">
-              <p>{activeInfo?.english}</p>
+{activeSection === "MAKEUP" && (
+  <MakeupCalendarPage />
+)}
 
-              <h2>{activeInfo?.label}</h2>
+{activeSection === "SINGLE_DAY" && (
+  <div className="courseHub__comingSoon">
+    <p>{activeInfo?.english}</p>
 
-              <span>
-                {activeInfo?.description}
-              </span>
+    <h2>{activeInfo?.label}</h2>
 
-              <div>
-                這個區域下一步開始建立。
-              </div>
-            </div>
-          )}
+    <span>
+      {activeInfo?.description}
+    </span>
+
+    <div>
+      這個區域下一步開始建立。
+    </div>
+  </div>
+)}
       </section>
     </div>
   );

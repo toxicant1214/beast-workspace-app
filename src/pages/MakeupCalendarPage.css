@@ -1,0 +1,195 @@
+.makeupCalendar {
+  width: 100%;
+  min-width: 0;
+}
+
+.makeupCalendar__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 30px;
+}
+
+.makeupCalendar__eyebrow {
+  margin: 0;
+  color: #a09a91;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.makeupCalendar__header h1 {
+  margin: 8px 0 0;
+  color: #302f2d;
+  font-size: 36px;
+  line-height: 1.2;
+}
+
+.makeupCalendar__summary {
+  margin: 10px 0 0;
+  color: #8b857d;
+  font-size: 14px;
+}
+
+.makeupCalendar__primaryButton {
+  flex: 0 0 auto;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 13px;
+  background: #82a58e;
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.makeupCalendar__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.makeupCalendar__monthControl {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.makeupCalendar__monthControl h2 {
+  min-width: 150px;
+  margin: 0;
+  color: #3c3935;
+  font-size: 20px;
+  text-align: center;
+}
+
+.makeupCalendar__monthControl button {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2dcd3;
+  border-radius: 10px;
+  background: #fffdf9;
+  color: #746e66;
+  font: inherit;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.makeupCalendar__todayButton {
+  padding: 9px 15px;
+  border: 1px solid #ded8cf;
+  border-radius: 10px;
+  background: #fffdf9;
+  color: #716b63;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.makeupCalendar__calendar {
+  overflow: hidden;
+  border: 1px solid #e5dfd6;
+  border-radius: 20px;
+  background: #e5dfd6;
+}
+
+.makeupCalendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+}
+
+.makeupCalendar__weekdays > div {
+  padding: 13px 8px;
+  background: #f5f2ec;
+  color: #8b857c;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.makeupCalendar__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+}
+
+.makeupCalendar__day {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 125px;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 11px;
+  border: 0;
+  background: #fffdf9;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.makeupCalendar__day:hover {
+  background: #faf8f3;
+}
+
+.makeupCalendar__day--empty {
+  background: #f8f5ef;
+  cursor: default;
+}
+
+.makeupCalendar__date {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: #5e5952;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.makeupCalendar__day--today
+  .makeupCalendar__date {
+  border-radius: 50%;
+  background: #82a58e;
+  color: #ffffff;
+}
+
+.makeupCalendar__events {
+  display: grid;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+@media (max-width: 900px) {
+  .makeupCalendar__day {
+    min-height: 95px;
+    padding: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  .makeupCalendar__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .makeupCalendar__primaryButton {
+    width: 100%;
+  }
+
+  .makeupCalendar__day {
+    min-height: 78px;
+  }
+}
