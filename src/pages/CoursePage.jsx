@@ -1,5 +1,6 @@
 import { useState } from "react";
 import TalentCoursePage from "./TalentCoursePage";
+import EnglishClassPage from "./EnglishClassPage";
 import "./CourseHubPage.css";
 
 const COURSE_SECTIONS = [
@@ -82,21 +83,26 @@ function CoursePage() {
           <TalentCoursePage />
         )}
 
-        {activeSection !== "TALENT" && (
-          <div className="courseHub__comingSoon">
-            <p>{activeInfo?.english}</p>
-
-            <h2>{activeInfo?.label}</h2>
-
-            <span>
-              {activeInfo?.description}
-            </span>
-
-            <div>
-              這個區域下一步開始建立。
-            </div>
-          </div>
+        {activeSection === "ENGLISH" && (
+          <EnglishClassPage />
         )}
+
+        {activeSection !== "TALENT" &&
+          activeSection !== "ENGLISH" && (
+            <div className="courseHub__comingSoon">
+              <p>{activeInfo?.english}</p>
+
+              <h2>{activeInfo?.label}</h2>
+
+              <span>
+                {activeInfo?.description}
+              </span>
+
+              <div>
+                這個區域下一步開始建立。
+              </div>
+            </div>
+          )}
       </section>
     </div>
   );
