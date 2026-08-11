@@ -863,3 +863,188 @@
     grid-template-columns: 1fr;
   }
 }
+/* =========================
+   Makeup Day Drawer
+========================= */
+
+.makeupDay__backdrop {
+  position: fixed;
+  z-index: 1550;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(38, 36, 32, 0.38);
+  backdrop-filter: blur(4px);
+}
+
+.makeupDay {
+  display: flex;
+  width: min(560px, 100%);
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fffdf9;
+  box-shadow: -20px 0 55px rgba(48, 42, 34, 0.18);
+}
+
+.makeupDay__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 28px 28px 22px;
+  border-bottom: 1px solid #eae4db;
+}
+
+.makeupDay__header p {
+  margin: 0 0 6px;
+  color: #aaa39a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.makeupDay__header h2 {
+  margin: 0;
+  color: #37342f;
+  font-size: 28px;
+}
+
+.makeupDay__header span {
+  display: block;
+  margin-top: 7px;
+  color: #8d867e;
+  font-size: 13px;
+}
+
+.makeupDay__header > button {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f1eee8;
+  color: #706a62;
+  font: inherit;
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.makeupDay__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 28px 40px;
+}
+
+.makeupDay__list {
+  display: grid;
+  gap: 10px;
+}
+
+.makeupDay__item {
+  display: grid;
+  width: 100%;
+  grid-template-columns:
+    auto
+    minmax(0, 1fr)
+    auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 15px;
+  border: 1px solid #e4ded5;
+  border-radius: 14px;
+  background: #fffdf9;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.makeupDay__item:hover {
+  border-color: #cbd8ce;
+  background: #f5f8f5;
+}
+
+.makeupDay__time {
+  display: flex;
+  min-width: 52px;
+  align-items: center;
+  gap: 5px;
+}
+
+.makeupDay__time > span {
+  color: #a07851;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.makeupDay__time strong {
+  color: #627969;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.makeupDay__info {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.makeupDay__info > strong {
+  color: #45413c;
+  font-size: 15px;
+}
+
+.makeupDay__info > span {
+  overflow: hidden;
+  color: #8a837b;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.makeupDay__info > small {
+  color: #a09a92;
+  font-size: 11px;
+}
+
+.makeupDay__status {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #eef4ef;
+  color: #667d6b;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.makeupDay__empty {
+  padding: 48px 20px;
+  color: #999289;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 650px) {
+  .makeupDay__header,
+  .makeupDay__body {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .makeupDay__item {
+    grid-template-columns:
+      auto
+      minmax(0, 1fr);
+  }
+
+  .makeupDay__status {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

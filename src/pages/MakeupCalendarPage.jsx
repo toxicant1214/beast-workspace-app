@@ -6,6 +6,7 @@ import {
 import { supabase } from "../lib/supabase";
 import MakeupDrawer from "../components/MakeupDrawer";
 import MakeupDetailDrawer from "../components/MakeupDetailDrawer";
+import MakeupDayDrawer from "../components/MakeupDayDrawer";
 import "./MakeupCalendarPage.css";
 
 const WEEKDAY_LABELS = [
@@ -40,6 +41,34 @@ function formatTime(timeString) {
   return timeString.slice(0, 5);
 }
 
+function formatDateLabel(dateKey) {
+  if (!dateKey) return "";
+
+  const [year, month, day] =
+    dateKey.split("-");
+
+  return `${year}/${month}/${day}`;
+}
+
+function getAutoCompleteCutoffDate() {
+  const cutoffDate = new Date();
+
+  cutoffDate.setHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  cutoffDate.setDate(
+    cutoffDate.getDate() - 3
+  );
+
+  return formatDateKey(
+    cutoffDate
+  );
+}
+
 function MakeupCalendarPage() {
   const [
     currentMonth,
@@ -72,6 +101,11 @@ function MakeupCalendarPage() {
   const [
     selectedMakeup,
     setSelectedMakeup,
+  ] = useState(null);
+
+  const [
+    selectedDay,
+    setSelectedDay,
   ] = useState(null);
 
   useEffect(() => {
@@ -169,6 +203,33 @@ function MakeupCalendarPage() {
       currentMonth.getMonth() + 1
     } 月`;
 
+  async function autoCompleteOldMakeups() {
+    const cutoffDate =
+      getAutoCompleteCutoffDate();
+
+    const {
+      error,
+    } = await supabase
+      .from("makeup_classes")
+      .update({
+        status: "COMPLETED",
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "status",
+        "PENDING"
+      )
+      .lte(
+        "makeup_date",
+        cutoffDate
+      );
+
+    if (error) {
+      throw error;
+    }
+  }
+
   async function loadMakeups() {
     const year =
       currentMonth.getFullYear();
@@ -196,6 +257,8 @@ function MakeupCalendarPage() {
 
     try {
       setIsLoading(true);
+
+      await autoCompleteOldMakeups();
 
       const {
         data,
@@ -352,11 +415,26 @@ function MakeupCalendarPage() {
   }
 
   function openMakeupDetail(item) {
+    setSelectedDay(null);
     setSelectedMakeup(item);
   }
 
   function closeMakeupDetail() {
     setSelectedMakeup(null);
+  }
+
+  function openDayDrawer(
+    dateKey,
+    items
+  ) {
+    setSelectedDay({
+      dateKey,
+      items,
+    });
+  }
+
+  function closeDayDrawer() {
+    setSelectedDay(null);
   }
 
   async function handleSaved() {
@@ -555,6 +633,12 @@ function MakeupCalendarPage() {
                       <button
                         type="button"
                         className="makeupCalendar__more"
+                        onClick={() =>
+                          openDayDrawer(
+                            dateKey,
+                            dayMakeups
+                          )
+                        }
                       >
                         ＋
                         {hiddenCount}
@@ -577,6 +661,25 @@ function MakeupCalendarPage() {
           }
           onSaved={
             handleSaved
+          }
+        />
+      )}
+
+      {selectedDay && (
+        <MakeupDayDrawer
+          dateLabel={
+            formatDateLabel(
+              selectedDay.dateKey
+            )
+          }
+          items={
+            selectedDay.items
+          }
+          onClose={
+            closeDayDrawer
+          }
+          onOpenMakeup={
+            openMakeupDetail
           }
         />
       )}
