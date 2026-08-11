@@ -15,6 +15,16 @@ const EMPTY_FORM = {
   note: "",
 };
 
+function getTodayString() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function ClassPage() {
   const [classes, setClasses] = useState([]);
   const [searchText, setSearchText] = useState("");
@@ -50,7 +60,11 @@ function ClassPage() {
       setClasses(data || []);
     } catch (error) {
       console.error("讀取班級資料失敗：", error);
-      window.alert(`讀取班級資料失敗：${error.message}`);
+
+      window.alert(
+        `讀取班級資料失敗：${error.message}`
+      );
+
       setClasses([]);
     } finally {
       setIsLoading(false);
@@ -114,36 +128,52 @@ function ClassPage() {
       form.end_date &&
       form.end_date < form.start_date
     ) {
-      window.alert("結束日期不可早於開始日期。");
+      window.alert(
+        "結束日期不可早於開始日期。"
+      );
+
       return;
     }
 
-    const duplicatedClass = classes.find((classItem) => {
-      const isCurrentClass =
-        selectedClass && classItem.id === selectedClass.id;
+    const duplicatedClass = classes.find(
+      (classItem) => {
+        const isCurrentClass =
+          selectedClass &&
+          classItem.id === selectedClass.id;
 
-      return (
-        !isCurrentClass &&
-        classItem.class_name.trim().toLowerCase() ===
-          className.toLowerCase() &&
-        (classItem.academic_year || "").trim().toLowerCase() ===
-          form.academic_year.trim().toLowerCase() &&
-        (classItem.term || "").trim().toLowerCase() ===
-          form.term.trim().toLowerCase()
-      );
-    });
+        return (
+          !isCurrentClass &&
+          classItem.class_name
+            .trim()
+            .toLowerCase() ===
+            className.toLowerCase() &&
+          (classItem.academic_year || "")
+            .trim()
+            .toLowerCase() ===
+            form.academic_year
+              .trim()
+              .toLowerCase() &&
+          (classItem.term || "")
+            .trim()
+            .toLowerCase() ===
+            form.term.trim().toLowerCase()
+        );
+      }
+    );
 
     if (duplicatedClass) {
       window.alert(
         `同一學年度與學期已經有「${duplicatedClass.class_name}」這個班級。`
       );
+
       return;
     }
 
     const payload = {
       class_name: className,
       course_type: "AFTER_SCHOOL",
-      academic_year: form.academic_year.trim() || null,
+      academic_year:
+        form.academic_year.trim() || null,
       term: form.term.trim() || null,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
@@ -181,18 +211,179 @@ function ClassPage() {
       await loadClasses();
     } catch (error) {
       console.error("儲存班級失敗：", error);
-      window.alert(`儲存班級失敗：${error.message}`);
+
+      window.alert(
+        `儲存班級失敗：${error.message}`
+      );
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function toggleClassStatus(classItem) {
-    const nextStatus = !classItem.is_active;
-    const actionText = nextStatus ? "重新啟用" : "停用";
+  async function deactivateClass(classItem) {
+    try {
+      const { data: activeStudents, error } =
+        await supabase
+          .from("class_students")
+          .select("id, student_id, joined_at")
+          .eq("class_id", classItem.id)
+          .eq("status", "ACTIVE");
 
+      if (error) {
+        throw error;
+      }
+
+      const studentCount =
+        activeStudents?.length || 0;
+
+      const defaultEndDate =
+        classItem.end_date || getTodayString();
+
+      const inputDate = window.prompt(
+        `「${classItem.class_name}」目前有 ${studentCount} 位學生。\n\n停用班級會視為這個班級正式結束，所有目前學生都會在同一天退出班級並保留歷程。\n\n請確認班級結束日期：\n格式：YYYY-MM-DD`,
+        defaultEndDate
+      );
+
+      if (inputDate === null) {
+        return;
+      }
+
+      const endDate = inputDate.trim();
+
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+      ) {
+        window.alert(
+          "日期格式錯誤，請使用 YYYY-MM-DD。"
+        );
+
+        return;
+      }
+
+      if (
+        classItem.start_date &&
+        endDate < classItem.start_date
+      ) {
+        window.alert(
+          "班級結束日期不可早於班級開始日期。"
+        );
+
+        return;
+      }
+
+      const invalidStudent =
+        activeStudents?.find(
+          (item) =>
+            item.joined_at &&
+            endDate < item.joined_at
+        );
+
+      if (invalidStudent) {
+        window.alert(
+          "班級結束日期早於其中一位學生的加入日期，請重新確認日期。"
+        );
+
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `確定停用「${classItem.class_name}」嗎？\n\n結束日期：${endDate}\n目前學生：${studentCount} 位\n\n完成後：\n・班級會移到已停用\n・目前學生會全部退出此班級\n・每位學生的班級歷程都會保留`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+
+      if (studentCount > 0) {
+        const { error: studentUpdateError } =
+          await supabase
+            .from("class_students")
+            .update({
+              status: "LEFT",
+              left_at: endDate,
+              updated_at: nowIso,
+            })
+            .eq("class_id", classItem.id)
+            .eq("status", "ACTIVE");
+
+        if (studentUpdateError) {
+          throw studentUpdateError;
+        }
+      }
+
+      const { error: classUpdateError } =
+        await supabase
+          .from("classes")
+          .update({
+            is_active: false,
+            end_date: endDate,
+            updated_at: nowIso,
+          })
+          .eq("id", classItem.id);
+
+      if (classUpdateError) {
+        /*
+         * 如果班級停用失敗，但前面學生已經被退出，
+         * 盡量自動把學生還原回 ACTIVE。
+         */
+        if (studentCount > 0) {
+          const activeIds =
+            activeStudents.map(
+              (item) => item.id
+            );
+
+          const { error: rollbackError } =
+            await supabase
+              .from("class_students")
+              .update({
+                status: "ACTIVE",
+                left_at: null,
+                updated_at:
+                  new Date().toISOString(),
+              })
+              .in("id", activeIds);
+
+          if (rollbackError) {
+            console.error(
+              "停用班級失敗後，學生狀態還原失敗：",
+              rollbackError
+            );
+
+            window.alert(
+              `班級停用未完成，而且學生班級狀態還原失敗。\n請立即到 Supabase 檢查「${classItem.class_name}」的 class_students 紀錄。`
+            );
+
+            return;
+          }
+        }
+
+        throw classUpdateError;
+      }
+
+      setDetailClass(null);
+
+      await loadClasses();
+
+      window.alert(
+        `「${classItem.class_name}」已於 ${endDate} 結束。\n${studentCount} 位學生的退出紀錄已保留。`
+      );
+    } catch (error) {
+      console.error(
+        "停用班級失敗：",
+        error
+      );
+
+      window.alert(
+        `停用班級失敗：${error.message}`
+      );
+    }
+  }
+
+  async function reactivateClass(classItem) {
     const confirmed = window.confirm(
-      `確定要${actionText}「${classItem.class_name}」嗎？`
+      `確定要重新啟用「${classItem.class_name}」嗎？\n\n重新啟用只會恢復班級本身，不會把過去已退出的學生自動重新加入。`
     );
 
     if (!confirmed) {
@@ -203,7 +394,7 @@ function ClassPage() {
       const { error } = await supabase
         .from("classes")
         .update({
-          is_active: nextStatus,
+          is_active: true,
           updated_at: new Date().toISOString(),
         })
         .eq("id", classItem.id);
@@ -213,35 +404,74 @@ function ClassPage() {
       }
 
       await loadClasses();
+
+      window.alert(
+        `「${classItem.class_name}」已重新啟用。`
+      );
     } catch (error) {
-      console.error(`${actionText}班級失敗：`, error);
-      window.alert(`${actionText}班級失敗：${error.message}`);
+      console.error(
+        "重新啟用班級失敗：",
+        error
+      );
+
+      window.alert(
+        `重新啟用班級失敗：${error.message}`
+      );
     }
   }
 
+  async function toggleClassStatus(classItem) {
+    if (classItem.is_active) {
+      await deactivateClass(classItem);
+      return;
+    }
+
+    await reactivateClass(classItem);
+  }
+
   const filteredClasses = useMemo(() => {
-    const keyword = searchText.trim().toLowerCase();
+    const keyword =
+      searchText.trim().toLowerCase();
 
     return classes.filter((classItem) => {
       const matchesKeyword =
         !keyword ||
-        classItem.class_name?.toLowerCase().includes(keyword) ||
-        classItem.academic_year?.toLowerCase().includes(keyword) ||
-        classItem.term?.toLowerCase().includes(keyword) ||
-        classItem.note?.toLowerCase().includes(keyword);
+        classItem.class_name
+          ?.toLowerCase()
+          .includes(keyword) ||
+        classItem.academic_year
+          ?.toLowerCase()
+          .includes(keyword) ||
+        classItem.term
+          ?.toLowerCase()
+          .includes(keyword) ||
+        classItem.note
+          ?.toLowerCase()
+          .includes(keyword);
 
       const matchesStatus =
         statusFilter === "ALL" ||
-        (statusFilter === "ACTIVE" && classItem.is_active) ||
-        (statusFilter === "INACTIVE" && !classItem.is_active);
+        (statusFilter === "ACTIVE" &&
+          classItem.is_active) ||
+        (statusFilter === "INACTIVE" &&
+          !classItem.is_active);
 
-      return matchesKeyword && matchesStatus;
+      return (
+        matchesKeyword &&
+        matchesStatus
+      );
     });
-  }, [classes, searchText, statusFilter]);
+  }, [
+    classes,
+    searchText,
+    statusFilter,
+  ]);
 
-  const activeClassCount = classes.filter(
-    (classItem) => classItem.is_active
-  ).length;
+  const activeClassCount =
+    classes.filter(
+      (classItem) =>
+        classItem.is_active
+    ).length;
 
   const inactiveClassCount =
     classes.length - activeClassCount;
@@ -273,31 +503,41 @@ function ClassPage() {
       <section className="classPage__stats">
         <div className="classPage__statCard">
           <span>全部班級</span>
-          <strong>{classes.length}</strong>
+          <strong>
+            {classes.length}
+          </strong>
         </div>
 
         <div className="classPage__statCard">
           <span>目前啟用</span>
-          <strong>{activeClassCount}</strong>
+          <strong>
+            {activeClassCount}
+          </strong>
         </div>
 
         <div className="classPage__statCard">
           <span>已停用</span>
-          <strong>{inactiveClassCount}</strong>
+          <strong>
+            {inactiveClassCount}
+          </strong>
         </div>
       </section>
 
       <section className="classPage__content">
         <div className="classPage__toolbar">
           <div className="classPage__search">
-            <span aria-hidden="true">⌕</span>
+            <span aria-hidden="true">
+              ⌕
+            </span>
 
             <input
               type="search"
               placeholder="搜尋班級名稱、學年度、學期或備註..."
               value={searchText}
               onChange={(event) =>
-                setSearchText(event.target.value)
+                setSearchText(
+                  event.target.value
+                )
               }
             />
           </div>
@@ -305,13 +545,23 @@ function ClassPage() {
           <select
             value={statusFilter}
             onChange={(event) =>
-              setStatusFilter(event.target.value)
+              setStatusFilter(
+                event.target.value
+              )
             }
             aria-label="班級狀態篩選"
           >
-            <option value="ACTIVE">目前啟用</option>
-            <option value="INACTIVE">已停用</option>
-            <option value="ALL">全部狀態</option>
+            <option value="ACTIVE">
+              目前啟用
+            </option>
+
+            <option value="INACTIVE">
+              已停用
+            </option>
+
+            <option value="ALL">
+              全部狀態
+            </option>
           </select>
         </div>
 
