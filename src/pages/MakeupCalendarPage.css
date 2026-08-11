@@ -509,3 +509,357 @@
     grid-column: auto;
   }
 }
+.makeupDrawer__studentResults {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.makeupDrawer__studentResults > small {
+  padding: 12px 2px;
+  color: #999289;
+  font-size: 12px;
+}
+
+.makeupDrawer__studentResult {
+  display: grid;
+  width: 100%;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid #e3ddd4;
+  border-radius: 11px;
+  background: #fffdf9;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.makeupDrawer__studentResult:hover {
+  border-color: #aec0b2;
+  background: #f3f7f4;
+}
+
+.makeupDrawer__studentResult strong {
+  color: #46413c;
+  font-size: 14px;
+}
+
+.makeupDrawer__studentResult span {
+  color: #918a81;
+  font-size: 12px;
+}
+
+.makeupDrawer__selectedStudent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 15px;
+  border: 1px solid #cbdacf;
+  border-radius: 13px;
+  background: #f1f6f2;
+}
+
+.makeupDrawer__selectedStudent > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.makeupDrawer__selectedStudent span {
+  color: #8b978e;
+  font-size: 11px;
+}
+
+.makeupDrawer__selectedStudent strong {
+  color: #405247;
+  font-size: 16px;
+}
+
+.makeupDrawer__selectedStudent small {
+  color: #89928c;
+  font-size: 12px;
+}
+
+.makeupDrawer__selectedStudent > button {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 1px solid #ccd7cf;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #66766b;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.makeupCalendar__event {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid #dfe8e1;
+  border-radius: 8px;
+  background: #f3f8f4;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.makeupCalendar__event:hover {
+  border-color: #c6d7ca;
+  background: #edf5ef;
+}
+
+.makeupCalendar__eventLine {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.makeupCalendar__eventLine strong {
+  flex: 0 0 auto;
+  color: #617a68;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.makeupCalendar__eventLine > span {
+  min-width: 0;
+  overflow: hidden;
+  color: #45413c;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.makeupCalendar__rescheduledMark {
+  margin-right: 3px;
+  color: #a07851;
+  font-weight: 800;
+}
+
+.makeupCalendar__more {
+  width: 100%;
+  padding: 4px 7px;
+  border: 0;
+  background: transparent;
+  color: #7c8f81;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.makeupCalendar__more:hover {
+  text-decoration: underline;
+}
+/* =========================
+   Makeup Detail Drawer
+========================= */
+
+.makeupDetail__backdrop {
+  position: fixed;
+  z-index: 1600;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(38, 36, 32, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.makeupDetail {
+  display: flex;
+  width: min(620px, 100%);
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fffdf9;
+  box-shadow: -20px 0 55px rgba(48, 42, 34, 0.18);
+}
+
+.makeupDetail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 28px 30px 22px;
+  border-bottom: 1px solid #eae4db;
+}
+
+.makeupDetail__header p {
+  margin: 0 0 6px;
+  color: #aaa39a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.makeupDetail__header h2 {
+  margin: 0;
+  color: #37342f;
+  font-size: 30px;
+}
+
+.makeupDetail__header span {
+  display: block;
+  margin-top: 7px;
+  color: #8d867e;
+  font-size: 13px;
+}
+
+.makeupDetail__header > button {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f1eee8;
+  color: #706a62;
+  font: inherit;
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.makeupDetail__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 30px 40px;
+}
+
+.makeupDetail__section {
+  padding: 24px 0;
+  border-top: 1px solid #eee8df;
+}
+
+.makeupDetail__section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.makeupDetail__section > p {
+  margin: 0;
+  color: #aaa39a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.makeupDetail__section h3 {
+  margin: 6px 0 18px;
+  color: #47433e;
+  font-size: 19px;
+}
+
+.makeupDetail__infoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.makeupDetail__infoGrid > div {
+  min-width: 0;
+  padding: 15px 16px;
+  border-radius: 14px;
+  background: #f7f4ee;
+}
+
+.makeupDetail__infoGrid span {
+  display: block;
+  margin-bottom: 6px;
+  color: #958e85;
+  font-size: 12px;
+}
+
+.makeupDetail__infoGrid strong {
+  display: block;
+  color: #47433e;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.makeupDetail__note {
+  min-height: 80px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #f7f4ee;
+  color: #59544d;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.makeupDetail__footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 18px 30px;
+  border-top: 1px solid #eae4db;
+  background: #fffdf9;
+}
+
+.makeupDetail__footer button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 11px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.makeupDetail__reschedule {
+  border: 1px solid #d9c9b4;
+  background: #fffaf3;
+  color: #8f6d48;
+}
+
+.makeupDetail__complete {
+  border: 1px solid #b9cdbd;
+  background: #eef5ef;
+  color: #5f7866;
+}
+
+.makeupDetail__cancel {
+  border: 1px solid #dfd7cd;
+  background: #faf8f4;
+  color: #777067;
+}
+
+.makeupDetail__delete {
+  border: 1px solid #e2c4bd;
+  background: #fff6f4;
+  color: #a25e53;
+}
+
+.makeupDetail__footer button:disabled,
+.makeupDetail__header button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@media (max-width: 650px) {
+  .makeupDetail__header,
+  .makeupDetail__body,
+  .makeupDetail__footer {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .makeupDetail__infoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .makeupDetail__footer {
+    grid-template-columns: 1fr;
+  }
+}

@@ -194,32 +194,65 @@ function MakeupDrawer({
     }
   }
 
+  const selectedStudent = useMemo(
+    () =>
+      students.find(
+        (student) =>
+          student.id === studentId
+      ) || null,
+    [students, studentId]
+  );
+
   const filteredStudents = useMemo(() => {
     const keyword = searchText
       .trim()
       .toLowerCase();
 
     if (!keyword) {
-      return students;
+      return [];
     }
 
-    return students.filter((student) => {
-      return (
-        student.chinese_name
-          ?.toLowerCase()
-          .includes(keyword) ||
-        student.english_name
-          ?.toLowerCase()
-          .includes(keyword) ||
-        student.student_no
-          ?.toLowerCase()
-          .includes(keyword) ||
-        student.school
-          ?.toLowerCase()
-          .includes(keyword)
-      );
-    });
+    return students
+      .filter((student) => {
+        return (
+          student.chinese_name
+            ?.toLowerCase()
+            .includes(keyword) ||
+          student.english_name
+            ?.toLowerCase()
+            .includes(keyword) ||
+          student.student_no
+            ?.toLowerCase()
+            .includes(keyword) ||
+          student.school
+            ?.toLowerCase()
+            .includes(keyword) ||
+          student.current_grade
+            ?.toLowerCase()
+            .includes(keyword)
+        );
+      })
+      .slice(0, 12);
   }, [students, searchText]);
+
+  function selectStudent(student) {
+    setStudentId(student.id);
+
+    setSearchText("");
+
+    setSourceId("");
+  }
+
+  function clearStudent() {
+    setStudentId("");
+
+    setSearchText("");
+
+    setEnglishClasses([]);
+    setTalentClasses([]);
+
+    setSourceId("");
+  }
 
   async function handleSave(event) {
     event.preventDefault();
@@ -374,47 +407,101 @@ function MakeupDrawer({
           <section className="makeupDrawer__section">
             <h3>學生</h3>
 
-            <input
-              type="search"
-              value={searchText}
-              placeholder="搜尋學生姓名、英文名、學校或學號..."
-              onChange={(event) =>
-                setSearchText(
-                  event.target.value
-                )
-              }
-            />
+            {selectedStudent ? (
+              <div className="makeupDrawer__selectedStudent">
+                <div>
+                  <span>
+                    已選學生
+                  </span>
 
-            <select
-              value={studentId}
-              onChange={(event) =>
-                setStudentId(
-                  event.target.value
-                )
-              }
-              disabled={isLoading}
-            >
-              <option value="">
-                請選擇學生
-              </option>
+                  <strong>
+                    {
+                      selectedStudent.chinese_name
+                    }
+                  </strong>
 
-              {filteredStudents.map(
-                (student) => (
-                  <option
-                    key={student.id}
-                    value={student.id}
-                  >
-                    {student.chinese_name}
-                    {student.current_grade
-                      ? `・${student.current_grade}`
-                      : ""}
-                    {student.school
-                      ? `・${student.school}`
-                      : ""}
-                  </option>
-                )
-              )}
-            </select>
+                  <small>
+                    {[
+                      selectedStudent.current_grade,
+                      selectedStudent.school,
+                      selectedStudent.english_name,
+                    ]
+                      .filter(Boolean)
+                      .join(" ・ ")}
+                  </small>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={clearStudent}
+                  disabled={isSaving}
+                >
+                  重新選擇
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="search"
+                  value={searchText}
+                  placeholder="輸入姓名、英文名、學校或學號..."
+                  autoComplete="off"
+                  onChange={(event) =>
+                    setSearchText(
+                      event.target.value
+                    )
+                  }
+                />
+
+                <div className="makeupDrawer__studentResults">
+                  {!searchText.trim() ? (
+                    <small>
+                      請輸入關鍵字搜尋學生。
+                    </small>
+                  ) : filteredStudents.length ===
+                    0 ? (
+                    <small>
+                      找不到符合條件的學生。
+                    </small>
+                  ) : (
+                    filteredStudents.map(
+                      (student) => (
+                        <button
+                          key={student.id}
+                          type="button"
+                          className="makeupDrawer__studentResult"
+                          onClick={() =>
+                            selectStudent(
+                              student
+                            )
+                          }
+                        >
+                          <strong>
+                            {
+                              student.chinese_name
+                            }
+                          </strong>
+
+                          <span>
+                            {[
+                              student.current_grade,
+                              student.school,
+                              student.english_name,
+                            ]
+                              .filter(
+                                Boolean
+                              )
+                              .join(
+                                " ・ "
+                              )}
+                          </span>
+                        </button>
+                      )
+                    )
+                  )}
+                </div>
+              </>
+            )}
           </section>
 
           <section className="makeupDrawer__section">
@@ -529,7 +616,9 @@ function MakeupDrawer({
           </section>
 
           <section className="makeupDrawer__section">
-            <h3>補課日期與時間</h3>
+            <h3>
+              補課日期與時間
+            </h3>
 
             <div className="makeupDrawer__grid">
               <label>
@@ -561,9 +650,7 @@ function MakeupDrawer({
               </label>
 
               <label>
-                <span>
-                  結束時間
-                </span>
+                <span>結束時間</span>
 
                 <input
                   type="time"

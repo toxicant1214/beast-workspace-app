@@ -5,6 +5,7 @@ import {
 } from "react";
 import { supabase } from "../lib/supabase";
 import MakeupDrawer from "../components/MakeupDrawer";
+import MakeupDetailDrawer from "../components/MakeupDetailDrawer";
 import "./MakeupCalendarPage.css";
 
 const WEEKDAY_LABELS = [
@@ -68,6 +69,11 @@ function MakeupCalendarPage() {
     setIsDrawerOpen,
   ] = useState(false);
 
+  const [
+    selectedMakeup,
+    setSelectedMakeup,
+  ] = useState(null);
+
   useEffect(() => {
     loadMakeups();
   }, [currentMonth]);
@@ -79,19 +85,17 @@ function MakeupCalendarPage() {
     const month =
       currentMonth.getMonth();
 
-    const firstDay =
-      new Date(
-        year,
-        month,
-        1
-      );
+    const firstDay = new Date(
+      year,
+      month,
+      1
+    );
 
-    const lastDay =
-      new Date(
-        year,
-        month + 1,
-        0
-      );
+    const lastDay = new Date(
+      year,
+      month + 1,
+      0
+    );
 
     const days = [];
 
@@ -311,8 +315,7 @@ function MakeupCalendarPage() {
   }
 
   function goToday() {
-    const today =
-      new Date();
+    const today = new Date();
 
     setCurrentMonth(
       new Date(
@@ -328,8 +331,7 @@ function MakeupCalendarPage() {
       return false;
     }
 
-    const today =
-      new Date();
+    const today = new Date();
 
     return (
       date.getFullYear() ===
@@ -341,54 +343,6 @@ function MakeupCalendarPage() {
     );
   }
 
-  function getSourceName(item) {
-    if (
-      item.makeup_type ===
-      "ENGLISH"
-    ) {
-      return (
-        item.english_classes
-          ?.class_name ||
-        "美語補課"
-      );
-    }
-
-    const courseName =
-      item.course_classes
-        ?.courses
-        ?.course_name;
-
-    const className =
-      item.course_classes
-        ?.class_name;
-
-    return (
-      [
-        courseName,
-        className,
-      ]
-        .filter(Boolean)
-        .join("・") ||
-      "才藝補課"
-    );
-  }
-
-  function getStatusLabel(status) {
-    if (
-      status === "COMPLETED"
-    ) {
-      return "已完成";
-    }
-
-    if (
-      status === "CANCELLED"
-    ) {
-      return "已取消";
-    }
-
-    return "待補課";
-  }
-
   function openDrawer() {
     setIsDrawerOpen(true);
   }
@@ -397,7 +351,19 @@ function MakeupCalendarPage() {
     setIsDrawerOpen(false);
   }
 
+  function openMakeupDetail(item) {
+    setSelectedMakeup(item);
+  }
+
+  function closeMakeupDetail() {
+    setSelectedMakeup(null);
+  }
+
   async function handleSaved() {
+    await loadMakeups();
+  }
+
+  async function handleChanged() {
     await loadMakeups();
   }
 
@@ -507,6 +473,19 @@ function MakeupCalendarPage() {
                   dateKey
                 ] || [];
 
+              const visibleMakeups =
+                dayMakeups.slice(
+                  0,
+                  3
+                );
+
+              const hiddenCount =
+                Math.max(
+                  dayMakeups.length -
+                    visibleMakeups.length,
+                  0
+                );
+
               return (
                 <div
                   key={dateKey}
@@ -521,7 +500,7 @@ function MakeupCalendarPage() {
                   </span>
 
                   <div className="makeupCalendar__events">
-                    {dayMakeups.map(
+                    {visibleMakeups.map(
                       (item) => {
                         const student =
                           item.students;
@@ -533,51 +512,55 @@ function MakeupCalendarPage() {
                           ) > 0;
 
                         return (
-                          <div
+                          <button
                             key={
                               item.id
                             }
+                            type="button"
                             className={`makeupCalendar__event makeupCalendar__event--${
                               item.status?.toLowerCase() ||
                               "pending"
                             }`}
+                            onClick={() =>
+                              openMakeupDetail(
+                                item
+                              )
+                            }
                           >
-                            <div className="makeupCalendar__eventTop">
+                            <div className="makeupCalendar__eventLine">
                               <strong>
+                                {hasRescheduled && (
+                                  <span className="makeupCalendar__rescheduledMark">
+                                    ↻
+                                  </span>
+                                )}
+
                                 {formatTime(
                                   item.start_time
                                 )}
                               </strong>
 
-                              {hasRescheduled && (
-                                <span className="makeupCalendar__rescheduled">
-                                  ↻
-                                </span>
-                              )}
+                              <span>
+                                {student?.chinese_name ||
+                                  "未命名學生"}
+                              </span>
                             </div>
-
-                            <span className="makeupCalendar__studentName">
-                              {student?.chinese_name ||
-                                "未命名學生"}
-                            </span>
-
-                            <small>
-                              {getSourceName(
-                                item
-                              )}
-                            </small>
-
-                            {item.status !==
-                              "PENDING" && (
-                              <small className="makeupCalendar__status">
-                                {getStatusLabel(
-                                  item.status
-                                )}
-                              </small>
-                            )}
-                          </div>
+                          </button>
                         );
                       }
+                    )}
+
+                    {hiddenCount >
+                      0 && (
+                      <button
+                        type="button"
+                        className="makeupCalendar__more"
+                      >
+                        ＋
+                        {hiddenCount}
+                        {" "}
+                        筆
+                      </button>
                     )}
                   </div>
                 </div>
@@ -594,6 +577,20 @@ function MakeupCalendarPage() {
           }
           onSaved={
             handleSaved
+          }
+        />
+      )}
+
+      {selectedMakeup && (
+        <MakeupDetailDrawer
+          makeupItem={
+            selectedMakeup
+          }
+          onClose={
+            closeMakeupDetail
+          }
+          onChanged={
+            handleChanged
           }
         />
       )}
