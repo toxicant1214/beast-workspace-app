@@ -375,3 +375,97 @@
     font-size: 48px;
   }
 }
+/* =========================
+   Student Enrollments / Class History
+========================= */
+
+.studentProfile__enrollmentList {
+  display: grid;
+  gap: 12px;
+}
+
+.studentProfile__enrollmentItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 18px 20px;
+  border: 1px solid #e8e2d9;
+  border-radius: 17px;
+  background: #fffdf9;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.studentProfile__enrollmentItem:hover {
+  border-color: #d8d0c5;
+  background: #faf8f4;
+}
+
+.studentProfile__enrollmentItem > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.studentProfile__enrollmentItem strong {
+  color: #3f3c38;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.studentProfile__enrollmentItem span {
+  overflow: hidden;
+  color: #918a81;
+  font-size: 13px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studentProfile__enrollmentItem small {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f1eee8;
+  color: #7e776e;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 目前班級第一筆稍微強調 */
+.studentProfile__enrollmentList
+  .studentProfile__enrollmentItem:first-child {
+  border-color: #d9e4dc;
+  background: #fbfdfb;
+}
+
+.studentProfile__enrollmentList
+  .studentProfile__enrollmentItem:first-child
+  small {
+  background: #eaf1ec;
+  color: #64806b;
+}
+
+/* Timeline 因為現在會有較多事件，稍微增加可讀性 */
+.studentProfile__timelineItem > div {
+  min-width: 0;
+}
+
+.studentProfile__timelineItem p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .studentProfile__enrollmentItem {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .studentProfile__enrollmentItem small {
+    align-self: flex-start;
+  }
+}

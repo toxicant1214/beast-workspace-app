@@ -1,6 +1,23 @@
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "../lib/supabase";
 import "./StudentProfile.css";
 
+function formatDate(dateString) {
+  if (!dateString) return "尚未設定";
+
+  const [year, month, day] = dateString.split("-");
+
+  if (!year || !month || !day) {
+    return dateString;
+  }
+
+  return `${year}/${month}/${day}`;
+}
+
 function StudentProfile({ student, onBack, onEdit }) {
+  const [classHistory, setClassHistory] = useState([]);
+  const [isLoadingClasses, setIsLoadingClasses] = useState(true);
+
   const statusLabels = {
     ACTIVE: "在學",
     PAUSED: "暫停",
@@ -9,20 +26,142 @@ function StudentProfile({ student, onBack, onEdit }) {
   };
 
   const gradeLabel = student.current_grade || "年級未設定";
+
   const statusLabel =
     statusLabels[student.student_status] ||
     student.student_status ||
     "狀態未設定";
 
+  useEffect(() => {
+    if (student?.id) {
+      loadClassHistory();
+    }
+  }, [student?.id]);
+
+  async function loadClassHistory() {
+    try {
+      setIsLoadingClasses(true);
+
+      const { data, error } = await supabase
+        .from("class_students")
+        .select(`
+          id,
+          joined_at,
+          left_at,
+          status,
+          classes (
+            id,
+            class_name,
+            academic_year,
+            term,
+            start_date,
+            end_date,
+            is_active
+          )
+        `)
+        .eq("student_id", student.id)
+        .order("joined_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setClassHistory(data || []);
+    } catch (error) {
+      console.error("讀取學生班級歷程失敗：", error);
+
+      window.alert(
+        `讀取學生班級歷程失敗：${error.message}`
+      );
+
+      setClassHistory([]);
+    } finally {
+      setIsLoadingClasses(false);
+    }
+  }
+
   function displayValue(value) {
     return value || "尚未設定";
   }
+
+  const currentClassRecords = useMemo(
+    () =>
+      classHistory.filter(
+        (item) => item.status === "ACTIVE"
+      ),
+    [classHistory]
+  );
+
+  const pastClassRecords = useMemo(
+    () =>
+      classHistory.filter(
+        (item) => item.status !== "ACTIVE"
+      ),
+    [classHistory]
+  );
+
+  const timelineItems = useMemo(() => {
+    const items = [];
+
+    if (student.enrollment_date) {
+      items.push({
+        date: student.enrollment_date,
+        title: "加入倍思",
+        description: "建立學生資料並開始就讀。",
+        type: "STUDENT",
+      });
+    }
+
+    classHistory.forEach((item) => {
+      const classItem = item.classes;
+
+      if (!classItem) return;
+
+      if (item.joined_at) {
+        items.push({
+          date: item.joined_at,
+          title: `加入 ${classItem.class_name}`,
+          description: [
+            classItem.academic_year,
+            classItem.term,
+          ]
+            .filter(Boolean)
+            .join("・"),
+          type: "CLASS_JOIN",
+        });
+      }
+
+      if (
+        item.status !== "ACTIVE" &&
+        item.left_at
+      ) {
+        items.push({
+          date: item.left_at,
+          title: `退出 ${classItem.class_name}`,
+          description: [
+            classItem.academic_year,
+            classItem.term,
+          ]
+            .filter(Boolean)
+            .join("・"),
+          type: "CLASS_LEFT",
+        });
+      }
+    });
+
+    return items.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+
+      return b.date.localeCompare(a.date);
+    });
+  }, [student.enrollment_date, classHistory]);
 
   return (
     <div className="studentProfile">
       <button
         type="button"
-        className="studentProfile__back"
+        className="studentProfile__backButton"
         onClick={onBack}
       >
         ← 返回學生列表
@@ -30,19 +169,26 @@ function StudentProfile({ student, onBack, onEdit }) {
 
       <header className="studentProfile__hero">
         <div className="studentProfile__heroMain">
-          <p className="studentProfile__eyebrow">STUDENT PROFILE</p>
+          <p className="studentProfile__eyebrow">
+            STUDENT PROFILE
+          </p>
 
           <div className="studentProfile__nameRow">
             <h1>{student.chinese_name}</h1>
 
             {student.is_test && (
-              <span className="studentProfile__testBadge">測試資料</span>
+              <span className="studentProfile__testBadge">
+                測試資料
+              </span>
             )}
           </div>
 
           <p className="studentProfile__studentNo">
             {student.student_no || "尚未建立學號"}
-            {student.english_name ? `・${student.english_name}` : ""}
+
+            {student.english_name
+              ? `・${student.english_name}`
+              : ""}
           </p>
 
           <div className="studentProfile__chips">
@@ -50,10 +196,14 @@ function StudentProfile({ student, onBack, onEdit }) {
               {statusLabel}
             </span>
 
-            <span className="studentProfile__chip">{gradeLabel}</span>
+            <span className="studentProfile__chip">
+              {gradeLabel}
+            </span>
 
             <span className="studentProfile__chip">
-              {student.is_test ? "測試學生" : "正式學生"}
+              {student.is_test
+                ? "測試學生"
+                : "正式學生"}
             </span>
           </div>
         </div>
@@ -70,22 +220,32 @@ function StudentProfile({ student, onBack, onEdit }) {
       <div className="studentProfile__overview">
         <div>
           <span>入班日期</span>
-          <strong>{displayValue(student.enrollment_date)}</strong>
+          <strong>
+            {formatDate(student.enrollment_date)}
+          </strong>
         </div>
 
         <div>
           <span>就讀學校</span>
-          <strong>{displayValue(student.school)}</strong>
+          <strong>
+            {displayValue(student.school)}
+          </strong>
         </div>
 
         <div>
           <span>出生年月日</span>
-          <strong>{displayValue(student.birthday)}</strong>
+          <strong>
+            {formatDate(student.birthday)}
+          </strong>
         </div>
 
         <div>
           <span>主要聯絡人</span>
-          <strong>{displayValue(student.primary_parent_title)}</strong>
+          <strong>
+            {displayValue(
+              student.primary_parent_title
+            )}
+          </strong>
         </div>
       </div>
 
@@ -99,32 +259,52 @@ function StudentProfile({ student, onBack, onEdit }) {
           <div className="studentProfile__detailList">
             <div>
               <span>中文姓名</span>
-              <strong>{displayValue(student.chinese_name)}</strong>
+              <strong>
+                {displayValue(
+                  student.chinese_name
+                )}
+              </strong>
             </div>
 
             <div>
               <span>英文姓名</span>
-              <strong>{displayValue(student.english_name)}</strong>
+              <strong>
+                {displayValue(
+                  student.english_name
+                )}
+              </strong>
             </div>
 
             <div>
               <span>出生年月日</span>
-              <strong>{displayValue(student.birthday)}</strong>
+              <strong>
+                {formatDate(student.birthday)}
+              </strong>
             </div>
 
             <div>
               <span>就讀學校</span>
-              <strong>{displayValue(student.school)}</strong>
+              <strong>
+                {displayValue(student.school)}
+              </strong>
             </div>
 
             <div>
               <span>目前年級</span>
-              <strong>{displayValue(student.current_grade)}</strong>
+              <strong>
+                {displayValue(
+                  student.current_grade
+                )}
+              </strong>
             </div>
 
             <div>
               <span>入班日期</span>
-              <strong>{displayValue(student.enrollment_date)}</strong>
+              <strong>
+                {formatDate(
+                  student.enrollment_date
+                )}
+              </strong>
             </div>
           </div>
         </section>
@@ -138,22 +318,38 @@ function StudentProfile({ student, onBack, onEdit }) {
           <div className="studentProfile__detailList">
             <div>
               <span>主要聯絡人</span>
-              <strong>{displayValue(student.primary_parent_title)}</strong>
+              <strong>
+                {displayValue(
+                  student.primary_parent_title
+                )}
+              </strong>
             </div>
 
             <div>
               <span>主要聯絡電話</span>
-              <strong>{displayValue(student.primary_parent_phone)}</strong>
+              <strong>
+                {displayValue(
+                  student.primary_parent_phone
+                )}
+              </strong>
             </div>
 
             <div>
               <span>第二聯絡人</span>
-              <strong>{displayValue(student.secondary_parent_title)}</strong>
+              <strong>
+                {displayValue(
+                  student.secondary_parent_title
+                )}
+              </strong>
             </div>
 
             <div>
               <span>第二聯絡電話</span>
-              <strong>{displayValue(student.secondary_parent_phone)}</strong>
+              <strong>
+                {displayValue(
+                  student.secondary_parent_phone
+                )}
+              </strong>
             </div>
           </div>
         </section>
@@ -161,16 +357,119 @@ function StudentProfile({ student, onBack, onEdit }) {
         <section className="studentProfile__panel studentProfile__panel--wide">
           <div className="studentProfile__sectionHeading">
             <p>ENROLLMENTS</p>
-            <h2>目前修課與班級</h2>
+            <h2>目前班級</h2>
           </div>
 
-          <div className="studentProfile__emptyState">
-            <div className="studentProfile__emptyIcon">＋</div>
-            <strong>目前尚未建立修課資料</strong>
-            <span>
-              下一階段會接上安親、美語、邏輯、圍棋及其他班級紀錄。
-            </span>
+          {isLoadingClasses ? (
+            <div className="studentProfile__emptyState">
+              <strong>正在讀取班級資料……</strong>
+            </div>
+          ) : currentClassRecords.length === 0 ? (
+            <div className="studentProfile__emptyState">
+              <div className="studentProfile__emptyIcon">
+                ＋
+              </div>
+
+              <strong>目前尚未加入班級</strong>
+
+              <span>
+                可從班級管理將學生加入安親班級。
+              </span>
+            </div>
+          ) : (
+            <div className="studentProfile__enrollmentList">
+              {currentClassRecords.map((item) => {
+                const classItem = item.classes;
+
+                if (!classItem) return null;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="studentProfile__enrollmentItem"
+                  >
+                    <div>
+                      <strong>
+                        {classItem.class_name}
+                      </strong>
+
+                      <span>
+                        {[
+                          classItem.academic_year,
+                          classItem.term,
+                        ]
+                          .filter(Boolean)
+                          .join("・")}
+                      </span>
+                    </div>
+
+                    <small>
+                      {formatDate(item.joined_at)}
+                      {" ～ "}
+                      至今
+                    </small>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="studentProfile__panel studentProfile__panel--wide">
+          <div className="studentProfile__sectionHeading">
+            <p>CLASS HISTORY</p>
+            <h2>班級歷程</h2>
           </div>
+
+          {isLoadingClasses ? (
+            <div className="studentProfile__emptyState">
+              <strong>正在讀取班級歷程……</strong>
+            </div>
+          ) : pastClassRecords.length === 0 ? (
+            <div className="studentProfile__emptyState">
+              <strong>目前沒有歷史班級紀錄</strong>
+
+              <span>
+                正式退出或轉班後，歷史紀錄會保留在這裡。
+              </span>
+            </div>
+          ) : (
+            <div className="studentProfile__enrollmentList">
+              {pastClassRecords.map((item) => {
+                const classItem = item.classes;
+
+                if (!classItem) return null;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="studentProfile__enrollmentItem"
+                  >
+                    <div>
+                      <strong>
+                        {classItem.class_name}
+                      </strong>
+
+                      <span>
+                        {[
+                          classItem.academic_year,
+                          classItem.term,
+                        ]
+                          .filter(Boolean)
+                          .join("・")}
+                      </span>
+                    </div>
+
+                    <small>
+                      {formatDate(item.joined_at)}
+                      {" ～ "}
+                      {formatDate(item.left_at)}
+                    </small>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="studentProfile__panel">
@@ -180,25 +479,40 @@ function StudentProfile({ student, onBack, onEdit }) {
           </div>
 
           <div className="studentProfile__timeline">
-            <div className="studentProfile__timelineItem">
-              <span className="studentProfile__timelineDot" />
-              <div>
-                <strong>建立學生資料</strong>
-                <p>
-                  {student.enrollment_date
-                    ? `入班日期：${student.enrollment_date}`
-                    : "尚未設定入班日期"}
-                </p>
-              </div>
-            </div>
+            {timelineItems.length === 0 ? (
+              <div className="studentProfile__timelineItem studentProfile__timelineItem--muted">
+                <span className="studentProfile__timelineDot" />
 
-            <div className="studentProfile__timelineItem studentProfile__timelineItem--muted">
-              <span className="studentProfile__timelineDot" />
-              <div>
-                <strong>等待更多紀錄</strong>
-                <p>未來會顯示升級、轉班、退課與狀態變更。</p>
+                <div>
+                  <strong>等待更多紀錄</strong>
+                  <p>
+                    未來會顯示班級、課程與狀態變更。
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              timelineItems.map(
+                (item, index) => (
+                  <div
+                    key={`${item.type}-${item.date}-${index}`}
+                    className="studentProfile__timelineItem"
+                  >
+                    <span className="studentProfile__timelineDot" />
+
+                    <div>
+                      <strong>{item.title}</strong>
+
+                      <p>
+                        {formatDate(item.date)}
+                        {item.description
+                          ? `・${item.description}`
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                )
+              )
+            )}
           </div>
         </section>
 
@@ -212,12 +526,16 @@ function StudentProfile({ student, onBack, onEdit }) {
             <div className="studentProfile__auditItem">
               <div>
                 <strong>學生資料已建立</strong>
-                <p>目前尚未有其他修改紀錄。</p>
+                <p>
+                  系統資料建立時間。
+                </p>
               </div>
 
               <span>
                 {student.created_at
-                  ? new Date(student.created_at).toLocaleDateString("zh-TW")
+                  ? new Date(
+                      student.created_at
+                    ).toLocaleDateString("zh-TW")
                   : "尚未記錄"}
               </span>
             </div>
