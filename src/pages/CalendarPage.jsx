@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SemesterSetupPanel from "../components/calendar/SemesterSetupPanel";
 import SemesterTableView from "../components/calendar/SemesterTableView";
+import { usePagePermission } from "../hooks/usePagePermission";
 import "../components/calendar/calendar.css";
+
 
 const VIEW_OPTIONS = [
   {
@@ -15,8 +17,10 @@ const VIEW_OPTIONS = [
   {
     id: "manage",
     label: "管理",
+    editOnly: true,
   },
 ];
+
 
 const CURRENT_SEMESTER = {
   id: "cd88fd29-fb4c-41b0-8e69-6007f9c76db7",
@@ -26,20 +30,56 @@ const CURRENT_SEMESTER = {
   status: "DRAFT",
 };
 
-function CalendarPage() {
+
+function CalendarPage({ currentTeacher }) {
   const [activeView, setActiveView] = useState("semester");
+
+  const {
+    canEdit,
+    isViewOnly,
+  } = usePagePermission(
+    currentTeacher,
+    "calendar"
+  );
+
+
+  const visibleViews = VIEW_OPTIONS.filter(
+    (view) => !view.editOnly || canEdit
+  );
+
+
+  useEffect(() => {
+    if (!canEdit && activeView === "manage") {
+      setActiveView("semester");
+    }
+  }, [canEdit, activeView]);
+
 
   return (
     <section className="calendar-page">
       <header className="calendar-page__header calendar-page__header--workspace">
         <div>
-          <p className="calendar-page__eyebrow">CALENDAR</p>
-          <h1>學期行事曆</h1>
-          <p className="calendar-page__description">
-            查看整學期安排、月份行程，並管理學期與學校資料。
+          <p className="calendar-page__eyebrow">
+            CALENDAR
           </p>
+
+          <h1>學期行事曆</h1>
+
+          <p className="calendar-page__description">
+            查看整學期安排、月份行程
+            {canEdit
+              ? "，並管理學期與學校資料。"
+              : "。"}
+          </p>
+
+          {isViewOnly && (
+            <p className="calendar-page__description">
+              目前為僅查看權限。
+            </p>
+          )}
         </div>
       </header>
+
 
       <section className="calendar-workspace">
         <div className="calendar-workspace__topbar">
@@ -49,7 +89,9 @@ function CalendarPage() {
                 目前學期
               </span>
 
-              <strong>{CURRENT_SEMESTER.name}</strong>
+              <strong>
+                {CURRENT_SEMESTER.name}
+              </strong>
 
               <p>
                 {CURRENT_SEMESTER.startDate.replaceAll("-", "/")}
@@ -63,11 +105,12 @@ function CalendarPage() {
             </span>
           </div>
 
+
           <nav
             className="calendar-view-tabs"
             aria-label="行事曆檢視方式"
           >
-            {VIEW_OPTIONS.map((view) => (
+            {visibleViews.map((view) => (
               <button
                 key={view.id}
                 type="button"
@@ -84,15 +127,18 @@ function CalendarPage() {
           </nav>
         </div>
 
+
         <div className="calendar-workspace__content">
           {activeView === "semester" && (
             <SemesterTableView
-  semesterId={CURRENT_SEMESTER.id}
-  semesterName={CURRENT_SEMESTER.name}
-  startDate={CURRENT_SEMESTER.startDate}
-  endDate={CURRENT_SEMESTER.endDate}
-/>
+              semesterId={CURRENT_SEMESTER.id}
+              semesterName={CURRENT_SEMESTER.name}
+              startDate={CURRENT_SEMESTER.startDate}
+              endDate={CURRENT_SEMESTER.endDate}
+              canEdit={canEdit}
+            />
           )}
+
 
           {activeView === "month" && (
             <section className="calendar-view-panel">
@@ -103,6 +149,7 @@ function CalendarPage() {
 
                 <div>
                   <h2>月曆檢視</h2>
+
                   <p>
                     後續會在這裡顯示月份月曆與每日行事項目。
                   </p>
@@ -111,7 +158,8 @@ function CalendarPage() {
             </section>
           )}
 
-          {activeView === "manage" && (
+
+          {activeView === "manage" && canEdit && (
             <section className="calendar-view-panel calendar-view-panel--manage">
               <SemesterSetupPanel />
             </section>
@@ -121,5 +169,6 @@ function CalendarPage() {
     </section>
   );
 }
+
 
 export default CalendarPage;
