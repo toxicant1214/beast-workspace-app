@@ -12,12 +12,12 @@ from services.message_service import (
 )
 from services.task_service import (
     claim_notification_delivery,
-    get_active_tasks,
+    get_morning_report_tasks,
     mark_notification_delivery_failed,
     mark_notification_delivery_sent,
 )
 from services.teacher_assignment_service import (
-    get_teacher_assignments_by_teacher_id,
+    get_teacher_morning_assignments_by_teacher_id,
 )
 from send_task_reminders import (
     process_task_reminders,
@@ -89,9 +89,11 @@ def send_morning_report_if_due(
     台灣時間 09:00～09:09 之間，
     每天只發送一次。
 
-    注意：
-    這裡只處理主管個人待辦。
-    不處理老師任務。
+    晨報只顯示：
+    1. 已逾期但尚未完成的個人待辦
+    2. 今天到未來 14 天內的未完成待辦
+
+    手動查詢全部待辦不受影響。
     """
 
     if not ADMIN_LINE_USER_ID:
@@ -156,7 +158,9 @@ def send_morning_report_if_due(
         }
 
     try:
-        tasks = get_active_tasks()
+        tasks = get_morning_report_tasks(
+            now=now
+        )
 
         message = (
             build_daily_task_message(
@@ -207,9 +211,10 @@ def send_teacher_reports_if_due(
     老師專屬晨報。
 
     每位老師只取得：
-    1. 自己被指派的老師任務
+    1. 自己兩週內或已逾期的老師任務
     2. notify_teacher_id 指定給自己的今日補課
 
+    老師手動查詢全部自己的任務不受影響。
     不會查詢主管個人待辦。
     """
 
@@ -279,8 +284,9 @@ def send_teacher_reports_if_due(
 
         try:
             assignments = (
-                get_teacher_assignments_by_teacher_id(
-                    teacher_id
+                get_teacher_morning_assignments_by_teacher_id(
+                    teacher_id,
+                    now=now,
                 )
             )
 

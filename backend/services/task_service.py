@@ -11,11 +11,22 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY,
+)
 
 
 def get_active_tasks():
-    """取得所有尚未完成的個人待辦。"""
+    """
+    取得所有尚未完成的個人待辦。
+
+    用途：
+    手動查詢全部未完成待辦。
+
+    注意：
+    晨報不要使用這支。
+    """
 
     response = (
         supabase
@@ -29,19 +40,43 @@ def get_active_tasks():
     return response.data or []
 
 
-def get_tasks_between(start_date, end_date):
-    """查詢指定日期區間內尚未完成的個人待辦。"""
+def get_morning_report_tasks(now=None):
+    """
+    取得主管 09:00 晨報要顯示的個人待辦。
 
-    start_iso = datetime.combine(
-        start_date,
-        datetime.min.time(),
-        tzinfo=ZoneInfo("Asia/Taipei"),
-    ).isoformat()
+    規則：
+    1. 只顯示尚未完成的待辦。
+    2. 已逾期但尚未完成的待辦繼續顯示。
+    3. 顯示今天到未來 14 天內的待辦。
+    4. 超過未來 14 天的待辦不顯示。
+    """
 
-    end_iso = datetime.combine(
-        end_date,
+    taipei_tz = ZoneInfo(
+        "Asia/Taipei"
+    )
+
+    now = now or datetime.now(
+        taipei_tz
+    )
+
+    if now.tzinfo is None:
+        now = now.replace(
+            tzinfo=taipei_tz
+        )
+    else:
+        now = now.astimezone(
+            taipei_tz
+        )
+
+    cutoff_date = (
+        now.date()
+        + timedelta(days=14)
+    )
+
+    cutoff_iso = datetime.combine(
+        cutoff_date,
         datetime.max.time(),
-        tzinfo=ZoneInfo("Asia/Taipei"),
+        tzinfo=taipei_tz,
     ).isoformat()
 
     response = (
@@ -49,8 +84,54 @@ def get_tasks_between(start_date, end_date):
         .table("todo_items")
         .select("*")
         .eq("is_done", False)
-        .gte("deadline_at", start_iso)
-        .lte("deadline_at", end_iso)
+        .lte(
+            "deadline_at",
+            cutoff_iso,
+        )
+        .order("deadline_at")
+        .execute()
+    )
+
+    return response.data or []
+
+
+def get_tasks_between(
+    start_date,
+    end_date,
+):
+    """
+    查詢指定日期區間內尚未完成的個人待辦。
+    """
+
+    start_iso = datetime.combine(
+        start_date,
+        datetime.min.time(),
+        tzinfo=ZoneInfo(
+            "Asia/Taipei"
+        ),
+    ).isoformat()
+
+    end_iso = datetime.combine(
+        end_date,
+        datetime.max.time(),
+        tzinfo=ZoneInfo(
+            "Asia/Taipei"
+        ),
+    ).isoformat()
+
+    response = (
+        supabase
+        .table("todo_items")
+        .select("*")
+        .eq("is_done", False)
+        .gte(
+            "deadline_at",
+            start_iso,
+        )
+        .lte(
+            "deadline_at",
+            end_iso,
+        )
         .order("deadline_at")
         .execute()
     )
@@ -65,20 +146,30 @@ def create_task(
     priority,
     reminder_offsets,
 ):
-    """新增一筆個人待辦。"""
+    """
+    新增一筆個人待辦。
+    """
 
     response = (
         supabase
         .table("todo_items")
-        .insert({
-            "title": title,
-            "deadline_at": deadline_at,
-            "has_time": has_time,
-            "priority": priority,
-            "reminder_offsets": reminder_offsets,
-            "assignee": None,
-            "is_done": False,
-        })
+        .insert(
+            {
+                "title": title,
+                "deadline_at":
+                    deadline_at,
+                "has_time":
+                    has_time,
+                "priority":
+                    priority,
+                "reminder_offsets":
+                    reminder_offsets,
+                "assignee":
+                    None,
+                "is_done":
+                    False,
+            }
+        )
         .execute()
     )
 
@@ -86,18 +177,26 @@ def create_task(
 
 
 def complete_task(task_id):
-    """將指定待辦標記為完成。"""
+    """
+    將指定待辦標記為完成。
+    """
 
     response = (
         supabase
         .table("todo_items")
-        .update({
-            "is_done": True,
-            "completed_at": datetime.now(
-                timezone.utc
-            ).isoformat(),
-        })
-        .eq("id", task_id)
+        .update(
+            {
+                "is_done": True,
+                "completed_at":
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat(),
+            }
+        )
+        .eq(
+            "id",
+            task_id,
+        )
         .execute()
     )
 
@@ -105,13 +204,18 @@ def complete_task(task_id):
 
 
 def delete_task(task_id):
-    """永久刪除指定待辦。"""
+    """
+    永久刪除指定待辦。
+    """
 
     response = (
         supabase
         .table("todo_items")
         .delete()
-        .eq("id", task_id)
+        .eq(
+            "id",
+            task_id,
+        )
         .execute()
     )
 
@@ -119,26 +223,44 @@ def delete_task(task_id):
 
 
 def _normalize_datetime(value):
-    """將提醒時間統一轉成 UTC ISO 格式。"""
+    """
+    將提醒時間統一轉成 UTC ISO 格式。
+    """
 
-    if isinstance(value, datetime):
+    if isinstance(
+        value,
+        datetime,
+    ):
         if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
+            value = value.replace(
+                tzinfo=timezone.utc
+            )
 
-        return value.astimezone(timezone.utc).isoformat()
+        return (
+            value
+            .astimezone(
+                timezone.utc
+            )
+            .isoformat()
+        )
 
     return str(value)
 
 
 def _parse_database_datetime(value):
-    """解析 Supabase 回傳的時間格式。"""
+    """
+    解析 Supabase 回傳的時間格式。
+    """
 
     if not value:
         return None
 
     try:
         return datetime.fromisoformat(
-            str(value).replace("Z", "+00:00")
+            str(value).replace(
+                "Z",
+                "+00:00",
+            )
         )
     except ValueError:
         return None
@@ -151,27 +273,47 @@ def _find_notification_delivery(
     reminder_type,
     scheduled_at,
 ):
-    """查詢同一筆提醒是否已建立發送紀錄。"""
+    """
+    查詢同一筆提醒是否已建立發送紀錄。
+    """
 
     response = (
         supabase
-        .table("notification_delivery_logs")
+        .table(
+            "notification_delivery_logs"
+        )
         .select("*")
-        .eq("source_type", source_type)
-        .eq("source_id", str(source_id))
+        .eq(
+            "source_type",
+            source_type,
+        )
+        .eq(
+            "source_id",
+            str(source_id),
+        )
         .eq(
             "recipient_line_user_id",
             recipient_line_user_id,
         )
-        .eq("reminder_type", reminder_type)
-        .eq("scheduled_at", scheduled_at)
+        .eq(
+            "reminder_type",
+            reminder_type,
+        )
+        .eq(
+            "scheduled_at",
+            scheduled_at,
+        )
         .limit(1)
         .execute()
     )
 
     rows = response.data or []
 
-    return rows[0] if rows else None
+    return (
+        rows[0]
+        if rows
+        else None
+    )
 
 
 def claim_notification_delivery(
@@ -186,83 +328,140 @@ def claim_notification_delivery(
     取得一筆提醒的發送權。
 
     回傳紀錄代表可以發送。
-    回傳 None 代表已發送，或正由其他程序處理。
+    回傳 None 代表已發送，
+    或正由其他程序處理。
     """
 
-    scheduled_at_iso = _normalize_datetime(
-        scheduled_at
+    scheduled_at_iso = (
+        _normalize_datetime(
+            scheduled_at
+        )
     )
 
-    existing = _find_notification_delivery(
-        source_type=source_type,
-        source_id=source_id,
-        recipient_line_user_id=recipient_line_user_id,
-        reminder_type=reminder_type,
-        scheduled_at=scheduled_at_iso,
+    existing = (
+        _find_notification_delivery(
+            source_type=
+                source_type,
+            source_id=
+                source_id,
+            recipient_line_user_id=
+                recipient_line_user_id,
+            reminder_type=
+                reminder_type,
+            scheduled_at=
+                scheduled_at_iso,
+        )
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(
+        timezone.utc
+    )
 
     if existing:
-        status = existing.get("status")
+        status = existing.get(
+            "status"
+        )
 
         if status == "sent":
             return None
 
-        claimed_at = _parse_database_datetime(
-            existing.get("claimed_at")
+        claimed_at = (
+            _parse_database_datetime(
+                existing.get(
+                    "claimed_at"
+                )
+            )
         )
 
         if (
             status == "processing"
             and claimed_at
-            and claimed_at > now - timedelta(minutes=15)
+            and claimed_at
+            > now
+            - timedelta(
+                minutes=15
+            )
         ):
             return None
 
         response = (
             supabase
-            .table("notification_delivery_logs")
-            .update({
-                "status": "processing",
-                "claimed_at": now.isoformat(),
-                "sent_at": None,
-                "error_message": None,
-            })
-            .eq("id", existing["id"])
+            .table(
+                "notification_delivery_logs"
+            )
+            .update(
+                {
+                    "status":
+                        "processing",
+                    "claimed_at":
+                        now.isoformat(),
+                    "sent_at":
+                        None,
+                    "error_message":
+                        None,
+                }
+            )
+            .eq(
+                "id",
+                existing["id"],
+            )
             .execute()
         )
 
-        rows = response.data or []
+        rows = (
+            response.data
+            or []
+        )
 
-        return rows[0] if rows else None
+        return (
+            rows[0]
+            if rows
+            else None
+        )
 
     try:
         response = (
             supabase
-            .table("notification_delivery_logs")
-            .insert({
-                "source_type": source_type,
-                "source_id": str(source_id),
-                "recipient_type": recipient_type,
-                "recipient_line_user_id": (
-                    recipient_line_user_id
-                ),
-                "reminder_type": reminder_type,
-                "scheduled_at": scheduled_at_iso,
-                "status": "processing",
-                "claimed_at": now.isoformat(),
-            })
+            .table(
+                "notification_delivery_logs"
+            )
+            .insert(
+                {
+                    "source_type":
+                        source_type,
+                    "source_id":
+                        str(
+                            source_id
+                        ),
+                    "recipient_type":
+                        recipient_type,
+                    "recipient_line_user_id":
+                        recipient_line_user_id,
+                    "reminder_type":
+                        reminder_type,
+                    "scheduled_at":
+                        scheduled_at_iso,
+                    "status":
+                        "processing",
+                    "claimed_at":
+                        now.isoformat(),
+                }
+            )
             .execute()
         )
 
-        rows = response.data or []
+        rows = (
+            response.data
+            or []
+        )
 
-        return rows[0] if rows else None
+        return (
+            rows[0]
+            if rows
+            else None
+        )
 
     except Exception as error:
-        # 若同一時間有另一個排程先建立紀錄，
-        # 唯一限制會阻止重複新增。
         print(
             "提醒紀錄可能已存在：",
             type(error).__name__,
@@ -272,20 +471,33 @@ def claim_notification_delivery(
         return None
 
 
-def mark_notification_delivery_sent(delivery_id):
-    """將提醒紀錄標記為成功發送。"""
+def mark_notification_delivery_sent(
+    delivery_id,
+):
+    """
+    將提醒紀錄標記為成功發送。
+    """
 
     response = (
         supabase
-        .table("notification_delivery_logs")
-        .update({
-            "status": "sent",
-            "sent_at": datetime.now(
-                timezone.utc
-            ).isoformat(),
-            "error_message": None,
-        })
-        .eq("id", delivery_id)
+        .table(
+            "notification_delivery_logs"
+        )
+        .update(
+            {
+                "status": "sent",
+                "sent_at":
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat(),
+                "error_message":
+                    None,
+            }
+        )
+        .eq(
+            "id",
+            delivery_id,
+        )
         .execute()
     )
 
@@ -296,16 +508,28 @@ def mark_notification_delivery_failed(
     delivery_id,
     error_message,
 ):
-    """將提醒紀錄標記為發送失敗。"""
+    """
+    將提醒紀錄標記為發送失敗。
+    """
 
     response = (
         supabase
-        .table("notification_delivery_logs")
-        .update({
-            "status": "failed",
-            "error_message": str(error_message)[:1000],
-        })
-        .eq("id", delivery_id)
+        .table(
+            "notification_delivery_logs"
+        )
+        .update(
+            {
+                "status": "failed",
+                "error_message":
+                    str(
+                        error_message
+                    )[:1000],
+            }
+        )
+        .eq(
+            "id",
+            delivery_id,
+        )
         .execute()
     )
 
