@@ -4,6 +4,7 @@
   color: #3f3a34;
 }
 
+
 .teacher-page__header {
   display: flex;
   align-items: flex-start;
@@ -11,6 +12,7 @@
   gap: 24px;
   margin-bottom: 28px;
 }
+
 
 .teacher-page__eyebrow {
   margin: 0 0 6px;
@@ -20,11 +22,13 @@
   text-transform: uppercase;
 }
 
+
 .teacher-page__header h1 {
   margin: 0;
   font-size: 30px;
   font-weight: 700;
 }
+
 
 .teacher-page__description {
   max-width: 660px;
@@ -33,6 +37,7 @@
   font-size: 15px;
   line-height: 1.7;
 }
+
 
 .teacher-page__add-button,
 .teacher-page__refresh-button,
@@ -47,6 +52,7 @@
     background-color 0.15s ease;
 }
 
+
 .teacher-page__add-button {
   flex-shrink: 0;
   padding: 12px 20px;
@@ -56,9 +62,11 @@
   box-shadow: 0 8px 20px rgba(75, 96, 81, 0.18);
 }
 
+
 .teacher-page__add-button:hover {
   transform: translateY(-1px);
 }
+
 
 .teacher-summary {
   display: grid;
@@ -66,6 +74,7 @@
   gap: 16px;
   margin-bottom: 24px;
 }
+
 
 .teacher-summary__card {
   padding: 20px;
@@ -75,11 +84,13 @@
   box-shadow: 0 8px 26px rgba(82, 69, 54, 0.06);
 }
 
+
 .teacher-summary__card span {
   display: block;
   color: #8d8275;
   font-size: 14px;
 }
+
 
 .teacher-summary__card strong {
   display: block;
@@ -89,6 +100,7 @@
   line-height: 1;
 }
 
+
 .teacher-summary__card small {
   display: block;
   margin-top: 8px;
@@ -96,12 +108,14 @@
   font-size: 12px;
 }
 
+
 .teacher-list-section {
   padding: 22px;
   border: 1px solid #e8e0d7;
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.72);
 }
+
 
 .teacher-list-section__toolbar {
   display: flex;
@@ -111,6 +125,7 @@
   margin-bottom: 20px;
 }
 
+
 .teacher-status-tabs {
   display: flex;
   gap: 8px;
@@ -118,6 +133,7 @@
   border-radius: 14px;
   background: #f1ece5;
 }
+
 
 .teacher-status-tabs__button {
   display: flex;
@@ -132,6 +148,7 @@
   cursor: pointer;
 }
 
+
 .teacher-status-tabs__button span {
   min-width: 22px;
   padding: 2px 6px;
@@ -141,11 +158,13 @@
   text-align: center;
 }
 
+
 .teacher-status-tabs__button.is-active {
   background: #ffffff;
   color: #4e6254;
   box-shadow: 0 4px 14px rgba(68, 61, 53, 0.08);
 }
+
 
 .teacher-page__refresh-button {
   padding: 9px 14px;
@@ -154,10 +173,12 @@
   color: #71675c;
 }
 
+
 .teacher-page__refresh-button:disabled {
   cursor: default;
   opacity: 0.6;
 }
+
 
 .teacher-page__error,
 .teacher-form__error {
@@ -169,15 +190,29 @@
   font-size: 14px;
 }
 
+
 .teacher-page__error {
   margin-bottom: 18px;
 }
+
+
+.teacher-page__success {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(54, 132, 92, 0.1);
+  color: #2f6f4f;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 
 .teacher-page__empty {
   padding: 64px 20px;
   color: #92877b;
   text-align: center;
 }
+
 
 .teacher-page__empty strong {
   display: block;
@@ -186,10 +221,12 @@
   font-size: 18px;
 }
 
+
 .teacher-page__empty p {
   margin: 0;
   line-height: 1.7;
 }
+
 
 .teacher-grid {
   display: grid;
@@ -197,18 +234,24 @@
   gap: 16px;
 }
 
+
 .teacher-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
   padding: 20px;
   border: 1px solid #e8e0d7;
   border-radius: 18px;
   background: #ffffff;
 }
 
+
 .teacher-card__top {
   display: flex;
   align-items: center;
   gap: 14px;
 }
+
 
 .teacher-card__avatar {
   display: flex;
@@ -224,10 +267,12 @@
   font-weight: 700;
 }
 
+
 .teacher-card__identity {
   min-width: 0;
   flex: 1;
 }
+
 
 .teacher-card__name-row {
   display: flex;
@@ -235,16 +280,19 @@
   gap: 10px;
 }
 
+
 .teacher-card__identity h2 {
   margin: 0;
   font-size: 19px;
 }
+
 
 .teacher-card__identity p {
   margin: 5px 0 0;
   color: #988d81;
   font-size: 13px;
 }
+
 
 .teacher-card__status {
   padding: 4px 8px;
@@ -253,15 +301,18 @@
   font-weight: 600;
 }
 
+
 .teacher-card__status.is-active {
   background: #e7f1e8;
   color: #55725b;
 }
 
+
 .teacher-card__status.is-inactive {
   background: #eeeae5;
   color: #8d8378;
 }
+
 
 .teacher-card__details {
   display: grid;
@@ -270,9 +321,11 @@
   margin-top: 20px;
 }
 
+
 .teacher-card__details div {
   min-width: 0;
 }
+
 
 .teacher-card__details span {
   display: block;
@@ -280,6 +333,7 @@
   color: #a0968b;
   font-size: 12px;
 }
+
 
 .teacher-card__details strong {
   display: block;
@@ -291,6 +345,7 @@
   white-space: nowrap;
 }
 
+
 .teacher-card__notes {
   margin-top: 18px;
   padding: 11px 13px;
@@ -301,32 +356,62 @@
   line-height: 1.6;
 }
 
+
+/* 按鈕區改成網格，不再因 4 顆或 5 顆而擠壓文字 */
 .teacher-card__actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 20px;
+  margin-top: auto;
+  padding-top: 20px;
 }
 
+
 .teacher-card__actions button {
-  flex: 1;
+  width: 100%;
+  min-height: 44px;
   padding: 9px 12px;
   border-radius: 10px;
+  line-height: 1.35;
+  text-align: center;
+  white-space: nowrap;
 }
+
 
 .teacher-card__edit-button {
   background: #ece7df;
   color: #635a50;
 }
 
+
 .teacher-card__deactivate-button {
   background: #fff0ed;
   color: #a55d55;
 }
 
+
 .teacher-card__restore-button {
   background: #e7f1e8;
   color: #52715a;
 }
+
+
+.teacher-card__delete-button {
+  background: #c94d4d;
+  color: #ffffff;
+}
+
+
+.teacher-card__delete-button:hover {
+  background: #b53d3d;
+}
+
+
+/* 五顆按鈕時，最後一顆刪除按鈕橫跨整列 */
+.teacher-card__actions button:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 
 .teacher-modal {
   position: fixed;
@@ -340,6 +425,7 @@
   backdrop-filter: blur(5px);
 }
 
+
 .teacher-modal__panel {
   width: min(680px, 100%);
   max-height: calc(100vh - 44px);
@@ -349,6 +435,7 @@
   box-shadow: 0 24px 70px rgba(46, 41, 36, 0.25);
 }
 
+
 .teacher-modal__header {
   display: flex;
   align-items: flex-start;
@@ -356,6 +443,7 @@
   padding: 24px 26px 18px;
   border-bottom: 1px solid #ebe3da;
 }
+
 
 .teacher-modal__header p {
   margin: 0 0 5px;
@@ -365,11 +453,13 @@
   text-transform: uppercase;
 }
 
+
 .teacher-modal__header h2 {
   margin: 0;
   color: #49423b;
   font-size: 23px;
 }
+
 
 .teacher-modal__close {
   width: 36px;
@@ -383,15 +473,18 @@
   cursor: pointer;
 }
 
+
 .teacher-form {
   padding: 24px 26px 26px;
 }
+
 
 .teacher-form__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
+
 
 .teacher-form__field {
   display: flex;
@@ -400,10 +493,12 @@
   gap: 7px;
 }
 
+
 .teacher-form__field--wide,
 .teacher-form__field--full {
   grid-column: 1 / -1;
 }
+
 
 .teacher-form__field > span {
   color: #665d53;
@@ -411,12 +506,14 @@
   font-weight: 600;
 }
 
+
 .teacher-form__field b {
   margin-left: 7px;
   color: #b26960;
   font-size: 11px;
   font-weight: 500;
 }
+
 
 .teacher-form__field input,
 .teacher-form__field textarea {
@@ -434,15 +531,18 @@
     box-shadow 0.15s ease;
 }
 
+
 .teacher-form__field input {
   height: 43px;
   padding: 0 12px;
 }
 
+
 .teacher-form__field textarea {
   padding: 11px 12px;
   resize: vertical;
 }
+
 
 .teacher-form__field input:focus,
 .teacher-form__field textarea:focus {
@@ -450,9 +550,20 @@
   box-shadow: 0 0 0 3px rgba(111, 139, 120, 0.12);
 }
 
+
+.teacher-form__field small {
+  display: block;
+  margin-top: 7px;
+  color: #8b8177;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+
 .teacher-form__error {
   margin-top: 18px;
 }
+
 
 .teacher-form__actions {
   display: flex;
@@ -461,40 +572,48 @@
   margin-top: 24px;
 }
 
+
 .teacher-form__actions button {
   min-width: 112px;
   padding: 10px 18px;
   border-radius: 11px;
 }
 
+
 .teacher-form__cancel {
   background: #eee9e2;
   color: #6f665c;
 }
+
 
 .teacher-form__save {
   background: #5e7564;
   color: #ffffff;
 }
 
+
 .teacher-form__actions button:disabled {
   cursor: default;
   opacity: 0.65;
 }
+
 
 @media (max-width: 900px) {
   .teacher-page {
     padding: 22px;
   }
 
+
   .teacher-summary {
     grid-template-columns: 1fr;
   }
+
 
   .teacher-grid {
     grid-template-columns: 1fr;
   }
 }
+
 
 @media (max-width: 640px) {
   .teacher-page__header,
@@ -503,67 +622,41 @@
     flex-direction: column;
   }
 
+
   .teacher-page__add-button {
     width: 100%;
   }
 
+
   .teacher-status-tabs {
     width: 100%;
   }
+
 
   .teacher-status-tabs__button {
     flex: 1;
     justify-content: center;
   }
 
+
   .teacher-card__details,
   .teacher-form__grid {
     grid-template-columns: 1fr;
   }
+
 
   .teacher-form__field--wide,
   .teacher-form__field--full {
     grid-column: auto;
   }
 
+
   .teacher-card__actions {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
-}
-.teacher-card__delete-button {
-  background: #c94d4d;
-  color: white;
-}
 
-.teacher-card__delete-button:hover {
-  background: #b53d3d;
-}
 
-/* 加到 src/pages/LoginPage.css 最下方 */
-.login-form__success {
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(54, 132, 92, 0.1);
-  color: #2f6f4f;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-/* 加到 src/pages/TeacherPage.css 最下方 */
-.teacher-page__success {
-  margin-bottom: 18px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(54, 132, 92, 0.1);
-  color: #2f6f4f;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.teacher-form__field small {
-  display: block;
-  margin-top: 7px;
-  color: #8b8177;
-  font-size: 12px;
-  line-height: 1.5;
+  .teacher-card__actions button:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
 }
