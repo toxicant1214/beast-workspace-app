@@ -29,13 +29,13 @@ const PICKUP_TABS = [
     key: "rules",
     label: "接車規則",
     description: "設定各學校與年級群組的固定放學時間",
-    editOnly: true,
+    adminOnly: true,
   },
   {
     key: "staff",
     label: "接車老師",
     description: "設定各學校與時段的學期固定接車老師",
-    editOnly: true,
+    adminOnly: true,
   },
   {
     key: "exceptions",
@@ -58,6 +58,7 @@ function PickupPage({
   const {
     canEdit,
     isViewOnly,
+    isAdmin,
   } = usePagePermission(
     currentTeacher,
     "pickup"
@@ -67,11 +68,26 @@ function PickupPage({
   const visibleTabs =
     useMemo(() => {
       return PICKUP_TABS.filter(
-        (tab) =>
-          !tab.editOnly ||
-          canEdit
+        (tab) => {
+          if (
+            tab.adminOnly
+          ) {
+            return isAdmin;
+          }
+
+          if (
+            tab.editOnly
+          ) {
+            return canEdit;
+          }
+
+          return true;
+        }
       );
-    }, [canEdit]);
+    }, [
+      canEdit,
+      isAdmin,
+    ]);
 
 
   useEffect(() => {
@@ -112,16 +128,8 @@ function PickupPage({
 
 
     if (
-      !canEdit
-    ) {
-      return (
-        <TodayPickupPanel />
-      );
-    }
-
-
-    if (
-      activeTab === "monthly"
+      activeTab === "monthly" &&
+      canEdit
     ) {
       return (
         <MonthlyPickupPanel />
@@ -130,7 +138,8 @@ function PickupPage({
 
 
     if (
-      activeTab === "rules"
+      activeTab === "rules" &&
+      isAdmin
     ) {
       return (
         <PickupRulesPanel />
@@ -139,7 +148,8 @@ function PickupPage({
 
 
     if (
-      activeTab === "staff"
+      activeTab === "staff" &&
+      isAdmin
     ) {
       return (
         <PickupStaffPanel />
@@ -148,7 +158,8 @@ function PickupPage({
 
 
     if (
-      activeTab === "exceptions"
+      activeTab === "exceptions" &&
+      canEdit
     ) {
       return (
         <PickupClosuresPanel />
@@ -179,7 +190,9 @@ function PickupPage({
           <p className="summary">
             {isViewOnly
               ? "查看今日各學校的接車時間與負責老師。"
-              : "管理固定接車時間、接車老師、停接日期與每月接車安排。"}
+              : isAdmin
+              ? "管理固定接車時間、接車老師、停接日期與每月接車安排。"
+              : "查看今日接車、月接車表，並管理停接安排。"}
           </p>
         </div>
       </header>
