@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import Sidebar from "./components/Sidebar";
+
 import DashboardPage from "./pages/DashboardPage";
 import TaskPage from "./pages/TaskPage";
 import StudentPage from "./pages/StudentPage";
@@ -16,334 +22,1000 @@ import CleaningPage from "./pages/CleaningPage";
 import LineReminderPage from "./pages/LineReminderPage";
 import ScoreAnalysisPage from "./pages/ScoreAnalysisPage";
 import LoginPage from "./pages/LoginPage";
-import { supabase } from "./lib/supabase";
-import { hasPagePermission } from "./services/permissionService";
-import "./App.css";
 import TeacherDashboard from "./pages/TeacherDashboard";
 
+import { supabase } from "./lib/supabase";
+
+import {
+  hasPagePermission,
+} from "./services/permissionService";
+
+import {
+  getTeacherPermissions,
+} from "./services/teacherPermissionService";
+
+import "./App.css";
+
+
+const PAGE_OPTIONS = [
+  {
+    label: "首頁",
+    key: "dashboard",
+  },
+  {
+    label: "任務中心",
+    key: "personal_tasks",
+    adminOnly: true,
+  },
+  {
+    label: "學生資料",
+    key: "students",
+  },
+  {
+    label: "老師管理",
+    key: "teachers",
+    adminOnly: true,
+  },
+  {
+    label: "老師任務",
+    key: "teacher_assignments",
+  },
+  {
+    label: "班級管理",
+    key: "classes",
+  },
+  {
+    label: "課程管理",
+    key: "courses",
+  },
+  {
+    label: "營隊管理",
+    key: "camps",
+  },
+  {
+    label: "行事曆",
+    key: "calendar",
+  },
+  {
+    label: "接送管理",
+    key: "pickup",
+  },
+  {
+    label: "學習報告書",
+    key: "learning_reports",
+  },
+  {
+    label: "營隊排班",
+    key: "camp_schedule",
+  },
+  {
+    label: "清潔分配",
+    key: "cleaning",
+  },
+  {
+    label: "LINE 提醒",
+    key: "line_reminders",
+    adminOnly: true,
+  },
+  {
+    label: "成績分析",
+    key: "score_analysis",
+  },
+];
+
+
 function isTeacherInviteUrl() {
-  const url = new URL(window.location.href);
-  return url.searchParams.get("setup") === "teacher";
+  const url =
+    new URL(
+      window.location.href
+    );
+
+  return (
+    url.searchParams.get(
+      "setup"
+    ) === "teacher"
+  );
 }
+
 
 function clearInviteUrl() {
-  const url = new URL(window.location.href);
-  url.searchParams.delete("setup");
+  const url =
+    new URL(
+      window.location.href
+    );
+
+  url.searchParams.delete(
+    "setup"
+  );
+
   url.hash = "";
-  window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
+
+  window.history.replaceState(
+    {},
+    document.title,
+    `${url.pathname}${url.search}`
+  );
 }
 
+
+function buildPermissionObject(
+  permissionRows
+) {
+  const result = {};
+
+  for (
+    const row
+    of permissionRows
+  ) {
+    const level =
+      row.permission_level ||
+      "hidden";
+
+    result[row.module_key] = {
+      level,
+
+      view:
+        level === "view" ||
+        level === "edit",
+
+      edit:
+        level === "edit",
+
+      create:
+        level === "edit",
+
+      update:
+        level === "edit",
+
+      delete:
+        level === "edit",
+
+      data_scope:
+        row.data_scope ||
+        "own",
+    };
+  }
+
+  return result;
+}
+
+
 function Workspace() {
-  const [activePage, setActivePage] = useState("首頁");
-  const [session, setSession] = useState(null);
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [isSettingInvitePassword, setIsSettingInvitePassword] = useState(
+  const [
+    activePage,
+    setActivePage,
+  ] = useState("首頁");
+
+  const [
+    session,
+    setSession,
+  ] = useState(null);
+
+  const [
+    checkingSession,
+    setCheckingSession,
+  ] = useState(true);
+
+  const [
+    isSettingInvitePassword,
+    setIsSettingInvitePassword,
+  ] = useState(
     isTeacherInviteUrl
   );
 
-  const [currentTeacher, setCurrentTeacher] = useState(null);
-  const [loadingCurrentTeacher, setLoadingCurrentTeacher] = useState(false);
-  const [currentTeacherError, setCurrentTeacherError] = useState("");
 
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState("");
+  const [
+    currentTeacher,
+    setCurrentTeacher,
+  ] = useState(null);
 
-  const pageOptions = [
-    { label: "首頁", key: "dashboard" },
-    { label: "任務中心", key: "personal_tasks", adminOnly: true },
-    { label: "學生資料", key: "students" },
-    { label: "老師管理", key: "teachers", adminOnly: true },
-    { label: "老師任務", key: "teacher_assignments" },
-    { label: "班級管理", key: "classes" },
-    { label: "課程管理", key: "courses" },
-    { label: "營隊管理", key: "camps" },
-    { label: "行事曆", key: "calendar" },
-    { label: "接送管理", key: "pickup" },
-    { label: "學習報告書", key: "learning_reports" },
-    { label: "營隊排班", key: "camp_schedule" },
-    { label: "清潔分配", key: "cleaning" },
-    { label: "LINE 提醒", key: "line_reminders", adminOnly: true },
-    { label: "成績分析", key: "score_analysis" },
-  ];
+  const [
+    loadingCurrentTeacher,
+    setLoadingCurrentTeacher,
+  ] = useState(false);
 
-  const pages = useMemo(() => {
-    return pageOptions
-      .filter((page) => {
-        if (currentTeacher?.role === "admin") {
-          return true;
-        }
+  const [
+    currentTeacherError,
+    setCurrentTeacherError,
+  ] = useState("");
 
-        if (page.adminOnly) {
-          return false;
-        }
 
-        return hasPagePermission(currentTeacher, page.key);
-      })
-      .map((page) => page.label);
-  }, [currentTeacher]);
+  const [
+    isSigningOut,
+    setIsSigningOut,
+  ] = useState(false);
+
+  const [
+    signOutError,
+    setSignOutError,
+  ] = useState("");
+
+
+  const pages =
+    useMemo(() => {
+      return PAGE_OPTIONS
+        .filter((page) => {
+          if (
+            currentTeacher?.role ===
+            "admin"
+          ) {
+            return true;
+          }
+
+          if (
+            page.adminOnly
+          ) {
+            return false;
+          }
+
+          return (
+            hasPagePermission(
+              currentTeacher,
+              page.key
+            )
+          );
+        })
+        .map(
+          (page) =>
+            page.label
+        );
+    }, [currentTeacher]);
+
 
   useEffect(() => {
     let isMounted = true;
 
+
     async function loadSession() {
       const {
-        data: { session: currentSession },
+        data: {
+          session:
+            currentSession,
+        },
         error,
-      } = await supabase.auth.getSession();
+      } =
+        await supabase.auth
+          .getSession();
+
 
       if (error) {
-        console.error("讀取登入狀態失敗：", error);
+        console.error(
+          "讀取登入狀態失敗：",
+          error
+        );
       }
 
+
       if (isMounted) {
-        setSession(currentSession);
-        setCheckingSession(false);
+        setSession(
+          currentSession
+        );
+
+        setCheckingSession(
+          false
+        );
       }
     }
 
+
     loadSession();
 
+
     const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setCheckingSession(false);
+      data: {
+        subscription,
+      },
+    } =
+      supabase.auth
+        .onAuthStateChange(
+          (
+            _event,
+            nextSession
+          ) => {
+            setSession(
+              nextSession
+            );
 
-      if (isTeacherInviteUrl()) {
-        setIsSettingInvitePassword(true);
-      }
+            setCheckingSession(
+              false
+            );
 
-      if (!nextSession) {
-        setActivePage("首頁");
-        setCurrentTeacher(null);
-        setCurrentTeacherError("");
-      }
-    });
+
+            if (
+              isTeacherInviteUrl()
+            ) {
+              setIsSettingInvitePassword(
+                true
+              );
+            }
+
+
+            if (!nextSession) {
+              setActivePage(
+                "首頁"
+              );
+
+              setCurrentTeacher(
+                null
+              );
+
+              setCurrentTeacherError(
+                ""
+              );
+            }
+          }
+        );
+
 
     return () => {
       isMounted = false;
+
       subscription.unsubscribe();
     };
   }, []);
 
+
   useEffect(() => {
-    if (!session?.user?.id || isSettingInvitePassword) {
-      setCurrentTeacher(null);
+    if (
+      !session?.user?.id ||
+      isSettingInvitePassword
+    ) {
+      setCurrentTeacher(
+        null
+      );
+
       return;
     }
 
+
     let isMounted = true;
+
 
     async function loadCurrentTeacher() {
       try {
-        setLoadingCurrentTeacher(true);
-        setCurrentTeacherError("");
+        setLoadingCurrentTeacher(
+          true
+        );
 
-        const { data, error } = await supabase
-          .from("teachers")
-          .select(
-            "id, chinese_name, english_name, email, role, status, auth_user_id, permissions"
-          )
-          .eq("auth_user_id", session.user.id)
-          .maybeSingle();
+        setCurrentTeacherError(
+          ""
+        );
+
+
+        const {
+          data,
+          error,
+        } =
+          await supabase
+            .from("teachers")
+            .select(
+              `
+              id,
+              chinese_name,
+              english_name,
+              email,
+              role,
+              status,
+              auth_user_id
+              `
+            )
+            .eq(
+              "auth_user_id",
+              session.user.id
+            )
+            .maybeSingle();
+
 
         if (error) {
           throw error;
         }
 
+
         if (!isMounted) {
           return;
         }
 
+
         if (!data) {
-          setCurrentTeacher(null);
-          setCurrentTeacherError("找不到這個登入帳號對應的老師資料。");
+          setCurrentTeacher(
+            null
+          );
+
+          setCurrentTeacherError(
+            "找不到這個登入帳號對應的老師資料。"
+          );
+
           return;
         }
 
-        if (data.status !== "active") {
-          setCurrentTeacher(null);
-          setCurrentTeacherError("這個老師帳號目前已停用，請聯絡管理員。");
+
+        if (
+          data.status !==
+          "active"
+        ) {
+          setCurrentTeacher(
+            null
+          );
+
+          setCurrentTeacherError(
+            "這個老師帳號目前已停用，請聯絡管理員。"
+          );
+
           return;
         }
 
-        setCurrentTeacher(data);
+
+        if (
+          data.role ===
+          "admin"
+        ) {
+          setCurrentTeacher({
+            ...data,
+            permissions: {},
+          });
+
+          return;
+        }
+
+
+        const permissionRows =
+          await getTeacherPermissions(
+            data.id
+          );
+
+
+        if (!isMounted) {
+          return;
+        }
+
+
+        const permissions =
+          buildPermissionObject(
+            permissionRows
+          );
+
+
+        setCurrentTeacher({
+          ...data,
+          permissions,
+        });
       } catch (error) {
-        console.error("讀取登入者資料失敗：", error);
+        console.error(
+          "讀取登入者資料失敗：",
+          error
+        );
+
 
         if (isMounted) {
-          setCurrentTeacher(null);
-          setCurrentTeacherError("登入者資料讀取失敗。");
+          setCurrentTeacher(
+            null
+          );
+
+          setCurrentTeacherError(
+            "登入者資料或權限讀取失敗。"
+          );
         }
       } finally {
         if (isMounted) {
-          setLoadingCurrentTeacher(false);
+          setLoadingCurrentTeacher(
+            false
+          );
         }
       }
     }
 
+
     loadCurrentTeacher();
+
 
     return () => {
       isMounted = false;
     };
-  }, [session, isSettingInvitePassword]);
+  }, [
+    session,
+    isSettingInvitePassword,
+  ]);
+
 
   useEffect(() => {
-    if (!currentTeacher || pages.length === 0) {
+    if (
+      !currentTeacher
+    ) {
       return;
     }
 
-    if (!pages.includes(activePage)) {
-      setActivePage(pages[0]);
+
+    if (
+      currentTeacher.role ===
+      "admin"
+    ) {
+      return;
     }
-  }, [currentTeacher, pages, activePage]);
+
+
+    if (
+      pages.length === 0
+    ) {
+      return;
+    }
+
+
+    if (
+      !pages.includes(
+        activePage
+      )
+    ) {
+      setActivePage(
+        pages[0]
+      );
+    }
+  }, [
+    currentTeacher,
+    pages,
+    activePage,
+  ]);
+
 
   async function handleSignOut() {
     try {
-      setIsSigningOut(true);
-      setSignOutError("");
+      setIsSigningOut(
+        true
+      );
 
-      const { error } = await supabase.auth.signOut();
+      setSignOutError(
+        ""
+      );
+
+
+      const {
+        error,
+      } =
+        await supabase.auth
+          .signOut();
+
 
       if (error) {
         throw error;
       }
     } catch (error) {
-      console.error("登出失敗：", error);
-      setSignOutError("登出失敗，請稍後再試。");
+      console.error(
+        "登出失敗：",
+        error
+      );
+
+      setSignOutError(
+        "登出失敗，請稍後再試。"
+      );
     } finally {
-      setIsSigningOut(false);
+      setIsSigningOut(
+        false
+      );
     }
   }
+
 
   function handlePasswordSet() {
     clearInviteUrl();
-    setIsSettingInvitePassword(false);
+
+    setIsSettingInvitePassword(
+      false
+    );
   }
 
-  function getRoleLabel(role) {
-    if (role === "admin") return "管理員";
-    if (role === "teacher") return "老師";
+
+  function getRoleLabel(
+    role
+  ) {
+    if (
+      role === "admin"
+    ) {
+      return "管理員";
+    }
+
+    if (
+      role === "teacher"
+    ) {
+      return "老師";
+    }
+
     return "使用者";
   }
 
+
   function getDisplayName() {
-    if (loadingCurrentTeacher) return "讀取中…";
-    if (currentTeacher?.chinese_name) return currentTeacher.chinese_name;
-    if (currentTeacher?.english_name) return currentTeacher.english_name;
-    return session?.user?.email || "使用者";
+    if (
+      loadingCurrentTeacher
+    ) {
+      return "讀取中…";
+    }
+
+    if (
+      currentTeacher?.chinese_name
+    ) {
+      return (
+        currentTeacher.chinese_name
+      );
+    }
+
+    if (
+      currentTeacher?.english_name
+    ) {
+      return (
+        currentTeacher.english_name
+      );
+    }
+
+    return (
+      session?.user?.email ||
+      "使用者"
+    );
   }
+
 
   function renderPage() {
-    if (activePage === "首頁") {
-  if (currentTeacher?.role === "teacher") {
-    return <TeacherDashboard />;
-  }
+    if (
+      activePage ===
+      "首頁"
+    ) {
+      if (
+        currentTeacher?.role ===
+        "teacher"
+      ) {
+        return (
+          <TeacherDashboard
+            currentTeacher={
+              currentTeacher
+            }
+          />
+        );
+      }
 
-  return <DashboardPage />;
-}
-    if (activePage === "任務中心") return <TaskPage />;
-    if (activePage === "學生資料") return <StudentPage />;
-    if (activePage === "老師管理") return <TeacherPage />;
-    if (activePage === "老師任務") {
-      return <TeacherAssignmentPage currentTeacher={currentTeacher} />;
+      return (
+        <DashboardPage />
+      );
     }
-    if (activePage === "班級管理") return <ClassPage />;
-    if (activePage === "課程管理") return <CoursePage />;
-    if (activePage === "營隊管理") return <CampPage />;
-    if (activePage === "行事曆") return <CalendarPage />;
-    if (activePage === "接送管理") return <PickupPage />;
-    if (activePage === "學習報告書") return <LearningReportPage />;
-    if (activePage === "營隊排班") return <CampSchedulePage />;
-    if (activePage === "清潔分配") return <CleaningPage />;
-    if (activePage === "LINE 提醒") return <LineReminderPage />;
-    if (activePage === "成績分析") return <ScoreAnalysisPage />;
 
-    return <DashboardPage />;
+
+    if (
+      activePage ===
+      "任務中心"
+    ) {
+      return (
+        <TaskPage />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "學生資料"
+    ) {
+      return (
+        <StudentPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "老師管理"
+    ) {
+      return (
+        <TeacherPage />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "老師任務"
+    ) {
+      return (
+        <TeacherAssignmentPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "班級管理"
+    ) {
+      return (
+        <ClassPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "課程管理"
+    ) {
+      return (
+        <CoursePage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "營隊管理"
+    ) {
+      return (
+        <CampPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "行事曆"
+    ) {
+      return (
+        <CalendarPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "接送管理"
+    ) {
+      return (
+        <PickupPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "學習報告書"
+    ) {
+      return (
+        <LearningReportPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "營隊排班"
+    ) {
+      return (
+        <CampSchedulePage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "清潔分配"
+    ) {
+      return (
+        <CleaningPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "LINE 提醒"
+    ) {
+      return (
+        <LineReminderPage />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "成績分析"
+    ) {
+      return (
+        <ScoreAnalysisPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    return (
+      <DashboardPage />
+    );
   }
 
-  if (checkingSession) {
+
+  if (
+    checkingSession
+  ) {
     return (
       <main className="workspace-auth-loading">
-        <p>正在確認登入狀態…</p>
+        <p>
+          正在確認登入狀態…
+        </p>
       </main>
     );
   }
 
-  if (isSettingInvitePassword) {
+
+  if (
+    isSettingInvitePassword
+  ) {
     if (!session) {
       return (
         <main className="workspace-auth-loading">
-          <p>邀請連結無效或已過期，請聯絡管理員重新寄送邀請。</p>
+          <p>
+            邀請連結無效或已過期，請聯絡管理員重新寄送邀請。
+          </p>
         </main>
       );
     }
 
-    return <LoginPage mode="set-password" onPasswordSet={handlePasswordSet} />;
+
+    return (
+      <LoginPage
+        mode="set-password"
+        onPasswordSet={
+          handlePasswordSet
+        }
+      />
+    );
   }
+
 
   if (!session) {
-    return <LoginPage />;
+    return (
+      <LoginPage />
+    );
   }
 
-  if (loadingCurrentTeacher) {
+
+  if (
+    loadingCurrentTeacher
+  ) {
     return (
       <main className="workspace-auth-loading">
-        <p>正在讀取登入者資料…</p>
+        <p>
+          正在讀取登入者資料…
+        </p>
       </main>
     );
   }
 
-  if (!currentTeacher) {
+
+  if (
+    !currentTeacher
+  ) {
     return (
       <main className="workspace-auth-loading">
-        <p>{currentTeacherError || "無法讀取登入者資料。"}</p>
-        <button type="button" onClick={handleSignOut} disabled={isSigningOut}>
-          {isSigningOut ? "登出中…" : "返回登入"}
+        <p>
+          {currentTeacherError ||
+            "無法讀取登入者資料。"}
+        </p>
+
+        <button
+          type="button"
+          onClick={
+            handleSignOut
+          }
+          disabled={
+            isSigningOut
+          }
+        >
+          {isSigningOut
+            ? "登出中…"
+            : "返回登入"}
         </button>
       </main>
     );
   }
 
+
   return (
     <div className="workspace">
       <Sidebar
         pages={pages}
-        activePage={activePage}
-        setActivePage={setActivePage}
+        activePage={
+          activePage
+        }
+        setActivePage={
+          setActivePage
+        }
       />
+
 
       <main className="main">
         <header className="workspace-topbar">
           <div className="workspace-user">
             <div className="workspace-user__text">
-              <span className="workspace-user__name">{getDisplayName()}</span>
+              <span className="workspace-user__name">
+                {
+                  getDisplayName()
+                }
+              </span>
+
 
               <span className="workspace-user__role">
-                {getRoleLabel(currentTeacher?.role)}
+                {getRoleLabel(
+                  currentTeacher?.role
+                )}
               </span>
             </div>
+
 
             <button
               type="button"
               className="workspace-signout"
-              onClick={handleSignOut}
-              disabled={isSigningOut}
+              onClick={
+                handleSignOut
+              }
+              disabled={
+                isSigningOut
+              }
             >
-              {isSigningOut ? "登出中…" : "登出"}
+              {isSigningOut
+                ? "登出中…"
+                : "登出"}
             </button>
           </div>
 
+
           {signOutError && (
-            <p className="workspace-signout-error">{signOutError}</p>
+            <p className="workspace-signout-error">
+              {
+                signOutError
+              }
+            </p>
           )}
         </header>
+
 
         {renderPage()}
       </main>
     </div>
   );
 }
+
 
 export default Workspace;
