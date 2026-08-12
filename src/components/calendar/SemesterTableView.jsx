@@ -719,14 +719,13 @@ function SemesterTableView({
 
 
       const payload = {
-        semester_id:
-          semesterId,
+  semester_id: semesterId,
 
-        school_id:
-          null,
+  school_id:
+    null,
 
-        applies_to_all_schools:
-          false,
+  applies_to_all_schools:
+    true,
 
         start_date:
           quickAdd.date,
