@@ -2007,3 +2007,36 @@ background 0.15s ease;
   margin: 0;
   white-space: nowrap;
 }
+/* 月份、週次：上下左右置中 */
+.semester-table__month,
+.semester-table__week {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* 日期格：上下左右置中 */
+.semester-table__date {
+  position: relative;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.semester-table__date span {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  line-height: 1;
+}
+
+/* 開始／結束的小字固定在底部 */
+.semester-table__date small {
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  transform: translateX(-50%);
+  margin: 0;
+  white-space: nowrap;
+}
