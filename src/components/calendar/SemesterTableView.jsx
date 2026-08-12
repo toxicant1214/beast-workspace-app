@@ -9,7 +9,7 @@ const WORK_COLUMNS = [
   {
     key: "SCHOOL",
     label: "學校重要事務",
-    allowQuickAdd: false,
+    allowQuickAdd: true,
   },
   {
     key: "ADMIN",
@@ -402,6 +402,11 @@ function SemesterTableView({
   ] = useState({});
 
   const [
+    semesterSchools,
+    setSemesterSchools,
+  ] = useState([]);
+
+  const [
     loadingEvents,
     setLoadingEvents,
   ] = useState(false);
@@ -462,6 +467,7 @@ function SemesterTableView({
     if (!semesterId) {
       setEvents([]);
       setSchoolNames({});
+      setSemesterSchools([]);
 
       return;
     }
@@ -558,29 +564,43 @@ function SemesterTableView({
       }
 
 
+      const nextSemesterSchools =
+        (
+          schoolResult.data ||
+          []
+        )
+          .map(
+            (item) =>
+              item.calendar_schools
+          )
+          .filter(Boolean)
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(
+                b.name,
+                "zh-Hant"
+              )
+          );
+
+
       const nextSchoolNames =
         Object.fromEntries(
-          (
-            schoolResult.data ||
-            []
+          nextSemesterSchools.map(
+            (school) => [
+              school.id,
+              school.name,
+            ]
           )
-            .map(
-              (item) =>
-                item.calendar_schools
-            )
-            .filter(Boolean)
-            .map(
-              (school) => [
-                school.id,
-                school.name,
-              ]
-            )
         );
 
 
       setEvents(
         eventResult.data ||
           []
+      );
+
+      setSemesterSchools(
+        nextSemesterSchools
       );
 
       setSchoolNames(
@@ -645,6 +665,7 @@ function SemesterTableView({
       title: "",
       date:
         week.firstAvailableDate,
+      schoolId: "ALL",
     });
 
 
@@ -729,14 +750,29 @@ function SemesterTableView({
       setEventError("");
 
 
+      const isSchoolEvent =
+        quickAdd.category ===
+        "SCHOOL";
+
+      const selectedSchoolId =
+        isSchoolEvent
+          ? quickAdd.schoolId ||
+            "ALL"
+          : "ALL";
+
+
       const payload = {
-  semester_id: semesterId,
+        semester_id: semesterId,
 
-  school_id:
-    null,
+        school_id:
+          selectedSchoolId ===
+          "ALL"
+            ? null
+            : selectedSchoolId,
 
-  applies_to_all_schools:
-    true,
+        applies_to_all_schools:
+          selectedSchoolId ===
+          "ALL",
 
         start_date:
           quickAdd.date,
@@ -1314,7 +1350,44 @@ function SemesterTableView({
                                 />
 
 
-                                <div className="semester-quick-add__actions">
+                                {quickAdd.category === "SCHOOL" && (
+                                  <select
+                                    name="schoolId"
+                                    value={
+                                      quickAdd.schoolId
+                                    }
+                                    onChange={
+                                      handleQuickAddChange
+                                    }
+                                    disabled={
+                                      quickAddSaving
+                                    }
+                                  >
+                                    <option value="ALL">
+                                      全部學校
+                                    </option>
+
+                                    {semesterSchools.map(
+                                      (school) => (
+                                        <option
+                                          key={
+                                            school.id
+                                          }
+                                          value={
+                                            school.id
+                                          }
+                                        >
+                                          {
+                                            school.name
+                                          }
+                                        </option>
+                                      )
+                                    )}
+                                  </select>
+                                )}
+
+
+                                 <div className="semester-quick-add__actions">
                                   <button
                                     type="button"
                                     onClick={

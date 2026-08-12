@@ -2090,3 +2090,267 @@ background 0.15s ease;
   justify-content: center;
   text-align: center;
 }
+/* ===== 月曆檢視 ===== */
+
+.month-calendar {
+  width: 100%;
+}
+
+.month-calendar__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.month-calendar__header h2 {
+  margin: 0;
+  color: #37322d;
+  font-size: 21px;
+}
+
+.month-calendar__nav {
+  display: flex;
+  gap: 8px;
+}
+
+.month-calendar__nav button {
+  min-height: 36px;
+  border: 1px solid #ddd4ca;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 12px;
+  color: #625a51;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.month-calendar__nav button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.month-calendar__grid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      7,
+      minmax(0, 1fr)
+    );
+  overflow: hidden;
+  border: 1px solid #ded6cc;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.month-calendar__weekday {
+  border-right: 1px solid #e5ddd4;
+  border-bottom: 1px solid #ddd4ca;
+  background: #eee8df;
+  padding: 10px 6px;
+  color: #514a43;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.month-calendar__weekday:nth-child(7) {
+  border-right: 0;
+}
+
+.month-calendar__day {
+  position: relative;
+  min-height: 120px;
+  border-right: 1px solid #e8e1d8;
+  border-bottom: 1px solid #e8e1d8;
+  background: #fffdf9;
+  padding: 8px;
+}
+
+.month-calendar__day:nth-child(7n) {
+  border-right: 0;
+}
+
+.month-calendar__day.is-other-month {
+  background: #f7f4ef;
+}
+
+.month-calendar__day.is-outside-semester {
+  background: #f2f0ed;
+  opacity: 0.58;
+}
+
+.month-calendar__date {
+  margin-bottom: 7px;
+  color: #514a43;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.month-calendar__events {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.month-calendar-event {
+  min-width: 0;
+  border: 1px solid #e2d7c8;
+  border-radius: 7px;
+  background: #f8f1e7;
+  padding: 5px 6px;
+}
+
+.month-calendar-event strong {
+  display: block;
+  overflow: hidden;
+  color: #51483f;
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.month-calendar-event span {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: #8a7d70;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.month-calendar__more {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: #eee8df;
+  padding: 4px 6px;
+  color: #70665c;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.month-calendar__add {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  width: 23px;
+  height: 23px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #cec3b6;
+  border-radius: 7px;
+  background: transparent;
+  color: #9a8f83;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.month-calendar__day:hover
+.month-calendar__add {
+  opacity: 1;
+}
+
+@media (max-width: 900px) {
+  .month-calendar {
+    overflow-x: auto;
+  }
+
+  .month-calendar__grid {
+    min-width: 780px;
+  }
+}
+.month-calendar-event {
+  width: 100%;
+  border: 1px solid #e2d7c8;
+  border-radius: 7px;
+  background: #f8f1e7;
+  padding: 5px 6px;
+  text-align: left;
+  font: inherit;
+}
+
+.month-calendar-event:not(:disabled) {
+  cursor: pointer;
+}
+
+.month-calendar-event:not(:disabled):hover {
+  border-color: #cdbfac;
+  background: #f3e9dc;
+}
+
+.month-calendar-event:disabled {
+  cursor: default;
+}
+
+.month-event-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.calendar-field select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #ddd5cb;
+  border-radius: 11px;
+  background: #fff;
+  padding: 11px 12px;
+  color: #37322d;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.calendar-field select:focus {
+  border-color: #998a79;
+  box-shadow: 0 0 0 3px rgba(153, 138, 121, 0.12);
+}
+
+.month-event-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 5px;
+  border-top: 1px solid #eee7df;
+  padding-top: 18px;
+}
+
+.month-event-form__actions > div {
+  display: flex;
+  gap: 9px;
+  margin-left: auto;
+}
+
+.month-event-form__delete {
+  min-height: 39px;
+  border: 1px solid #edc8c3;
+  border-radius: 10px;
+  background: #fff1ef;
+  padding: 0 15px;
+  color: #ad554e;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.month-event-form__delete:hover:not(:disabled) {
+  background: #f9dfdc;
+}
+
+.month-event-form__delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

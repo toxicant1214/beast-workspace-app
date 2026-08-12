@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import SemesterSetupPanel from "../components/calendar/SemesterSetupPanel";
 import SemesterTableView from "../components/calendar/SemesterTableView";
 import { usePagePermission } from "../hooks/usePagePermission";
+import MonthCalendarView from "../components/calendar/MonthCalendarView";
 import "../components/calendar/calendar.css";
 
 
@@ -141,22 +142,19 @@ function CalendarPage({ currentTeacher }) {
 
 
           {activeView === "month" && (
-            <section className="calendar-view-panel">
-              <div className="calendar-placeholder">
-                <div className="calendar-placeholder__symbol">
-                  □
-                </div>
-
-                <div>
-                  <h2>月曆檢視</h2>
-
-                  <p>
-                    後續會在這裡顯示月份月曆與每日行事項目。
-                  </p>
-                </div>
-              </div>
-            </section>
-          )}
+  <MonthCalendarView
+    semesterId={
+      CURRENT_SEMESTER.id
+    }
+    semesterStartDate={
+      CURRENT_SEMESTER.startDate
+    }
+    semesterEndDate={
+      CURRENT_SEMESTER.endDate
+    }
+    canEdit={canEdit}
+  />
+)}
 
 
           {activeView === "manage" && canEdit && (
