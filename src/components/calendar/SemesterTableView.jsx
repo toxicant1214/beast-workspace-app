@@ -206,76 +206,6 @@ function buildSemesterWeeks(
     );
 
 
-  async function handleDeleteEvent(
-    eventItem
-  ) {
-    if (!canEdit) {
-      setEventError(
-        "目前權限為僅查看，無法刪除行事項目。"
-      );
-
-      return;
-    }
-
-    const eventTitle =
-      getEventTitle(eventItem);
-
-    const confirmed =
-      window.confirm(
-        `確定要刪除「${eventTitle}」嗎？\n\n刪除後無法復原。`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setDeletingEventId(
-        eventItem.id
-      );
-
-      setEventError("");
-
-      const { error } =
-        await supabase
-          .from(
-            "calendar_school_events"
-          )
-          .delete()
-          .eq(
-            "id",
-            eventItem.id
-          );
-
-      if (error) {
-        throw error;
-      }
-
-      setEvents(
-        (currentEvents) =>
-          currentEvents.filter(
-            (item) =>
-              item.id !==
-              eventItem.id
-          )
-      );
-    } catch (error) {
-      console.error(
-        "刪除學期行事失敗：",
-        error
-      );
-
-      setEventError(
-        error?.message
-          ? `刪除失敗：${error.message}`
-          : "刪除失敗，請稍後再試。"
-      );
-    } finally {
-      setDeletingEventId(null);
-    }
-  }
-
-
   if (
     !semesterStart ||
     !semesterEnd ||
@@ -496,6 +426,11 @@ function SemesterTableView({
     deletingEventId,
     setDeletingEventId,
   ] = useState(null);
+
+  const [
+    expandedCells,
+    setExpandedCells,
+  ] = useState({});
 
 
   const semesterStart =
@@ -871,6 +806,89 @@ function SemesterTableView({
   }
 
 
+  function toggleCellExpanded(
+    cellKey
+  ) {
+    setExpandedCells(
+      (current) => ({
+        ...current,
+        [cellKey]:
+          !current[cellKey],
+      })
+    );
+  }
+
+
+  async function handleDeleteEvent(
+    eventItem
+  ) {
+    if (!canEdit) {
+      setEventError(
+        "目前權限為僅查看，無法刪除行事項目。"
+      );
+
+      return;
+    }
+
+    const eventTitle =
+      getEventTitle(eventItem);
+
+    const confirmed =
+      window.confirm(
+        `確定要刪除「${eventTitle}」嗎？\n\n刪除後無法復原。`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingEventId(
+        eventItem.id
+      );
+
+      setEventError("");
+
+      const { error } =
+        await supabase
+          .from(
+            "calendar_school_events"
+          )
+          .delete()
+          .eq(
+            "id",
+            eventItem.id
+          );
+
+      if (error) {
+        throw error;
+      }
+
+      setEvents(
+        (currentEvents) =>
+          currentEvents.filter(
+            (item) =>
+              item.id !==
+              eventItem.id
+          )
+      );
+    } catch (error) {
+      console.error(
+        "刪除學期行事失敗：",
+        error
+      );
+
+      setEventError(
+        error?.message
+          ? `刪除失敗：${error.message}`
+          : "刪除失敗，請稍後再試。"
+      );
+    } finally {
+      setDeletingEventId(null);
+    }
+  }
+
+
   if (
     !semesterStart ||
     !semesterEnd ||
@@ -1116,6 +1134,25 @@ function SemesterTableView({
                         quickAdd?.category ===
                           column.key;
 
+                      const cellKey =
+                        `${week.weekNumber}-${column.key}`;
+
+                      const isExpanded =
+                        Boolean(
+                          expandedCells[cellKey]
+                        );
+
+                      const visibleEvents =
+                        isExpanded
+                          ? weekEvents
+                          : weekEvents.slice(0, 2);
+
+                      const hiddenEventCount =
+                        Math.max(
+                          weekEvents.length - 2,
+                          0
+                        );
+
 
                       return (
                         <td
@@ -1123,7 +1160,7 @@ function SemesterTableView({
                           className="semester-table__work-cell"
                         >
                           <div className="semester-table__work-content">
-                            {weekEvents.map(
+                            {visibleEvents.map(
                               (
                                 eventItem
                               ) => {
@@ -1190,6 +1227,22 @@ function SemesterTableView({
                                   </div>
                                 );
                               }
+                            )}
+
+                            {hiddenEventCount > 0 && (
+                              <button
+                                type="button"
+                                className="semester-table-event-toggle"
+                                onClick={() =>
+                                  toggleCellExpanded(
+                                    cellKey
+                                  )
+                                }
+                              >
+                                {isExpanded
+                                  ? "收合"
+                                  : `＋${hiddenEventCount} 項`}
+                              </button>
                             )}
 
 
