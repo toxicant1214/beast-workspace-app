@@ -206,6 +206,76 @@ function buildSemesterWeeks(
     );
 
 
+  async function handleDeleteEvent(
+    eventItem
+  ) {
+    if (!canEdit) {
+      setEventError(
+        "目前權限為僅查看，無法刪除行事項目。"
+      );
+
+      return;
+    }
+
+    const eventTitle =
+      getEventTitle(eventItem);
+
+    const confirmed =
+      window.confirm(
+        `確定要刪除「${eventTitle}」嗎？\n\n刪除後無法復原。`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingEventId(
+        eventItem.id
+      );
+
+      setEventError("");
+
+      const { error } =
+        await supabase
+          .from(
+            "calendar_school_events"
+          )
+          .delete()
+          .eq(
+            "id",
+            eventItem.id
+          );
+
+      if (error) {
+        throw error;
+      }
+
+      setEvents(
+        (currentEvents) =>
+          currentEvents.filter(
+            (item) =>
+              item.id !==
+              eventItem.id
+          )
+      );
+    } catch (error) {
+      console.error(
+        "刪除學期行事失敗：",
+        error
+      );
+
+      setEventError(
+        error?.message
+          ? `刪除失敗：${error.message}`
+          : "刪除失敗，請稍後再試。"
+      );
+    } finally {
+      setDeletingEventId(null);
+    }
+  }
+
+
   if (
     !semesterStart ||
     !semesterEnd ||
@@ -420,6 +490,12 @@ function SemesterTableView({
     quickAddSaving,
     setQuickAddSaving,
   ] = useState(false);
+
+
+  const [
+    deletingEventId,
+    setDeletingEventId,
+  ] = useState(null);
 
 
   const semesterStart =
@@ -1062,35 +1138,53 @@ function SemesterTableView({
 
                                 return (
                                   <div
-                                    key={
-                                      eventItem.id
-                                    }
+                                    key={eventItem.id}
                                     className="semester-table-event"
                                   >
                                     <div className="semester-table-event__heading">
                                       <strong>
-                                        {
-                                          getEventTitle(
-                                            eventItem
-                                          )
-                                        }
+                                        {getEventTitle(
+                                          eventItem
+                                        )}
                                       </strong>
 
-                                      <small>
-                                        {
-                                          formatInlineDate(
+                                      <div className="semester-table-event__tools">
+                                        <small>
+                                          {formatInlineDate(
                                             eventItem.start_date
-                                          )
-                                        }
-                                      </small>
-                                    </div>
+                                          )}
+                                        </small>
 
+                                        {canEdit && (
+                                          <button
+                                            type="button"
+                                            className="semester-table-event__delete"
+                                            onClick={() =>
+                                              handleDeleteEvent(
+                                                eventItem
+                                              )
+                                            }
+                                            disabled={
+                                              deletingEventId ===
+                                              eventItem.id
+                                            }
+                                            aria-label={`刪除 ${getEventTitle(
+                                              eventItem
+                                            )}`}
+                                            title="刪除"
+                                          >
+                                            {deletingEventId ===
+                                            eventItem.id
+                                              ? "…"
+                                              : "×"}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
 
                                     {schoolLabel && (
                                       <span>
-                                        {
-                                          schoolLabel
-                                        }
+                                        {schoolLabel}
                                       </span>
                                     )}
                                   </div>
