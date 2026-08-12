@@ -954,6 +954,25 @@ function SemesterTableView({
 
       <div className="semester-table-scroll">
         <table className="semester-table">
+          <colgroup>
+            <col className="semester-col semester-col--month" />
+            <col className="semester-col semester-col--week" />
+
+            {WEEKDAY_LABELS.map((weekday) => (
+              <col
+                key={`date-col-${weekday}`}
+                className="semester-col semester-col--date"
+              />
+            ))}
+
+            {WORK_COLUMNS.map((column) => (
+              <col
+                key={`work-col-${column.key}`}
+                className="semester-col semester-col--work"
+              />
+            ))}
+          </colgroup>
+
           <thead>
             <tr>
               <th

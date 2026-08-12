@@ -1894,3 +1894,90 @@ background 0.15s ease;
     min-width: 150px;
   }
 }
+
+/* ===== 學期總表欄寬最終修正：用 colgroup 鎖定真正欄寬 ===== */
+
+.semester-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+/* 3.5 + 3.5 + (4 × 7) + (13 × 5) = 100% */
+.semester-col--month {
+  width: 3.5%;
+}
+
+.semester-col--week {
+  width: 3.5%;
+}
+
+.semester-col--date {
+  width: 4%;
+}
+
+.semester-col--work {
+  width: 13%;
+}
+
+/* 不再讓 th / td 自己的舊 width 干擾 colgroup */
+.semester-table__month-column,
+.semester-table__month,
+.semester-table__week-column,
+.semester-table__week,
+.semester-table__day-heading,
+.semester-table__date,
+.semester-table__work-heading,
+.semester-table__work-cell {
+  width: auto;
+  min-width: 0;
+}
+
+/* 日期是定位資訊，保持緊湊 */
+.semester-table__date {
+  height: 42px;
+  padding: 4px 2px;
+}
+
+.semester-table__date span {
+  font-size: 11px;
+}
+
+/* 工作欄是主要內容區 */
+.semester-table__work-cell {
+  height: 42px;
+  padding: 5px 7px;
+}
+
+.semester-table__work-heading {
+  padding: 7px 6px;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+.semester-table-event {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.semester-table-event__heading strong {
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+/* 桌機不橫向捲動；只有真的很窄才退回可捲動模式 */
+.semester-table-scroll {
+  overflow-x: hidden;
+}
+
+@media (max-width: 1050px) {
+  .semester-table-scroll {
+    overflow-x: auto;
+  }
+
+  .semester-table {
+    min-width: 1050px;
+  }
+}
