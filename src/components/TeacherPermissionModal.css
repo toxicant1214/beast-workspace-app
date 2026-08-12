@@ -1,0 +1,355 @@
+.teacherPermission__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 28px;
+
+  background: rgba(38, 36, 32, 0.42);
+  backdrop-filter: blur(5px);
+}
+
+
+.teacherPermission {
+  display: flex;
+  flex-direction: column;
+
+  width: min(920px, 100%);
+  max-height: calc(100vh - 56px);
+
+  overflow: hidden;
+
+  border-radius: 22px;
+
+  background: #fffdf9;
+
+  box-shadow:
+    0 24px 70px
+    rgba(42, 38, 32, 0.24);
+}
+
+
+.teacherPermission__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 24px;
+
+  padding: 28px 30px 22px;
+
+  border-bottom:
+    1px solid #ebe5dc;
+}
+
+
+.teacherPermission__header p {
+  margin: 0 0 7px;
+
+  color: #aaa39a;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  letter-spacing: 0.18em;
+}
+
+
+.teacherPermission__header h2 {
+  margin: 0;
+
+  color: #3f3b36;
+
+  font-size: 27px;
+}
+
+
+.teacherPermission__header span {
+  display: block;
+
+  margin-top: 8px;
+
+  color: #8f8880;
+
+  font-size: 13px;
+}
+
+
+.teacherPermission__header > button {
+  display: flex;
+
+  width: 42px;
+  height: 42px;
+
+  flex: 0 0 auto;
+
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 50%;
+
+  background: #f1eee8;
+
+  color: #716b63;
+
+  font: inherit;
+  font-size: 26px;
+
+  cursor: pointer;
+}
+
+
+.teacherPermission__body {
+  min-height: 0;
+  flex: 1;
+
+  overflow-y: auto;
+
+  padding: 22px 30px 28px;
+}
+
+
+.teacherPermission__legend {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap: 8px;
+
+  width: 390px;
+
+  margin: 0 0 12px auto;
+
+  color: #9a938a;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  text-align: center;
+}
+
+
+.teacherPermission__list {
+  display: grid;
+  gap: 10px;
+}
+
+
+.teacherPermission__row {
+  display: grid;
+
+  grid-template-columns:
+    minmax(220px, 1fr)
+    390px;
+
+  align-items: center;
+
+  gap: 22px;
+
+  padding: 15px 17px;
+
+  border:
+    1px solid #ebe5dc;
+
+  border-radius: 14px;
+
+  background: #fff;
+}
+
+
+.teacherPermission__info strong {
+  display: block;
+
+  color: #45413c;
+
+  font-size: 14px;
+}
+
+
+.teacherPermission__info span {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #989087;
+
+  font-size: 12px;
+}
+
+
+.teacherPermission__options {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap: 8px;
+}
+
+
+.teacherPermission__option {
+  display: flex;
+
+  min-height: 38px;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 6px;
+
+  padding: 8px 10px;
+
+  border:
+    1px solid #e3ddd4;
+
+  border-radius: 10px;
+
+  background: #faf8f4;
+
+  color: #807970;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+
+.teacherPermission__option input {
+  margin: 0;
+}
+
+
+.teacherPermission__option.is-selected {
+  border-color: #b8c9bb;
+
+  background: #edf4ee;
+
+  color: #5f7465;
+}
+
+
+.teacherPermission__loading {
+  padding: 50px 20px;
+
+  color: #999188;
+
+  font-size: 13px;
+
+  text-align: center;
+}
+
+
+.teacherPermission__error {
+  margin-top: 16px;
+
+  padding: 12px 14px;
+
+  border-radius: 11px;
+
+  background: #fff1ee;
+
+  color: #a05f54;
+
+  font-size: 13px;
+}
+
+
+.teacherPermission__footer {
+  display: flex;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  padding: 18px 30px;
+
+  border-top:
+    1px solid #ebe5dc;
+
+  background: #fffdf9;
+}
+
+
+.teacherPermission__footer button {
+  min-width: 110px;
+  min-height: 43px;
+
+  padding: 9px 18px;
+
+  border-radius: 11px;
+
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+
+.teacherPermission__cancel {
+  border:
+    1px solid #ddd6cc;
+
+  background: #fff;
+
+  color: #777068;
+}
+
+
+.teacherPermission__save {
+  border:
+    1px solid #adbfaf;
+
+  background: #eaf2eb;
+
+  color: #587062;
+}
+
+
+.teacherPermission__footer button:disabled,
+.teacherPermission__header button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+
+@media (max-width: 760px) {
+  .teacherPermission__backdrop {
+    padding: 12px;
+  }
+
+
+  .teacherPermission {
+    max-height:
+      calc(100vh - 24px);
+  }
+
+
+  .teacherPermission__header,
+  .teacherPermission__body,
+  .teacherPermission__footer {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+
+  .teacherPermission__legend {
+    display: none;
+  }
+
+
+  .teacherPermission__row {
+    grid-template-columns: 1fr;
+  }
+
+
+  .teacherPermission__options {
+    grid-template-columns: 1fr;
+  }
+}
