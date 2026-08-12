@@ -1042,23 +1042,21 @@ function SemesterTableView({
                   {week.monthRowSpan >
                     0 && (
                     <td
-                      className="semester-table__month"
-                      rowSpan={
-                        week.monthRowSpan
-                      }
-                    >
-                      {
-                        week.monthLabel
-                      }
-                    </td>
+  className="semester-table__month"
+  rowSpan={week.monthRowSpan}
+>
+  <div className="semester-table__center">
+    {week.monthLabel}
+  </div>
+</td>
                   )}
 
 
                   <td className="semester-table__week">
-                    {
-                      week.weekNumber
-                    }
-                  </td>
+  <div className="semester-table__center">
+    {week.weekNumber}
+  </div>
+</td>
 
 
                   {week.days.map(
