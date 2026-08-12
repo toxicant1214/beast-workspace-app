@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
+
 
 const WORK_COLUMNS = [
   {
@@ -31,6 +33,7 @@ const WORK_COLUMNS = [
   },
 ];
 
+
 const EVENT_TYPE_LABELS = {
   OPENING_DAY: "開學日",
   MIDTERM_EXAM: "期中考",
@@ -46,204 +49,433 @@ const EVENT_TYPE_LABELS = {
   OTHER: "其他",
 };
 
+
 function parseLocalDate(dateString) {
   if (!dateString) return null;
 
-  const [year, month, day] = dateString.split("-").map(Number);
-  return new Date(year, month - 1, day, 12, 0, 0);
+  const [year, month, day] = dateString
+    .split("-")
+    .map(Number);
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    12,
+    0,
+    0
+  );
 }
+
 
 function formatDateKey(date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
+
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
 
+
 function addDays(date, amount) {
   const result = new Date(date);
-  result.setDate(result.getDate() + amount);
+
+  result.setDate(
+    result.getDate() + amount
+  );
+
   return result;
 }
+
 
 function getMonday(date) {
   const result = new Date(date);
-  const weekday = result.getDay();
-  const daysFromMonday = weekday === 0 ? 6 : weekday - 1;
 
-  result.setDate(result.getDate() - daysFromMonday);
+  const weekday =
+    result.getDay();
+
+  const daysFromMonday =
+    weekday === 0
+      ? 6
+      : weekday - 1;
+
+  result.setDate(
+    result.getDate() -
+      daysFromMonday
+  );
+
   return result;
 }
 
+
 function getSunday(date) {
-  return addDays(getMonday(date), 6);
+  return addDays(
+    getMonday(date),
+    6
+  );
 }
+
 
 function formatMonth(date) {
   return `${date.getMonth() + 1}月`;
 }
 
+
 function formatDay(date) {
   return date.getDate();
 }
 
-function formatShortDate(dateString) {
-  const date = parseLocalDate(dateString);
 
-  if (!date) return "—";
+function formatShortDate(
+  dateString
+) {
+  const date =
+    parseLocalDate(
+      dateString
+    );
 
-  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(
+  if (!date) {
+    return "—";
+  }
+
+  return `${date.getFullYear()}/${String(
+    date.getMonth() + 1
+  ).padStart(
     2,
     "0"
-  )}/${String(date.getDate()).padStart(2, "0")}`;
+  )}/${String(
+    date.getDate()
+  ).padStart(
+    2,
+    "0"
+  )}`;
 }
 
-function formatInlineDate(dateString) {
-  const date = parseLocalDate(dateString);
 
-  if (!date) return "";
+function formatInlineDate(
+  dateString
+) {
+  const date =
+    parseLocalDate(
+      dateString
+    );
 
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+  if (!date) {
+    return "";
+  }
+
+  return `${
+    date.getMonth() + 1
+  }/${date.getDate()}`;
 }
 
-function isSameDate(dateA, dateB) {
+
+function isSameDate(
+  dateA,
+  dateB
+) {
   return (
-    dateA.getFullYear() === dateB.getFullYear() &&
-    dateA.getMonth() === dateB.getMonth() &&
-    dateA.getDate() === dateB.getDate()
+    dateA.getFullYear() ===
+      dateB.getFullYear() &&
+    dateA.getMonth() ===
+      dateB.getMonth() &&
+    dateA.getDate() ===
+      dateB.getDate()
   );
 }
 
-function buildSemesterWeeks(startDateString, endDateString) {
-  const semesterStart = parseLocalDate(startDateString);
-  const semesterEnd = parseLocalDate(endDateString);
 
-  if (!semesterStart || !semesterEnd || semesterStart > semesterEnd) {
+function buildSemesterWeeks(
+  startDateString,
+  endDateString
+) {
+  const semesterStart =
+    parseLocalDate(
+      startDateString
+    );
+
+  const semesterEnd =
+    parseLocalDate(
+      endDateString
+    );
+
+
+  if (
+    !semesterStart ||
+    !semesterEnd ||
+    semesterStart >
+      semesterEnd
+  ) {
     return [];
   }
 
-  const tableStart = getMonday(semesterStart);
-  const tableEnd = getSunday(semesterEnd);
+
+  const tableStart =
+    getMonday(
+      semesterStart
+    );
+
+  const tableEnd =
+    getSunday(
+      semesterEnd
+    );
 
   const weeks = [];
-  let currentMonday = new Date(tableStart);
+
+  let currentMonday =
+    new Date(
+      tableStart
+    );
+
   let weekNumber = 1;
 
-  while (currentMonday <= tableEnd) {
-    const days = Array.from({ length: 7 }, (_, index) =>
-      addDays(currentMonday, index)
-    );
+
+  while (
+    currentMonday <=
+    tableEnd
+  ) {
+    const days =
+      Array.from(
+        { length: 7 },
+        (_, index) =>
+          addDays(
+            currentMonday,
+            index
+          )
+      );
+
 
     const firstSemesterDay =
       days.find(
-        (date) => date >= semesterStart && date <= semesterEnd
+        (date) =>
+          date >= semesterStart &&
+          date <= semesterEnd
       ) ?? days[0];
 
-    const monthKey = `${firstSemesterDay.getFullYear()}-${
-      firstSemesterDay.getMonth() + 1
-    }`;
+
+    const monthKey =
+      `${firstSemesterDay.getFullYear()}-${
+        firstSemesterDay.getMonth() + 1
+      }`;
+
 
     weeks.push({
       weekNumber,
       monthKey,
-      monthLabel: formatMonth(firstSemesterDay),
+      monthLabel:
+        formatMonth(
+          firstSemesterDay
+        ),
       days,
-      startDate: formatDateKey(days[0]),
-      endDate: formatDateKey(days[6]),
-      firstAvailableDate: formatDateKey(firstSemesterDay),
+      startDate:
+        formatDateKey(
+          days[0]
+        ),
+      endDate:
+        formatDateKey(
+          days[6]
+        ),
+      firstAvailableDate:
+        formatDateKey(
+          firstSemesterDay
+        ),
     });
 
-    currentMonday = addDays(currentMonday, 7);
+
+    currentMonday =
+      addDays(
+        currentMonday,
+        7
+      );
+
     weekNumber += 1;
   }
 
-  weeks.forEach((week, index) => {
-    const isFirstWeekOfMonth =
-      index === 0 ||
-      weeks[index - 1].monthKey !== week.monthKey;
 
-    if (!isFirstWeekOfMonth) {
-      week.monthRowSpan = 0;
-      return;
+  weeks.forEach(
+    (week, index) => {
+      const isFirstWeekOfMonth =
+        index === 0 ||
+        weeks[index - 1]
+          .monthKey !==
+          week.monthKey;
+
+
+      if (
+        !isFirstWeekOfMonth
+      ) {
+        week.monthRowSpan = 0;
+
+        return;
+      }
+
+
+      let rowSpan = 1;
+
+
+      while (
+        index + rowSpan <
+          weeks.length &&
+        weeks[
+          index + rowSpan
+        ].monthKey ===
+          week.monthKey
+      ) {
+        rowSpan += 1;
+      }
+
+
+      week.monthRowSpan =
+        rowSpan;
     }
+  );
 
-    let rowSpan = 1;
-
-    while (
-      index + rowSpan < weeks.length &&
-      weeks[index + rowSpan].monthKey === week.monthKey
-    ) {
-      rowSpan += 1;
-    }
-
-    week.monthRowSpan = rowSpan;
-  });
 
   return weeks;
 }
 
-function getEventTitle(eventItem) {
-  if (eventItem.event_type === "OTHER") {
-    return eventItem.title || "其他行事";
+
+function getEventTitle(
+  eventItem
+) {
+  if (
+    eventItem.event_type ===
+    "OTHER"
+  ) {
+    return (
+      eventItem.title ||
+      "其他行事"
+    );
   }
 
   return (
-    EVENT_TYPE_LABELS[eventItem.event_type] ||
+    EVENT_TYPE_LABELS[
+      eventItem.event_type
+    ] ||
     eventItem.title ||
     "行事項目"
   );
 }
 
-function eventOverlapsWeek(eventItem, week) {
-  const eventStart = eventItem.start_date;
-  const eventEnd = eventItem.end_date || eventItem.start_date;
 
-  return eventStart <= week.endDate && eventEnd >= week.startDate;
+function eventOverlapsWeek(
+  eventItem,
+  week
+) {
+  const eventStart =
+    eventItem.start_date;
+
+  const eventEnd =
+    eventItem.end_date ||
+    eventItem.start_date;
+
+  return (
+    eventStart <=
+      week.endDate &&
+    eventEnd >=
+      week.startDate
+  );
 }
+
 
 function SemesterTableView({
   semesterId,
   semesterName,
   startDate,
   endDate,
+  canEdit = false,
 }) {
-  const [events, setEvents] = useState([]);
-  const [schoolNames, setSchoolNames] = useState({});
-  const [loadingEvents, setLoadingEvents] = useState(false);
-  const [eventError, setEventError] = useState("");
+  const [
+    events,
+    setEvents,
+  ] = useState([]);
 
-  const [quickAdd, setQuickAdd] = useState(null);
-  const [quickAddSaving, setQuickAddSaving] = useState(false);
+  const [
+    schoolNames,
+    setSchoolNames,
+  ] = useState({});
 
-  const semesterStart = parseLocalDate(startDate);
-  const semesterEnd = parseLocalDate(endDate);
+  const [
+    loadingEvents,
+    setLoadingEvents,
+  ] = useState(false);
 
-  const weeks = useMemo(
-    () => buildSemesterWeeks(startDate, endDate),
-    [startDate, endDate]
-  );
+  const [
+    eventError,
+    setEventError,
+  ] = useState("");
+
+  const [
+    quickAdd,
+    setQuickAdd,
+  ] = useState(null);
+
+  const [
+    quickAddSaving,
+    setQuickAddSaving,
+  ] = useState(false);
+
+
+  const semesterStart =
+    parseLocalDate(
+      startDate
+    );
+
+  const semesterEnd =
+    parseLocalDate(
+      endDate
+    );
+
+
+  const weeks =
+    useMemo(
+      () =>
+        buildSemesterWeeks(
+          startDate,
+          endDate
+        ),
+      [
+        startDate,
+        endDate,
+      ]
+    );
+
 
   useEffect(() => {
     if (!semesterId) {
       setEvents([]);
       setSchoolNames({});
+
       return;
     }
 
     loadSemesterEvents();
   }, [semesterId]);
 
+
   async function loadSemesterEvents() {
     try {
       setLoadingEvents(true);
       setEventError("");
 
-      const [eventResult, schoolResult] = await Promise.all([
-        supabase
-          .from("calendar_school_events")
-          .select(
-            `
+
+      const [
+        eventResult,
+        schoolResult,
+      ] =
+        await Promise.all([
+          supabase
+            .from(
+              "calendar_school_events"
+            )
+            .select(
+              `
               id,
               semester_id,
               school_id,
@@ -256,45 +488,99 @@ function SemesterTableView({
               display_order,
               notes,
               affects_pickup
-            `
-          )
-          .eq("semester_id", semesterId)
-          .order("start_date", { ascending: true })
-          .order("display_order", { ascending: true }),
+              `
+            )
+            .eq(
+              "semester_id",
+              semesterId
+            )
+            .order(
+              "start_date",
+              {
+                ascending:
+                  true,
+              }
+            )
+            .order(
+              "display_order",
+              {
+                ascending:
+                  true,
+              }
+            ),
 
-        supabase
-          .from("calendar_semester_schools")
-          .select(
-            `
+          supabase
+            .from(
+              "calendar_semester_schools"
+            )
+            .select(
+              `
               school_id,
               calendar_schools (
                 id,
                 name
               )
-            `
+              `
+            )
+            .eq(
+              "semester_id",
+              semesterId
+            ),
+        ]);
+
+
+      if (
+        eventResult.error
+      ) {
+        throw (
+          eventResult.error
+        );
+      }
+
+
+      if (
+        schoolResult.error
+      ) {
+        throw (
+          schoolResult.error
+        );
+      }
+
+
+      const nextSchoolNames =
+        Object.fromEntries(
+          (
+            schoolResult.data ||
+            []
           )
-          .eq("semester_id", semesterId),
-      ]);
+            .map(
+              (item) =>
+                item.calendar_schools
+            )
+            .filter(Boolean)
+            .map(
+              (school) => [
+                school.id,
+                school.name,
+              ]
+            )
+        );
 
-      if (eventResult.error) {
-        throw eventResult.error;
-      }
 
-      if (schoolResult.error) {
-        throw schoolResult.error;
-      }
-
-      const nextSchoolNames = Object.fromEntries(
-        (schoolResult.data || [])
-          .map((item) => item.calendar_schools)
-          .filter(Boolean)
-          .map((school) => [school.id, school.name])
+      setEvents(
+        eventResult.data ||
+          []
       );
 
-      setEvents(eventResult.data || []);
-      setSchoolNames(nextSchoolNames);
+      setSchoolNames(
+        nextSchoolNames
+      );
     } catch (error) {
-      console.error("讀取學期行事失敗：", error);
+      console.error(
+        "讀取學期行事失敗：",
+        error
+      );
+
 
       setEventError(
         error?.message
@@ -302,92 +588,200 @@ function SemesterTableView({
           : "讀取學期行事失敗，請稍後再試。"
       );
     } finally {
-      setLoadingEvents(false);
+      setLoadingEvents(
+        false
+      );
     }
   }
 
-  function getWeekEvents(week, category) {
-    return events.filter((eventItem) => {
-      const eventCategory = eventItem.category || "SCHOOL";
 
-      return (
-        eventCategory === category &&
-        eventOverlapsWeek(eventItem, week)
-      );
-    });
+  function getWeekEvents(
+    week,
+    category
+  ) {
+    return events.filter(
+      (eventItem) => {
+        const eventCategory =
+          eventItem.category ||
+          "SCHOOL";
+
+        return (
+          eventCategory ===
+            category &&
+          eventOverlapsWeek(
+            eventItem,
+            week
+          )
+        );
+      }
+    );
   }
 
-  function openQuickAdd(week, category) {
+
+  function openQuickAdd(
+    week,
+    category
+  ) {
+    if (!canEdit) {
+      return;
+    }
+
+
     setQuickAdd({
-      weekNumber: week.weekNumber,
+      weekNumber:
+        week.weekNumber,
       category,
       title: "",
-      date: week.firstAvailableDate,
+      date:
+        week.firstAvailableDate,
     });
+
 
     setEventError("");
   }
 
+
   function closeQuickAdd() {
-    if (quickAddSaving) return;
+    if (
+      quickAddSaving
+    ) {
+      return;
+    }
+
     setQuickAdd(null);
   }
 
-  function handleQuickAddChange(event) {
-    const { name, value } = event.target;
 
-    setQuickAdd((current) => ({
-      ...current,
-      [name]: value,
-    }));
+  function handleQuickAddChange(
+    event
+  ) {
+    const {
+      name,
+      value,
+    } = event.target;
+
+
+    setQuickAdd(
+      (current) => ({
+        ...current,
+        [name]: value,
+      })
+    );
   }
 
-  async function handleQuickAddSubmit(event) {
+
+  async function handleQuickAddSubmit(
+    event
+  ) {
     event.preventDefault();
 
-    const title = quickAdd?.title?.trim();
+
+    if (!canEdit) {
+      setEventError(
+        "目前權限為僅查看，無法新增行事項目。"
+      );
+
+      return;
+    }
+
+
+    const title =
+      quickAdd?.title
+        ?.trim();
+
 
     if (!title) {
-      setEventError("請先輸入事項名稱。");
+      setEventError(
+        "請先輸入事項名稱。"
+      );
+
       return;
     }
 
-    if (!quickAdd.date) {
-      setEventError("請選擇日期。");
+
+    if (
+      !quickAdd.date
+    ) {
+      setEventError(
+        "請選擇日期。"
+      );
+
       return;
     }
+
 
     try {
-      setQuickAddSaving(true);
+      setQuickAddSaving(
+        true
+      );
+
       setEventError("");
 
+
       const payload = {
-        semester_id: semesterId,
-        school_id: null,
-        applies_to_all_schools: false,
-        start_date: quickAdd.date,
-        end_date: null,
+        semester_id:
+          semesterId,
+
+        school_id:
+          null,
+
+        applies_to_all_schools:
+          false,
+
+        start_date:
+          quickAdd.date,
+
+        end_date:
+          null,
+
         title,
-        event_type: "OTHER",
-        category: quickAdd.category,
-        display_order: 0,
-        notes: null,
-        affects_pickup: false,
-        updated_at: new Date().toISOString(),
+
+        event_type:
+          "OTHER",
+
+        category:
+          quickAdd.category,
+
+        display_order:
+          0,
+
+        notes:
+          null,
+
+        affects_pickup:
+          false,
+
+        updated_at:
+          new Date()
+            .toISOString(),
       };
 
-      const { error } = await supabase
-        .from("calendar_school_events")
-        .insert(payload);
+
+      const {
+        error,
+      } = await supabase
+        .from(
+          "calendar_school_events"
+        )
+        .insert(
+          payload
+        );
+
 
       if (error) {
         throw error;
       }
 
+
       setQuickAdd(null);
+
       await loadSemesterEvents();
     } catch (error) {
-      console.error("快速新增行事失敗：", error);
+      console.error(
+        "快速新增行事失敗：",
+        error
+      );
+
 
       setEventError(
         error?.message
@@ -395,18 +789,31 @@ function SemesterTableView({
           : "新增失敗，請稍後再試。"
       );
     } finally {
-      setQuickAddSaving(false);
+      setQuickAddSaving(
+        false
+      );
     }
   }
 
-  if (!semesterStart || !semesterEnd || weeks.length === 0) {
+
+  if (
+    !semesterStart ||
+    !semesterEnd ||
+    weeks.length === 0
+  ) {
     return (
       <section className="semester-table-empty">
-        <h2>尚未建立學期總表</h2>
-        <p>請先到「管理」建立有效的學期起訖日期。</p>
+        <h2>
+          尚未建立學期總表
+        </h2>
+
+        <p>
+          請先到「管理」建立有效的學期起訖日期。
+        </p>
       </section>
     );
   }
+
 
   return (
     <section className="semester-table-view">
@@ -416,18 +823,27 @@ function SemesterTableView({
             SEMESTER OVERVIEW
           </p>
 
-          <h2>{semesterName}</h2>
+          <h2>
+            {semesterName}
+          </h2>
 
           <span>
-            {formatShortDate(startDate)}－
-            {formatShortDate(endDate)}
+            {formatShortDate(
+              startDate
+            )}
+            －
+            {formatShortDate(
+              endDate
+            )}
           </span>
         </div>
+
 
         <div className="semester-table-view__summary">
           共 {weeks.length} 週
         </div>
       </header>
+
 
       {loadingEvents && (
         <div className="calendar-message">
@@ -435,11 +851,13 @@ function SemesterTableView({
         </div>
       )}
 
+
       {eventError && (
         <div className="calendar-message calendar-message--error">
           {eventError}
         </div>
       )}
+
 
       <div className="semester-table-scroll">
         <table className="semester-table">
@@ -459,210 +877,336 @@ function SemesterTableView({
                 週次
               </th>
 
-              <th colSpan="7">日期</th>
+              <th colSpan="7">
+                日期
+              </th>
 
-              {WORK_COLUMNS.map((column) => (
-                <th
-                  key={column.key}
-                  className="semester-table__work-heading"
-                  rowSpan="2"
-                >
-                  {column.label}
-                </th>
-              ))}
+
+              {WORK_COLUMNS.map(
+                (column) => (
+                  <th
+                    key={
+                      column.key
+                    }
+                    className="semester-table__work-heading"
+                    rowSpan="2"
+                  >
+                    {
+                      column.label
+                    }
+                  </th>
+                )
+              )}
             </tr>
 
+
             <tr>
-              {WEEKDAY_LABELS.map((weekday) => (
-                <th
-                  key={weekday}
-                  className="semester-table__day-heading"
-                >
-                  {weekday}
-                </th>
-              ))}
+              {WEEKDAY_LABELS.map(
+                (weekday) => (
+                  <th
+                    key={
+                      weekday
+                    }
+                    className="semester-table__day-heading"
+                  >
+                    {
+                      weekday
+                    }
+                  </th>
+                )
+              )}
             </tr>
           </thead>
 
+
           <tbody>
-            {weeks.map((week) => (
-              <tr key={week.weekNumber}>
-                {week.monthRowSpan > 0 && (
-                  <td
-                    className="semester-table__month"
-                    rowSpan={week.monthRowSpan}
-                  >
-                    {week.monthLabel}
+            {weeks.map(
+              (week) => (
+                <tr
+                  key={
+                    week.weekNumber
+                  }
+                >
+                  {week.monthRowSpan >
+                    0 && (
+                    <td
+                      className="semester-table__month"
+                      rowSpan={
+                        week.monthRowSpan
+                      }
+                    >
+                      {
+                        week.monthLabel
+                      }
+                    </td>
+                  )}
+
+
+                  <td className="semester-table__week">
+                    {
+                      week.weekNumber
+                    }
                   </td>
-                )}
 
-                <td className="semester-table__week">
-                  {week.weekNumber}
-                </td>
 
-                {week.days.map((date) => {
-                  const outsideSemester =
-                    date < semesterStart || date > semesterEnd;
+                  {week.days.map(
+                    (date) => {
+                      const outsideSemester =
+                        date <
+                          semesterStart ||
+                        date >
+                          semesterEnd;
 
-                  const isSemesterStart = isSameDate(
-                    date,
-                    semesterStart
-                  );
 
-                  const isSemesterEnd = isSameDate(
-                    date,
-                    semesterEnd
-                  );
+                      const isSemesterStart =
+                        isSameDate(
+                          date,
+                          semesterStart
+                        );
 
-                  return (
-                    <td
-                      key={date.toISOString()}
-                      className={[
-                        "semester-table__date",
-                        outsideSemester
-                          ? "semester-table__date--outside"
-                          : "",
-                        isSemesterStart
-                          ? "semester-table__date--start"
-                          : "",
-                        isSemesterEnd
-                          ? "semester-table__date--end"
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      <span>{formatDay(date)}</span>
 
-                      {isSemesterStart && <small>開始</small>}
-                      {isSemesterEnd && <small>結束</small>}
-                    </td>
-                  );
-                })}
+                      const isSemesterEnd =
+                        isSameDate(
+                          date,
+                          semesterEnd
+                        );
 
-                {WORK_COLUMNS.map((column) => {
-                  const weekEvents = getWeekEvents(
-                    week,
-                    column.key
-                  );
 
-                  const isQuickAdding =
-                    quickAdd?.weekNumber === week.weekNumber &&
-                    quickAdd?.category === column.key;
+                      return (
+                        <td
+                          key={
+                            date.toISOString()
+                          }
+                          className={[
+                            "semester-table__date",
 
-                  return (
-                    <td
-                      key={`${week.weekNumber}-${column.key}`}
-                      className="semester-table__work-cell"
-                    >
-                      <div className="semester-table__work-content">
-                        {weekEvents.map((eventItem) => {
-                          const schoolLabel =
-                            eventItem.applies_to_all_schools
-                              ? "全部學校"
-                              : schoolNames[eventItem.school_id] ||
-                                "";
+                            outsideSemester
+                              ? "semester-table__date--outside"
+                              : "",
 
-                          return (
-                            <div
-                              key={eventItem.id}
-                              className="semester-table-event"
-                            >
-                              <div className="semester-table-event__heading">
-                                <strong>
-                                  {getEventTitle(eventItem)}
-                                </strong>
+                            isSemesterStart
+                              ? "semester-table__date--start"
+                              : "",
 
-                                <small>
-                                  {formatInlineDate(
-                                    eventItem.start_date
-                                  )}
-                                </small>
-                              </div>
+                            isSemesterEnd
+                              ? "semester-table__date--end"
+                              : "",
+                          ]
+                            .filter(
+                              Boolean
+                            )
+                            .join(
+                              " "
+                            )}
+                        >
+                          <span>
+                            {
+                              formatDay(
+                                date
+                              )
+                            }
+                          </span>
 
-                              {schoolLabel && (
-                                <span>{schoolLabel}</span>
-                              )}
-                            </div>
-                          );
-                        })}
 
-                        {isQuickAdding ? (
-                          <form
-                            className="semester-quick-add"
-                            onSubmit={handleQuickAddSubmit}
-                          >
-                            <input
-                              type="text"
-                              name="title"
-                              value={quickAdd.title}
-                              onChange={handleQuickAddChange}
-                              placeholder="輸入事項名稱"
-                              autoFocus
-                              disabled={quickAddSaving}
-                            />
+                          {isSemesterStart && (
+                            <small>
+                              開始
+                            </small>
+                          )}
 
-                            <input
-                              type="date"
-                              name="date"
-                              value={quickAdd.date}
-                              min={
-                                week.startDate < startDate
-                                  ? startDate
-                                  : week.startDate
+
+                          {isSemesterEnd && (
+                            <small>
+                              結束
+                            </small>
+                          )}
+                        </td>
+                      );
+                    }
+                  )}
+
+
+                  {WORK_COLUMNS.map(
+                    (column) => {
+                      const weekEvents =
+                        getWeekEvents(
+                          week,
+                          column.key
+                        );
+
+
+                      const isQuickAdding =
+                        quickAdd?.weekNumber ===
+                          week.weekNumber &&
+                        quickAdd?.category ===
+                          column.key;
+
+
+                      return (
+                        <td
+                          key={`${week.weekNumber}-${column.key}`}
+                          className="semester-table__work-cell"
+                        >
+                          <div className="semester-table__work-content">
+                            {weekEvents.map(
+                              (
+                                eventItem
+                              ) => {
+                                const schoolLabel =
+                                  eventItem.applies_to_all_schools
+                                    ? "全部學校"
+                                    : schoolNames[
+                                        eventItem.school_id
+                                      ] ||
+                                      "";
+
+
+                                return (
+                                  <div
+                                    key={
+                                      eventItem.id
+                                    }
+                                    className="semester-table-event"
+                                  >
+                                    <div className="semester-table-event__heading">
+                                      <strong>
+                                        {
+                                          getEventTitle(
+                                            eventItem
+                                          )
+                                        }
+                                      </strong>
+
+                                      <small>
+                                        {
+                                          formatInlineDate(
+                                            eventItem.start_date
+                                          )
+                                        }
+                                      </small>
+                                    </div>
+
+
+                                    {schoolLabel && (
+                                      <span>
+                                        {
+                                          schoolLabel
+                                        }
+                                      </span>
+                                    )}
+                                  </div>
+                                );
                               }
-                              max={
-                                week.endDate > endDate
-                                  ? endDate
-                                  : week.endDate
-                              }
-                              onChange={handleQuickAddChange}
-                              disabled={quickAddSaving}
-                            />
+                            )}
 
-                            <div className="semester-quick-add__actions">
-                              <button
-                                type="button"
-                                onClick={closeQuickAdd}
-                                disabled={quickAddSaving}
+
+                            {isQuickAdding ? (
+                              <form
+                                className="semester-quick-add"
+                                onSubmit={
+                                  handleQuickAddSubmit
+                                }
                               >
-                                取消
-                              </button>
+                                <input
+                                  type="text"
+                                  name="title"
+                                  value={
+                                    quickAdd.title
+                                  }
+                                  onChange={
+                                    handleQuickAddChange
+                                  }
+                                  placeholder="輸入事項名稱"
+                                  autoFocus
+                                  disabled={
+                                    quickAddSaving
+                                  }
+                                />
 
-                              <button
-                                type="submit"
-                                disabled={quickAddSaving}
-                              >
-                                {quickAddSaving
-                                  ? "儲存中…"
-                                  : "儲存"}
-                              </button>
-                            </div>
-                          </form>
-                        ) : (
-                          column.allowQuickAdd && (
-                            <button
-                              type="button"
-                              className="semester-quick-add-button"
-                              onClick={() =>
-                                openQuickAdd(week, column.key)
-                              }
-                            >
-                              ＋新增
-                            </button>
-                          )
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+
+                                <input
+                                  type="date"
+                                  name="date"
+                                  value={
+                                    quickAdd.date
+                                  }
+                                  min={
+                                    week.startDate <
+                                    startDate
+                                      ? startDate
+                                      : week.startDate
+                                  }
+                                  max={
+                                    week.endDate >
+                                    endDate
+                                      ? endDate
+                                      : week.endDate
+                                  }
+                                  onChange={
+                                    handleQuickAddChange
+                                  }
+                                  disabled={
+                                    quickAddSaving
+                                  }
+                                />
+
+
+                                <div className="semester-quick-add__actions">
+                                  <button
+                                    type="button"
+                                    onClick={
+                                      closeQuickAdd
+                                    }
+                                    disabled={
+                                      quickAddSaving
+                                    }
+                                  >
+                                    取消
+                                  </button>
+
+                                  <button
+                                    type="submit"
+                                    disabled={
+                                      quickAddSaving
+                                    }
+                                  >
+                                    {quickAddSaving
+                                      ? "儲存中…"
+                                      : "儲存"}
+                                  </button>
+                                </div>
+                              </form>
+                            ) : (
+                              canEdit &&
+                              column.allowQuickAdd && (
+                                <button
+                                  type="button"
+                                  className="semester-quick-add-button"
+                                  onClick={() =>
+                                    openQuickAdd(
+                                      week,
+                                      column.key
+                                    )
+                                  }
+                                >
+                                  ＋新增
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </td>
+                      );
+                    }
+                  )}
+                </tr>
+              )
+            )}
           </tbody>
         </table>
       </div>
     </section>
   );
 }
+
 
 export default SemesterTableView;
