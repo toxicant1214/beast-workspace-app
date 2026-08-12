@@ -2,10 +2,12 @@ import {
   useEffect,
   useState,
 } from "react";
+
 import {
   getTeacherPermissions,
   saveTeacherPermissions,
 } from "../services/teacherPermissionService";
+
 import "./TeacherPermissionModal.css";
 
 
@@ -29,11 +31,13 @@ const PERMISSION_MODULES = [
     key: "classes",
     label: "班級管理",
     description: "班級資料與學生編班資訊",
+    editOnly: true,
   },
   {
     key: "courses",
     label: "課程管理",
     description: "才藝班、單日課程、美語班與補課",
+    editOnly: true,
   },
   {
     key: "camps",
@@ -89,6 +93,18 @@ const LEVEL_OPTIONS = [
 ];
 
 
+const EDIT_ONLY_LEVEL_OPTIONS = [
+  {
+    value: "hidden",
+    label: "完全不顯示",
+  },
+  {
+    value: "edit",
+    label: "可編輯",
+  },
+];
+
+
 function createDefaultPermissions() {
   return Object.fromEntries(
     PERMISSION_MODULES.map(
@@ -113,14 +129,19 @@ function TeacherPermissionModal({
     createDefaultPermissions()
   );
 
+
   const [loading, setLoading] =
     useState(true);
+
 
   const [saving, setSaving] =
     useState(false);
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
 
   useEffect(() => {
@@ -137,13 +158,16 @@ function TeacherPermissionModal({
       setLoading(true);
       setErrorMessage("");
 
+
       const rows =
         await getTeacherPermissions(
           teacher.id
         );
 
+
       const nextPermissions =
         createDefaultPermissions();
+
 
       rows.forEach((row) => {
         if (
@@ -152,13 +176,39 @@ function TeacherPermissionModal({
             row.module_key
           )
         ) {
-          nextPermissions[
-            row.module_key
-          ] =
+          const module =
+            PERMISSION_MODULES.find(
+              (item) =>
+                item.key ===
+                row.module_key
+            );
+
+
+          const storedLevel =
             row.permission_level ||
             "hidden";
+
+
+          /*
+           * 班級管理、課程管理不接受 view。
+           * 如果舊資料曾存過 view，
+           * 載入時直接視為 hidden。
+           */
+          if (
+            module?.editOnly &&
+            storedLevel === "view"
+          ) {
+            nextPermissions[
+              row.module_key
+            ] = "hidden";
+          } else {
+            nextPermissions[
+              row.module_key
+            ] = storedLevel;
+          }
         }
       });
+
 
       setPermissions(
         nextPermissions
@@ -168,6 +218,7 @@ function TeacherPermissionModal({
         "讀取老師權限失敗：",
         error
       );
+
 
       setErrorMessage(
         "權限資料讀取失敗，請稍後再試。"
@@ -196,30 +247,54 @@ function TeacherPermissionModal({
       setSaving(true);
       setErrorMessage("");
 
+
       const rows =
         PERMISSION_MODULES.map(
-          (module) => ({
-            module_key:
-              module.key,
-
-            permission_level:
+          (module) => {
+            let permissionLevel =
               permissions[
                 module.key
-              ] || "hidden",
+              ] || "hidden";
 
-            data_scope:
-              "own",
-          })
+
+            /*
+             * 再加一道防線：
+             * editOnly 模組不能存成 view。
+             */
+            if (
+              module.editOnly &&
+              permissionLevel ===
+                "view"
+            ) {
+              permissionLevel =
+                "hidden";
+            }
+
+
+            return {
+              module_key:
+                module.key,
+
+              permission_level:
+                permissionLevel,
+
+              data_scope:
+                "own",
+            };
+          }
         );
+
 
       await saveTeacherPermissions(
         teacher.id,
         rows
       );
 
+
       if (onSaved) {
         await onSaved();
       }
+
 
       onClose();
     } catch (error) {
@@ -227,6 +302,7 @@ function TeacherPermissionModal({
         "儲存老師權限失敗：",
         error
       );
+
 
       setErrorMessage(
         error?.message ||
@@ -273,15 +349,18 @@ function TeacherPermissionModal({
               PERMISSION SETTINGS
             </p>
 
+
             <h2>
               {teacherName}｜權限設定
             </h2>
+
 
             <span>
               設定老師登入 Workspace
               後可查看與操作的功能。
             </span>
           </div>
+
 
           <button
             type="button"
@@ -318,73 +397,83 @@ function TeacherPermissionModal({
 
               <div className="teacherPermission__list">
                 {PERMISSION_MODULES.map(
-                  (module) => (
-                    <article
-                      key={module.key}
-                      className="teacherPermission__row"
-                    >
-                      <div className="teacherPermission__info">
-                        <strong>
-                          {module.label}
-                        </strong>
-
-                        <span>
-                          {
-                            module.description
-                          }
-                        </span>
-                      </div>
+                  (module) => {
+                    const options =
+                      module.editOnly
+                        ? EDIT_ONLY_LEVEL_OPTIONS
+                        : LEVEL_OPTIONS;
 
 
-                      <div className="teacherPermission__options">
-                        {LEVEL_OPTIONS.map(
-                          (option) => (
-                            <label
-                              key={
-                                option.value
-                              }
-                              className={
-                                permissions[
-                                  module.key
-                                ] ===
-                                option.value
-                                  ? "teacherPermission__option is-selected"
-                                  : "teacherPermission__option"
-                              }
-                            >
-                              <input
-                                type="radio"
-                                name={
-                                  `permission-${module.key}`
-                                }
-                                value={
+                    return (
+                      <article
+                        key={module.key}
+                        className="teacherPermission__row"
+                      >
+                        <div className="teacherPermission__info">
+                          <strong>
+                            {module.label}
+                          </strong>
+
+
+                          <span>
+                            {
+                              module.description
+                            }
+                          </span>
+                        </div>
+
+
+                        <div className="teacherPermission__options">
+                          {options.map(
+                            (option) => (
+                              <label
+                                key={
                                   option.value
                                 }
-                                checked={
+                                className={
                                   permissions[
                                     module.key
                                   ] ===
                                   option.value
+                                    ? "teacherPermission__option is-selected"
+                                    : "teacherPermission__option"
                                 }
-                                onChange={() =>
-                                  changePermission(
-                                    module.key,
+                              >
+                                <input
+                                  type="radio"
+                                  name={
+                                    `permission-${module.key}`
+                                  }
+                                  value={
                                     option.value
-                                  )
-                                }
-                              />
+                                  }
+                                  checked={
+                                    permissions[
+                                      module.key
+                                    ] ===
+                                    option.value
+                                  }
+                                  onChange={() =>
+                                    changePermission(
+                                      module.key,
+                                      option.value
+                                    )
+                                  }
+                                />
 
-                              <span>
-                                {
-                                  option.label
-                                }
-                              </span>
-                            </label>
-                          )
-                        )}
-                      </div>
-                    </article>
-                  )
+
+                                <span>
+                                  {
+                                    option.label
+                                  }
+                                </span>
+                              </label>
+                            )
+                          )}
+                        </div>
+                      </article>
+                    );
+                  }
                 )}
               </div>
             </>
@@ -408,6 +497,7 @@ function TeacherPermissionModal({
           >
             取消
           </button>
+
 
           <button
             type="button"

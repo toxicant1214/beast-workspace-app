@@ -28,6 +28,7 @@ import { supabase } from "./lib/supabase";
 
 import {
   hasPagePermission,
+  canEditPage,
 } from "./services/permissionService";
 
 import {
@@ -61,13 +62,15 @@ const PAGE_OPTIONS = [
     key: "teacher_assignments",
   },
   {
-    label: "班級管理",
-    key: "classes",
-  },
-  {
-    label: "課程管理",
-    key: "courses",
-  },
+  label: "班級管理",
+  key: "classes",
+  editOnly: true,
+},
+{
+  label: "課程管理",
+  key: "courses",
+  editOnly: true,
+},
   {
     label: "營隊管理",
     key: "camps",
@@ -248,12 +251,17 @@ function Workspace() {
             return false;
           }
 
-          return (
-            hasPagePermission(
-              currentTeacher,
-              page.key
-            )
-          );
+          if (page.editOnly) {
+  return canEditPage(
+    currentTeacher,
+    page.key
+  );
+}
+
+return hasPagePermission(
+  currentTeacher,
+  page.key
+);
         })
         .map(
           (page) =>
