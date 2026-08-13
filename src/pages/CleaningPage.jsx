@@ -134,6 +134,57 @@ function getScopeLabel(scope) {
   );
 }
 
+
+const MAX_VISIBLE_TASKS_PER_DAY = 3;
+
+function getTodayDateString() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+
+  return new Date(now.getTime() - offset * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function getCalendarCells(year, month) {
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDay = new Date(year, month, 0);
+  const mondayFirstOffset = (firstDay.getDay() + 6) % 7;
+  const totalCells = Math.ceil((mondayFirstOffset + lastDay.getDate()) / 7) * 7;
+
+  return Array.from({ length: totalCells }, (_, index) => {
+    const dayOffset = index - mondayFirstOffset + 1;
+    const date = new Date(year, month - 1, dayOffset);
+    const dateString = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    return {
+      dateString,
+      day: date.getDate(),
+      weekday: date.getDay(),
+      isCurrentMonth: date.getMonth() === month - 1,
+    };
+  });
+}
+
+function getOverrideLabel(override) {
+  if (!override) return "";
+
+  return (
+    override.title ||
+    (override.override_type === "SPECIAL_WORKDAY"
+      ? "特殊上班"
+      : override.override_type === "HOLIDAY"
+        ? "休假"
+        : override.override_type === "CLASSROOM_CLOSED"
+          ? "教室休假"
+          : "")
+  );
+}
+
 function CleaningPage() {
   const [activeTab, setActiveTab] = useState("MONTH");
   const [items, setItems] = useState([]);
@@ -165,6 +216,11 @@ function CleaningPage() {
   const [reassigningTaskId, setReassigningTaskId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [calendarViewMode, setCalendarViewMode] = useState("ALL");
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [currentTeacherId, setCurrentTeacherId] = useState("");
+  const [monthOverrides, setMonthOverrides] = useState([]);
+  const [expandedDate, setExpandedDate] = useState("");
 
   useEffect(() => {
     loadData();
@@ -239,6 +295,25 @@ function CleaningPage() {
           getTeacherName(a).localeCompare(getTeacherName(b), "zh-Hant")
         )
       );
+
+
+      const { data: authData } = await supabase.auth.getUser();
+      const authUser = authData?.user || null;
+
+      if (authUser) {
+        const matchedTeacher = teacherRows.find((teacher) =>
+          [
+            teacher.auth_user_id,
+            teacher.user_id,
+            teacher.profile_id,
+          ].filter(Boolean).includes(authUser.id) ||
+          (teacher.email &&
+            authUser.email &&
+            teacher.email.toLowerCase() === authUser.email.toLowerCase())
+        );
+
+        setCurrentTeacherId(matchedTeacher?.id || "");
+      }
     } catch (error) {
       console.error("讀取清潔資料失敗：", error);
       setErrorMessage(`讀取清潔資料失敗：${error.message}`);
@@ -284,6 +359,17 @@ function CleaningPage() {
         .select("*")
         .gte("task_date", start)
         .lte("task_date", end);
+
+
+      const { data: overrideRows, error: overridesError } = await supabase
+        .from("calendar_day_overrides")
+        .select("*")
+        .gte("override_date", start)
+        .lte("override_date", end);
+
+      if (overridesError) throw overridesError;
+
+      setMonthOverrides(overrideRows || []);
 
       const settingMap = new Map(
         (settingsRows || []).map((row) => [row.teacher_id, row])
@@ -871,6 +957,216 @@ function CleaningPage() {
     });
   }, [selectedYear, selectedMonth]);
 
+  const overrideMap = useMemo(
+    () => new Map(monthOverrides.map((row) => [row.override_date, row])),
+    [monthOverrides]
+  );
+
+  const calendarCells = useMemo(
+    () => getCalendarCells(selectedYear, selectedMonth),
+    [selectedYear, selectedMonth]
+  );
+
+  const activeViewTeacherId =
+    calendarViewMode === "MY"
+      ? currentTeacherId
+      : calendarViewMode === "PERSON"
+        ? selectedTeacherId
+        : "";
+
+  const visibleMonthTasks = useMemo(() => {
+    if (!activeViewTeacherId) return monthTasks;
+
+    return monthTasks.filter(
+      (task) => task.teacher_id === activeViewTeacherId
+    );
+  }, [monthTasks, activeViewTeacherId]);
+
+  const visibleTasksByDate = useMemo(() => {
+    const map = new Map();
+
+    visibleMonthTasks.forEach((task) => {
+      if (!map.has(task.task_date)) {
+        map.set(task.task_date, []);
+      }
+
+      map.get(task.task_date).push(task);
+    });
+
+    return map;
+  }, [visibleMonthTasks]);
+
+  const expandedTasks = expandedDate
+    ? visibleTasksByDate.get(expandedDate) || []
+    : [];
+
+  function getVisibleTaskText(task, includeTeacher = true) {
+    const itemName =
+      itemMap.get(task.cleaning_item_id)?.name || "清潔工作";
+
+    if (!includeTeacher) {
+      return itemName;
+    }
+
+    return `${itemName}｜${getTeacherName(
+      teacherMap.get(task.teacher_id)
+    )}`;
+  }
+
+  function exportCalendarImage(mode = "CURRENT") {
+    const exportTeacherId =
+      mode === "MY"
+        ? currentTeacherId
+        : mode === "PERSON"
+          ? selectedTeacherId
+          : activeViewTeacherId;
+
+    const exportTasks = exportTeacherId
+      ? monthTasks.filter((task) => task.teacher_id === exportTeacherId)
+      : mode === "ALL"
+        ? monthTasks
+        : visibleMonthTasks;
+
+    const includeTeacher = !exportTeacherId;
+    const exportTeacher = exportTeacherId
+      ? teacherMap.get(exportTeacherId)
+      : null;
+
+    const taskMap = new Map();
+    exportTasks.forEach((task) => {
+      if (!taskMap.has(task.task_date)) taskMap.set(task.task_date, []);
+      taskMap.get(task.task_date).push(task);
+    });
+
+    const width = 1540;
+    const sidePadding = 56;
+    const usableWidth = width - sidePadding * 2;
+    const cellWidth = usableWidth / 7;
+    const headerHeight = 170;
+    const weekdayHeight = 54;
+    const weeks = Math.ceil(calendarCells.length / 7);
+    const weekHeights = [];
+
+    for (let weekIndex = 0; weekIndex < weeks; weekIndex += 1) {
+      const weekCells = calendarCells.slice(weekIndex * 7, weekIndex * 7 + 7);
+      const maxTaskCount = Math.max(
+        0,
+        ...weekCells.map((cell) => (taskMap.get(cell.dateString) || []).length)
+      );
+      weekHeights.push(Math.max(150, 70 + maxTaskCount * 30));
+    }
+
+    const height =
+      headerHeight +
+      weekdayHeight +
+      weekHeights.reduce((sum, value) => sum + value, 0) +
+      60;
+
+    const canvas = document.createElement("canvas");
+    const scale = 2;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const context = canvas.getContext("2d");
+    context.scale(scale, scale);
+    context.fillStyle = "#f8f8f3";
+    context.fillRect(0, 0, width, height);
+
+    context.fillStyle = "#29312d";
+    context.font = "700 38px system-ui, -apple-system, sans-serif";
+    context.fillText(
+      `${selectedYear} 年 ${selectedMonth} 月清潔安排`,
+      sidePadding,
+      70
+    );
+
+    context.fillStyle = "#778079";
+    context.font = "500 21px system-ui, -apple-system, sans-serif";
+    context.fillText(
+      exportTeacher ? `${getTeacherName(exportTeacher)}｜個人清潔月表` : "全部清潔月表",
+      sidePadding,
+      112
+    );
+
+    const weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
+    context.textAlign = "center";
+    context.font = "700 20px system-ui, -apple-system, sans-serif";
+    context.fillStyle = "#5c6b62";
+
+    weekdayLabels.forEach((label, index) => {
+      context.fillText(
+        label,
+        sidePadding + cellWidth * index + cellWidth / 2,
+        headerHeight + 34
+      );
+    });
+
+    let y = headerHeight + weekdayHeight;
+
+    for (let weekIndex = 0; weekIndex < weeks; weekIndex += 1) {
+      const rowHeight = weekHeights[weekIndex];
+
+      for (let column = 0; column < 7; column += 1) {
+        const cell = calendarCells[weekIndex * 7 + column];
+        const x = sidePadding + cellWidth * column;
+        const tasks = taskMap.get(cell.dateString) || [];
+        const override = overrideMap.get(cell.dateString);
+        const isWeekend = column >= 5;
+
+        context.fillStyle = !cell.isCurrentMonth
+          ? "#f0f1ed"
+          : isWeekend || ["HOLIDAY", "CLASSROOM_CLOSED"].includes(override?.override_type)
+            ? "#f3f2ed"
+            : "#ffffff";
+        context.fillRect(x, y, cellWidth, rowHeight);
+
+        context.strokeStyle = "#dfe5e0";
+        context.strokeRect(x, y, cellWidth, rowHeight);
+
+        context.textAlign = "left";
+        context.fillStyle = cell.isCurrentMonth ? "#35473d" : "#adb3ae";
+        context.font = "700 20px system-ui, -apple-system, sans-serif";
+        context.fillText(String(cell.day), x + 14, y + 28);
+
+        if (override) {
+          context.textAlign = "right";
+          context.fillStyle = "#9b746d";
+          context.font = "600 13px system-ui, -apple-system, sans-serif";
+          context.fillText(
+            getOverrideLabel(override),
+            x + cellWidth - 12,
+            y + 27
+          );
+        }
+
+        context.textAlign = "left";
+        tasks.forEach((task, taskIndex) => {
+          context.fillStyle = "#46564d";
+          context.font = "500 15px system-ui, -apple-system, sans-serif";
+          const raw = getVisibleTaskText(task, includeTeacher);
+          const maxChars = includeTeacher ? 16 : 20;
+          const text = raw.length > maxChars ? `${raw.slice(0, maxChars - 1)}…` : raw;
+          context.fillText(text, x + 14, y + 60 + taskIndex * 28);
+        });
+      }
+
+      y += rowHeight;
+    }
+
+    const link = document.createElement("a");
+    const suffix = exportTeacher
+      ? `_${getTeacherName(exportTeacher)}`
+      : "_全部";
+    link.download = `${selectedYear}-${String(selectedMonth).padStart(
+      2,
+      "0"
+    )}_清潔月表${suffix}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  }
+
   function getRuleTeachers(rule) {
     if (rule.assignment_scope === "OWN_AREA") {
       return "各自負責自己的區域";
@@ -1036,115 +1332,214 @@ function CleaningPage() {
             </div>
           </div>
 
-          <div className="cleaningMonth__summary">
-            {monthSummary.map((row) => (
-              <article key={row.teacher_id}>
-                <strong>{row.teacher_name}</strong>
+          <div className="cleaningCard cleaningCalendarControls">
+            <div className="cleaningCalendarControls__view">
+              <span>查看</span>
 
-                <span>
-                  {row.participates_in_rotation
-                    ? "參與輪值"
-                    : "不參與輪值"}
-                </span>
+              <button
+                type="button"
+                className={calendarViewMode === "ALL" ? "active" : ""}
+                onClick={() => setCalendarViewMode("ALL")}
+              >
+                全部清潔
+              </button>
 
-                <small>
-                  {row.total_count} 次｜週三五 {row.wed_fri_count} 次｜
-                  負擔 {Number(row.total_weight || 0).toFixed(1)}
-                </small>
-              </article>
-            ))}
+              <button
+                type="button"
+                className={calendarViewMode === "MY" ? "active" : ""}
+                disabled={!currentTeacherId}
+                onClick={() => setCalendarViewMode("MY")}
+              >
+                我的清潔
+              </button>
+
+              <select
+                value={calendarViewMode === "PERSON" ? selectedTeacherId : ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSelectedTeacherId(value);
+                  setCalendarViewMode(value ? "PERSON" : "ALL");
+                }}
+              >
+                <option value="">選擇老師查看</option>
+                {teachers.map((teacher) => (
+                  <option key={teacher.id} value={teacher.id}>
+                    {getTeacherName(teacher)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="cleaningCalendarControls__export">
+              <button type="button" onClick={() => exportCalendarImage("ALL")}>
+                輸出全部圖檔
+              </button>
+
+              <button
+                type="button"
+                disabled={!activeViewTeacherId}
+                onClick={() => exportCalendarImage("CURRENT")}
+              >
+                輸出個人圖檔
+              </button>
+            </div>
           </div>
 
-          <div className="cleaningCard cleaningMonth__tableWrap">
+          <div className="cleaningCard cleaningCalendarCard">
             {loadingMonth ? (
               <div className="cleaningEmpty">正在讀取月表…</div>
             ) : (
-              <table className="cleaningMonth__table">
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>星期</th>
-                    <th>清潔安排</th>
-                  </tr>
-                </thead>
+              <>
+                <div className="cleaningCalendar__weekdays">
+                  {["一", "二", "三", "四", "五", "六", "日"].map(
+                    (label) => (
+                      <div key={label}>{label}</div>
+                    )
+                  )}
+                </div>
 
-                <tbody>
-                  {monthDates.map((dateString) => {
-                    const tasks =
-                      monthTasksByDate.get(dateString) || [];
+                <div className="cleaningCalendar">
+                  {calendarCells.map((cell) => {
+                    const tasks = visibleTasksByDate.get(cell.dateString) || [];
+                    const override = overrideMap.get(cell.dateString);
+                    const visibleTasks = tasks.slice(0, MAX_VISIBLE_TASKS_PER_DAY);
+                    const hiddenCount = Math.max(
+                      0,
+                      tasks.length - MAX_VISIBLE_TASKS_PER_DAY
+                    );
+                    const isToday = cell.dateString === getTodayDateString();
+                    const isWeekend = cell.weekday === 0 || cell.weekday === 6;
+                    const isClosed = [
+                      "HOLIDAY",
+                      "CLASSROOM_CLOSED",
+                    ].includes(override?.override_type);
 
                     return (
-                      <tr key={dateString}>
-                        <td>{formatDate(dateString)}</td>
-
-                        <td
-                          className={
-                            ["三", "五"].includes(
-                              getWeekdayLabel(dateString)
-                            )
-                              ? "is-heavy-day"
-                              : ""
+                      <button
+                        key={cell.dateString}
+                        type="button"
+                        className={[
+                          "cleaningCalendarDay",
+                          !cell.isCurrentMonth ? "is-outside" : "",
+                          isWeekend ? "is-weekend" : "",
+                          isClosed ? "is-closed" : "",
+                          isToday ? "is-today" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => {
+                          if (cell.isCurrentMonth) {
+                            setExpandedDate(cell.dateString);
                           }
-                        >
-                          {getWeekdayLabel(dateString)}
-                        </td>
+                        }}
+                      >
+                        <div className="cleaningCalendarDay__header">
+                          <strong>{cell.day}</strong>
 
-                        <td>
-                          {tasks.length === 0 ? (
-                            <span className="cleaningMonth__emptyDay">
-                              —
-                            </span>
-                          ) : (
-                            <div className="cleaningMonth__taskList">
-                              {tasks.map((task) => (
-                                <div
-                                  key={task.id}
-                                  className="cleaningMonth__task"
-                                >
-                                  <strong>
-                                    {itemMap.get(task.cleaning_item_id)
-                                      ?.name || "清潔工作"}
-                                  </strong>
+                          {override && (
+                            <span>{getOverrideLabel(override)}</span>
+                          )}
+                        </div>
 
-                                  <select
-                                    value={task.teacher_id || ""}
-                                    disabled={
-                                      reassigningTaskId === task.id
-                                    }
-                                    onChange={(event) =>
-                                      handleReassignTask(
-                                        task.id,
-                                        event.target.value
-                                      )
-                                    }
-                                  >
-                                    <option value="">未指定</option>
+                        <div className="cleaningCalendarDay__tasks">
+                          {visibleTasks.map((task) => (
+                            <div
+                              key={task.id}
+                              className={
+                                task.status === "DONE"
+                                  ? "cleaningCalendarTask is-done"
+                                  : "cleaningCalendarTask"
+                              }
+                            >
+                              <span>
+                                {itemMap.get(task.cleaning_item_id)?.name ||
+                                  "清潔工作"}
+                              </span>
 
-                                    {teachers.map((teacher) => (
-                                      <option
-                                        key={teacher.id}
-                                        value={teacher.id}
-                                      >
-                                        {getTeacherName(teacher)}
-                                      </option>
-                                    ))}
-                                  </select>
-
-                                  {task.is_manual_assignment && (
-                                    <span>手動</span>
+                              {!activeViewTeacherId && (
+                                <b>
+                                  {getTeacherName(
+                                    teacherMap.get(task.teacher_id)
                                   )}
-                                </div>
-                              ))}
+                                </b>
+                              )}
+                            </div>
+                          ))}
+
+                          {hiddenCount > 0 && (
+                            <div className="cleaningCalendarDay__more">
+                              ＋{hiddenCount} 項
                             </div>
                           )}
-                        </td>
-                      </tr>
+                        </div>
+                      </button>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              </>
             )}
           </div>
+
+          {expandedDate && (
+            <div
+              className="cleaningDayModalBackdrop"
+              onClick={() => setExpandedDate("")}
+            >
+              <section
+                className="cleaningDayModal"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="cleaningDayModal__header">
+                  <div>
+                    <p>DAY DETAILS</p>
+                    <h3>
+                      {formatDate(expandedDate)}（
+                      {getWeekdayLabel(expandedDate)}）
+                    </h3>
+                  </div>
+
+                  <button type="button" onClick={() => setExpandedDate("")}>
+                    關閉
+                  </button>
+                </div>
+
+                {expandedTasks.length === 0 ? (
+                  <div className="cleaningEmpty">這天沒有清潔工作。</div>
+                ) : (
+                  <div className="cleaningDayModal__tasks">
+                    {expandedTasks.map((task) => (
+                      <article key={task.id}>
+                        <div>
+                          <strong>
+                            {itemMap.get(task.cleaning_item_id)?.name ||
+                              "清潔工作"}
+                          </strong>
+
+                          <span>
+                            {getTeacherName(teacherMap.get(task.teacher_id))}
+                          </span>
+                        </div>
+
+                        <select
+                          value={task.teacher_id || ""}
+                          disabled={reassigningTaskId === task.id}
+                          onChange={(event) =>
+                            handleReassignTask(task.id, event.target.value)
+                          }
+                        >
+                          {teachers.map((teacher) => (
+                            <option key={teacher.id} value={teacher.id}>
+                              {getTeacherName(teacher)}
+                            </option>
+                          ))}
+                        </select>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
         </section>
       )}
 

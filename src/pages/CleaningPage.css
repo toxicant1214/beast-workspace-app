@@ -699,3 +699,334 @@
     flex: 1 1 auto;
   }
 }
+/* ===== Calendar month view ===== */
+
+.cleaningCalendarControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.cleaningCalendarControls__view,
+.cleaningCalendarControls__export {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cleaningCalendarControls__view > span {
+  margin-right: 2px;
+  color: #79837d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cleaningCalendarControls button,
+.cleaningCalendarControls select {
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid #d9e0db;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #56625b;
+  font: inherit;
+  font-weight: 700;
+}
+
+.cleaningCalendarControls button {
+  cursor: pointer;
+}
+
+.cleaningCalendarControls button.active {
+  border-color: #8da596;
+  background: #edf4ef;
+  color: #355444;
+}
+
+.cleaningCalendarControls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.cleaningCalendarCard {
+  padding: 0;
+  overflow: hidden;
+}
+
+.cleaningCalendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid #dfe5e0;
+  background: #f5f7f3;
+}
+
+.cleaningCalendar__weekdays > div {
+  padding: 12px 8px;
+  text-align: center;
+  color: #657168;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.cleaningCalendar__weekdays > div:nth-child(6),
+.cleaningCalendar__weekdays > div:nth-child(7) {
+  color: #9a837c;
+  background: #f5f3ef;
+}
+
+.cleaningCalendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  background: #dfe5e0;
+  gap: 1px;
+}
+
+.cleaningCalendarDay {
+  position: relative;
+  min-width: 0;
+  min-height: 148px;
+  padding: 10px;
+  border: 0;
+  background: #ffffff;
+  color: #354039;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.cleaningCalendarDay:hover {
+  background: #fbfcf9;
+}
+
+.cleaningCalendarDay.is-weekend {
+  background: #faf9f6;
+}
+
+.cleaningCalendarDay.is-closed {
+  background: #f6f2ef;
+}
+
+.cleaningCalendarDay.is-outside {
+  background: #f2f3f0;
+  color: #b3b8b4;
+  cursor: default;
+}
+
+.cleaningCalendarDay.is-today {
+  z-index: 1;
+  box-shadow: inset 0 0 0 2px #7f9b89;
+}
+
+.cleaningCalendarDay__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 24px;
+  margin-bottom: 7px;
+}
+
+.cleaningCalendarDay__header strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 25px;
+  height: 25px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.cleaningCalendarDay.is-today .cleaningCalendarDay__header strong {
+  background: #6f8b78;
+  color: #ffffff;
+}
+
+.cleaningCalendarDay__header > span {
+  max-width: 72%;
+  color: #a0665f;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: right;
+}
+
+.cleaningCalendarDay__tasks {
+  display: grid;
+  gap: 5px;
+}
+
+.cleaningCalendarTask {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid #e2e8e3;
+  border-radius: 7px;
+  background: #f8faf7;
+  line-height: 1.2;
+}
+
+.cleaningCalendarTask span {
+  min-width: 0;
+  overflow: hidden;
+  color: #415048;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cleaningCalendarTask b {
+  max-width: 62px;
+  overflow: hidden;
+  color: #738078;
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cleaningCalendarTask.is-done {
+  opacity: 0.5;
+}
+
+.cleaningCalendarTask.is-done span::before {
+  content: "✓ ";
+}
+
+.cleaningCalendarDay__more {
+  padding: 3px 4px;
+  color: #728077;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.cleaningDayModalBackdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(35, 42, 38, 0.42);
+}
+
+.cleaningDayModal {
+  width: min(620px, 100%);
+  max-height: min(720px, 88vh);
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(30, 39, 34, 0.22);
+}
+
+.cleaningDayModal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.cleaningDayModal__header p {
+  margin: 0 0 4px;
+  color: #7c8d83;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.cleaningDayModal__header h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.cleaningDayModal__header button {
+  padding: 7px 10px;
+  border: 1px solid #d9e0db;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #657069;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cleaningDayModal__tasks {
+  display: grid;
+  gap: 9px;
+}
+
+.cleaningDayModal__tasks article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 190px);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid #e2e7e3;
+  border-radius: 12px;
+}
+
+.cleaningDayModal__tasks article > div {
+  display: grid;
+  gap: 4px;
+}
+
+.cleaningDayModal__tasks article span {
+  color: #79837d;
+  font-size: 13px;
+}
+
+.cleaningDayModal__tasks select {
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid #d9e0db;
+  border-radius: 9px;
+  background: #ffffff;
+  font: inherit;
+}
+
+@media (max-width: 900px) {
+  .cleaningCalendarControls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cleaningCalendarControls__export {
+    justify-content: flex-start;
+  }
+
+  .cleaningCalendarCard {
+    overflow-x: auto;
+  }
+
+  .cleaningCalendar__weekdays,
+  .cleaningCalendar {
+    min-width: 820px;
+  }
+}
+
+@media (max-width: 640px) {
+  .cleaningCalendarControls__view,
+  .cleaningCalendarControls__export {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cleaningCalendarControls__view > span {
+    grid-column: 1 / -1;
+  }
+
+  .cleaningCalendarControls select {
+    grid-column: 1 / -1;
+  }
+
+  .cleaningDayModal__tasks article {
+    grid-template-columns: 1fr;
+  }
+}
