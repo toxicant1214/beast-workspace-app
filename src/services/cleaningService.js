@@ -244,10 +244,7 @@ export async function getSemesterForDate(
 }
 
 
-async function getSemestersForRange(
-  startDate,
-  endDate
-) {
+export async function getCleaningSemesters() {
   const {
     data,
     error,
@@ -259,14 +256,6 @@ async function getSemestersForRange(
       .select(
         "id, name, start_date, end_date, status"
       )
-      .lte(
-        "start_date",
-        endDate
-      )
-      .gte(
-        "end_date",
-        startDate
-      )
       .neq(
         "status",
         "ARCHIVED"
@@ -274,7 +263,7 @@ async function getSemestersForRange(
       .order(
         "start_date",
         {
-          ascending: true,
+          ascending: false,
         }
       );
 
@@ -283,6 +272,75 @@ async function getSemestersForRange(
   }
 
   return data || [];
+}
+
+
+export async function getCleaningSemesterStatus(
+  semesterId
+) {
+  if (!semesterId) {
+    return {
+      generated: false,
+      taskCount: 0,
+    };
+  }
+
+  const {
+    data: semester,
+    error: semesterError,
+  } =
+    await supabase
+      .from(
+        "calendar_semesters"
+      )
+      .select(
+        "id, start_date, end_date"
+      )
+      .eq(
+        "id",
+        semesterId
+      )
+      .single();
+
+  if (semesterError) {
+    throw semesterError;
+  }
+
+  const {
+    count,
+    error,
+  } =
+    await supabase
+      .from(
+        "cleaning_tasks"
+      )
+      .select(
+        "id",
+        {
+          count: "exact",
+          head: true,
+        }
+      )
+      .gte(
+        "task_date",
+        semester.start_date
+      )
+      .lte(
+        "task_date",
+        semester.end_date
+      );
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    generated:
+      Number(count || 0) > 0,
+
+    taskCount:
+      Number(count || 0),
+  };
 }
 
 
@@ -333,22 +391,6 @@ async function getOverridesForSemesters(
 }
 
 
-function findSemesterForDate(
-  semesters,
-  dateString
-) {
-  return (
-    semesters.find(
-      (semester) =>
-        dateString >=
-          semester.start_date &&
-        dateString <=
-          semester.end_date
-    ) || null
-  );
-}
-
-
 function findOverride(
   overrides,
   semesterId,
@@ -372,6 +414,15 @@ function isWorkingDayFromData(
   overrides
 ) {
   if (!semester) {
+    return false;
+  }
+
+  if (
+    dateString <
+      semester.start_date ||
+    dateString >
+      semester.end_date
+  ) {
     return false;
   }
 
@@ -410,29 +461,10 @@ function isWorkingDayFromData(
 }
 
 
-function isSemesterWorkingDay(
-  dateString,
-  semesters,
-  overrides
-) {
-  const semester =
-    findSemesterForDate(
-      semesters,
-      dateString
-    );
-
-  return isWorkingDayFromData(
-    dateString,
-    semester,
-    overrides
-  );
-}
-
-
-function getWorkingDatesInMonth(
+function getWorkingDatesInRange(
   startDate,
   endDate,
-  semesters,
+  semester,
   overrides
 ) {
   const dates = [];
@@ -444,9 +476,9 @@ function getWorkingDatesInMonth(
     cursor <= endDate
   ) {
     if (
-      isSemesterWorkingDay(
+      isWorkingDayFromData(
         cursor,
-        semesters,
+        semester,
         overrides
       )
     ) {
@@ -593,56 +625,47 @@ function getRuleDueDatesForMonth(
       return [];
     }
 
-    const result = [];
+    const result =
+      [];
 
-    for (
-      const workingDate
-      of validWorkingDates
+    const monthStart =
+      `${year}-${pad2(
+        month
+      )}-01`;
+
+    const monthEnd =
+      `${year}-${pad2(
+        month
+      )}-${pad2(
+        getDaysInMonth(
+          year,
+          month
+        )
+      )}`;
+
+    let cursor =
+      monthStart;
+
+    while (
+      cursor <=
+      monthEnd
     ) {
-      const weekStart =
-        getMonday(
-          workingDate
+      const date =
+        parseDateString(
+          cursor
         );
 
-      for (
-        const weekday
-        of weekdays
+      const weekday =
+        date.getDay();
+
+      if (
+        weekdays.includes(
+          weekday
+        )
       ) {
-        const monday =
-          parseDateString(
-            weekStart
-          );
-
-        const offset =
-          weekday === 0
-            ? 6
-            : weekday -
-              1;
-
-        monday.setDate(
-          monday.getDate() +
-            offset
-        );
-
-        const nominalDate =
-          toDateString(
-            monday
-          );
-
-        if (
-          getMonthKey(
-            nominalDate
-          ) !==
-          `${year}-${pad2(
-            month
-          )}`
-        ) {
-          continue;
-        }
-
         const shiftedDate =
           getNextWorkingDate(
-            nominalDate,
+            cursor,
             validWorkingDates,
             {
               sameWeek:
@@ -658,6 +681,12 @@ function getRuleDueDatesForMonth(
           );
         }
       }
+
+      cursor =
+        addDays(
+          cursor,
+          1
+        );
     }
 
     return unique(
@@ -957,7 +986,8 @@ function getRotationCandidates(
     );
 
   const candidateIds =
-    memberIds.length > 0
+    memberIds.length >
+    0
       ? memberIds
       : teachers.map(
           (teacher) =>
@@ -982,7 +1012,8 @@ function getRotationCandidates(
           );
 
         if (
-          setting?.participates_in_rotation ===
+          setting
+            ?.participates_in_rotation ===
           false
         ) {
           return null;
@@ -1128,7 +1159,6 @@ function chooseFairTeacher(
         return {
           teacher,
           state,
-
           repeated:
             teacher.id ===
             lastTeacherId,
@@ -1207,8 +1237,6 @@ function chooseFairTeacher(
     null
   );
 }
-
-
 function buildPublicRotationTask({
   rule,
   item,
@@ -1373,7 +1401,7 @@ function buildOwnAreaTasks({
 }
 
 
-async function getMonthTasks(
+async function getTasksForRange(
   startDate,
   endDate
 ) {
@@ -1415,7 +1443,7 @@ async function getMonthTasks(
 }
 
 
-async function removeRegeneratableMonthTasks(
+async function removeRegeneratableTasksForRange(
   startDate,
   endDate
 ) {
@@ -1450,125 +1478,206 @@ async function removeRegeneratableMonthTasks(
 }
 
 
-export async function generateCleaningMonth(
-  year,
-  month
+function getMonthSegments(
+  startDate,
+  endDate
 ) {
-  const numericYear =
-    Number(year);
+  const result = [];
 
-  const numericMonth =
-    Number(month);
+  const start =
+    parseDateString(
+      startDate
+    );
 
+  const end =
+    parseDateString(
+      endDate
+    );
+
+  let year =
+    start.getFullYear();
+
+  let month =
+    start.getMonth() +
+    1;
+
+  while (
+    year <
+      end.getFullYear() ||
+    (
+      year ===
+        end.getFullYear() &&
+      month <=
+        end.getMonth() +
+          1
+    )
+  ) {
+    const monthRange =
+      getMonthRange(
+        year,
+        month
+      );
+
+    result.push({
+      year,
+      month,
+
+      startDate:
+        monthRange.startDate <
+        startDate
+          ? startDate
+          : monthRange.startDate,
+
+      endDate:
+        monthRange.endDate >
+        endDate
+          ? endDate
+          : monthRange.endDate,
+    });
+
+    month += 1;
+
+    if (
+      month > 12
+    ) {
+      month = 1;
+      year += 1;
+    }
+  }
+
+  return result;
+}
+
+
+export async function generateCleaningSemester(
+  semesterId
+) {
   if (
-    !Number.isInteger(
-      numericYear
-    ) ||
-    !Number.isInteger(
-      numericMonth
-    ) ||
-    numericMonth < 1 ||
-    numericMonth > 12
+    !semesterId
   ) {
     throw new Error(
-      "年月格式不正確。"
+      "請先選擇要產生排班的學期。"
     );
   }
 
   const {
-    startDate,
-    endDate,
+    data: semester,
+    error: semesterError,
   } =
-    getMonthRange(
-      numericYear,
-      numericMonth
-    );
-
-  const [
-    semesters,
-    setup,
-    existingTasks,
-  ] =
-    await Promise.all([
-      getSemestersForRange(
-        startDate,
-        endDate
-      ),
-
-      loadCleaningSetup(),
-
-      getMonthTasks(
-        startDate,
-        endDate
-      ),
-    ]);
+    await supabase
+      .from(
+        "calendar_semesters"
+      )
+      .select(
+        "id, name, start_date, end_date, status"
+      )
+      .eq(
+        "id",
+        semesterId
+      )
+      .single();
 
   if (
-    semesters.length ===
-    0
+    semesterError
   ) {
-    return {
-      year:
-        numericYear,
-
-      month:
-        numericMonth,
-
-      startDate,
-      endDate,
-
-      semesters: [],
-
-      workingDates: [],
-
-      generated: 0,
-
-      preserved:
-        existingTasks.length,
-
-      tasks:
-        existingTasks,
-
-      summary: [],
-    };
+    throw semesterError;
   }
 
-  const overrides =
-    await getOverridesForSemesters(
-      semesters.map(
-        (semester) =>
-          semester.id
-      )
-    );
+  const today =
+    getTodayDateString();
 
-  const workingDates =
-    getWorkingDatesInMonth(
-      startDate,
-      endDate,
-      semesters,
-      overrides
-    );
+  let regenerationStart =
+    semester.start_date;
 
+  if (
+    today >
+      semester.start_date &&
+    today <=
+      semester.end_date
+  ) {
+    regenerationStart =
+      today;
+  }
+
+  if (
+    today >
+    semester.end_date
+  ) {
+    throw new Error(
+      "這個學期已經結束，歷史排班不會重新產生。"
+    );
+  }
+
+  const [
+    setup,
+    existingTasks,
+    overrides,
+  ] =
+    await Promise.all([
+      loadCleaningSetup(),
+
+      getTasksForRange(
+        semester.start_date,
+        semester.end_date
+      ),
+
+      getOverridesForSemesters([
+        semester.id,
+      ]),
+    ]);
+
+  /*
+   * 這些任務一定保留：
+   *
+   * 1. 今天以前的歷史紀錄
+   * 2. 人工換過老師的任務
+   * 3. 已完成 / 略過等非 PENDING 任務
+   */
   const protectedTasks =
     existingTasks.filter(
       (task) =>
+        task.task_date <
+          regenerationStart ||
         task.is_manual_assignment ===
           true ||
         task.status !==
           "PENDING"
     );
 
+  const protectedRuleDateTeacherKeys =
+    new Set(
+      protectedTasks.map(
+        (task) =>
+          [
+            task.cleaning_rule_id,
+            task.task_date,
+            task.teacher_id ||
+              "",
+          ].join("|")
+      )
+    );
+
   const protectedRuleDateKeys =
     new Set(
       protectedTasks.map(
         (task) =>
-          `${task.cleaning_rule_id}|${task.task_date}`
+          [
+            task.cleaning_rule_id,
+            task.task_date,
+          ].join("|")
       )
     );
 
-  await removeRegeneratableMonthTasks(
-    startDate,
-    endDate
+  /*
+   * 只刪掉今天之後：
+   * - 自動產生
+   * - 還沒完成
+   *
+   * 然後依照最新規則重新計算。
+   */
+  await removeRegeneratableTasksForRange(
+    regenerationStart,
+    semester.end_date
   );
 
   const {
@@ -1594,21 +1703,59 @@ export async function generateCleaningMonth(
       teachers
     );
 
-  for (
-    const task
-    of protectedTasks
-  ) {
-    applyTaskToFairness(
-      fairness,
-      task
-    );
-  }
+  /*
+   * 本學期過去已經發生的工作，
+   * 都要繼續算進公平度。
+   *
+   * 所以換月份不會重新歸零。
+   */
+  protectedTasks.forEach(
+    (task) => {
+      applyTaskToFairness(
+        fairness,
+        task
+      );
+    }
+  );
 
   const generatedTasks =
     [];
 
   const lastTeacherByRule =
     new Map();
+
+  protectedTasks
+    .filter(
+      (task) =>
+        task.teacher_id
+    )
+    .sort(
+      (a, b) =>
+        compareDates(
+          a.task_date,
+          b.task_date
+        )
+    )
+    .forEach(
+      (task) => {
+        lastTeacherByRule.set(
+          task.cleaning_rule_id,
+          task.teacher_id
+        );
+      }
+    );
+
+  /*
+   * 把一整學期切成月份，
+   * 但只是為了算每月一次的規則。
+   *
+   * 公平度本身仍然是跨月共用。
+   */
+  const segments =
+    getMonthSegments(
+      regenerationStart,
+      semester.end_date
+    );
 
   for (
     const rule
@@ -1619,25 +1766,66 @@ export async function generateCleaningMonth(
         rule.cleaning_item_id
       );
 
-    const dueDates =
-      getRuleDueDatesForMonth(
-        rule,
-        numericYear,
-        numericMonth,
-        workingDates
-      );
-
     const scope =
       rule.assignment_scope ||
       "PUBLIC";
 
+    const dueDates =
+      [];
+
+    for (
+      const segment
+      of segments
+    ) {
+      const validWorkingDates =
+        getWorkingDatesInRange(
+          segment.startDate,
+          segment.endDate,
+          semester,
+          overrides
+        );
+
+      const monthDates =
+        getRuleDueDatesForMonth(
+          rule,
+          segment.year,
+          segment.month,
+          validWorkingDates
+        );
+
+      monthDates
+        .filter(
+          (dateString) =>
+            dateString >=
+              regenerationStart &&
+            dateString <=
+              semester.end_date
+        )
+        .forEach(
+          (dateString) =>
+            dueDates.push(
+              dateString
+            )
+        );
+    }
+
+    const uniqueDueDates =
+      unique(
+        dueDates
+      ).sort(
+        compareDates
+      );
+
+    /*
+     * 各自教室 / 區域
+     */
     if (
       scope ===
       "OWN_AREA"
     ) {
       for (
         const dateString
-        of dueDates
+        of uniqueDueDates
       ) {
         const tasks =
           buildOwnAreaTasks({
@@ -1648,14 +1836,38 @@ export async function generateCleaningMonth(
             settingsMap,
           });
 
-        generatedTasks.push(
-          ...tasks
-        );
+        for (
+          const task
+          of tasks
+        ) {
+          const key =
+            [
+              rule.id,
+              dateString,
+              task.teacher_id ||
+                "",
+            ].join("|");
+
+          if (
+            protectedRuleDateTeacherKeys.has(
+              key
+            )
+          ) {
+            continue;
+          }
+
+          generatedTasks.push(
+            task
+          );
+        }
       }
 
       continue;
     }
 
+    /*
+     * 固定專責
+     */
     if (
       scope ===
         "FIXED_TASK" ||
@@ -1664,11 +1876,17 @@ export async function generateCleaningMonth(
     ) {
       for (
         const dateString
-        of dueDates
+        of uniqueDueDates
       ) {
+        const key =
+          [
+            rule.id,
+            dateString,
+          ].join("|");
+
         if (
           protectedRuleDateKeys.has(
-            `${rule.id}|${dateString}`
+            key
           )
         ) {
           continue;
@@ -1693,6 +1911,9 @@ export async function generateCleaningMonth(
       continue;
     }
 
+    /*
+     * 公共公平輪值
+     */
     const candidates =
       getRotationCandidates(
         rule,
@@ -1703,11 +1924,17 @@ export async function generateCleaningMonth(
 
     for (
       const dateString
-      of dueDates
+      of uniqueDueDates
     ) {
+      const key =
+        [
+          rule.id,
+          dateString,
+        ].join("|");
+
       if (
         protectedRuleDateKeys.has(
-          `${rule.id}|${dateString}`
+          key
         )
       ) {
         continue;
@@ -1747,116 +1974,60 @@ export async function generateCleaningMonth(
     }
   }
 
+  /*
+   * 整學期可能很多筆，
+   * 分批寫 Supabase。
+   */
   if (
     generatedTasks.length >
     0
   ) {
-    const {
-      error,
-    } =
-      await supabase
-        .from(
-          "cleaning_tasks"
-        )
-        .insert(
-          generatedTasks
-        );
+    const chunkSize =
+      500;
 
-    if (error) {
-      throw error;
+    for (
+      let index = 0;
+      index <
+      generatedTasks.length;
+      index += chunkSize
+    ) {
+      const {
+        error,
+      } =
+        await supabase
+          .from(
+            "cleaning_tasks"
+          )
+          .insert(
+            generatedTasks.slice(
+              index,
+              index +
+                chunkSize
+            )
+          );
+
+      if (error) {
+        throw error;
+      }
     }
   }
 
-  const tasks =
-    await getMonthTasks(
-      startDate,
-      endDate
-    );
-
-  const summary =
-    teachers.map(
-      (teacher) => {
-        const teacherTasks =
-          tasks.filter(
-            (task) =>
-              task.teacher_id ===
-                teacher.id &&
-              Number(
-                task.burden_weight ||
-                  0
-              ) > 0
-          );
-
-        const wedFriCount =
-          teacherTasks.filter(
-            (task) =>
-              isSpecialBurdenDay(
-                task.task_date
-              )
-          ).length;
-
-        const totalWeight =
-          teacherTasks.reduce(
-            (
-              sum,
-              task
-            ) =>
-              sum +
-              Number(
-                task.burden_weight ||
-                  0
-              ),
-            0
-          );
-
-        const setting =
-          settingsMap.get(
-            teacher.id
-          );
-
-        return {
-          teacher_id:
-            teacher.id,
-
-          teacher_name:
-            getTeacherName(
-              teacher
-            ),
-
-          participates_in_rotation:
-            setting
-              ?.participates_in_rotation !==
-            false,
-
-          total_count:
-            teacherTasks.length,
-
-          wed_fri_count:
-            wedFriCount,
-
-          total_weight:
-            Number(
-              totalWeight.toFixed(
-                2
-              )
-            ),
-        };
-      }
+  const finalTasks =
+    await getTasksForRange(
+      semester.start_date,
+      semester.end_date
     );
 
   return {
-    year:
-      numericYear,
+    semester,
 
-    month:
-      numericMonth,
+    startDate:
+      semester.start_date,
 
-    startDate,
-    endDate,
+    endDate:
+      semester.end_date,
 
-    semesters,
-
-    workingDates,
+    regenerationStart,
 
     generated:
       generatedTasks.length,
@@ -1864,9 +2035,8 @@ export async function generateCleaningMonth(
     preserved:
       protectedTasks.length,
 
-    tasks,
-
-    summary,
+    tasks:
+      finalTasks,
   };
 }
 
@@ -1884,7 +2054,7 @@ export async function getCleaningMonth(
       Number(month)
     );
 
-  return getMonthTasks(
+  return getTasksForRange(
     startDate,
     endDate
   );

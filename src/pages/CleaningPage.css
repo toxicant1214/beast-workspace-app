@@ -1030,3 +1030,157 @@
     grid-template-columns: 1fr;
   }
 }
+/* =========================================================
+   學期排班 + 月曆假日顯示
+   將本段加到 CleaningPage.css 最下方
+   ========================================================= */
+
+.cleaningSemesterPanel {
+  display: grid;
+  gap: 18px;
+}
+
+.cleaningSemesterPanel__main {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.1fr) minmax(180px, 1fr) minmax(220px, 1.25fr) auto auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.cleaningSemesterPanel__main p,
+.cleaningMonth__toolbar p {
+  margin: 0 0 5px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  opacity: 0.55;
+}
+
+.cleaningSemesterPanel__main h2,
+.cleaningMonth__toolbar h2 {
+  margin: 0;
+}
+
+.cleaningSemesterPanel__select,
+.cleaningSemesterPanel__meta {
+  display: grid;
+  gap: 6px;
+}
+
+.cleaningSemesterPanel__select > span,
+.cleaningSemesterPanel__meta > span {
+  font-size: 12px;
+  opacity: 0.62;
+}
+
+.cleaningSemesterPanel__select select {
+  min-height: 42px;
+  border: 1px solid rgba(62, 72, 65, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0 12px;
+  font: inherit;
+}
+
+.cleaningSemesterPanel__meta strong {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.cleaningSemesterPanel__status {
+  min-width: 112px;
+  min-height: 42px;
+  border-radius: 12px;
+  padding: 7px 12px;
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  background: rgba(110, 118, 112, 0.08);
+}
+
+.cleaningSemesterPanel__status span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cleaningSemesterPanel__status small {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.cleaningSemesterPanel__status.is-ready {
+  background: rgba(113, 139, 119, 0.12);
+}
+
+.cleaningMonth__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(62, 72, 65, 0.1);
+}
+
+/* 假日名稱不再塞在日期右側，改成日期下方的小標籤 */
+.cleaningCalendarDay__header {
+  min-height: 28px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.cleaningCalendarDay__override {
+  width: fit-content;
+  max-width: 100%;
+  margin: -2px 0 7px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.35;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.cleaningCalendarDay__override.is-holiday {
+  background: rgba(153, 105, 105, 0.09);
+  color: rgba(112, 72, 72, 0.82);
+}
+
+.cleaningCalendarDay__override.is-workday {
+  background: rgba(103, 133, 111, 0.11);
+  color: rgba(65, 94, 72, 0.88);
+}
+
+.cleaningCalendarDay.is-closed {
+  background: rgba(248, 246, 243, 0.78);
+}
+
+.cleaningCalendarDay.is-closed .cleaningCalendarDay__tasks {
+  opacity: 0.62;
+}
+
+@media (max-width: 1100px) {
+  .cleaningSemesterPanel__main {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cleaningSemesterPanel__main > button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .cleaningSemesterPanel__main {
+    grid-template-columns: 1fr;
+  }
+
+  .cleaningMonth__toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

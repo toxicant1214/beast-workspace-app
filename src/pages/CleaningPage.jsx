@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import {
-  generateCleaningMonth,
+  generateCleaningSemester,
+  getCleaningSemesters,
+  getCleaningSemesterStatus,
   getCleaningMonth,
   getCleaningTasksForDate,
   reassignCleaningTask,
@@ -201,9 +203,17 @@ function CleaningPage() {
 
   const initialDate = getDateParts();
   const [selectedYear, setSelectedYear] = useState(initialDate.year);
-  const [selectedMonth, setSelectedMonth] = useState(initialDate.month);
+const [selectedMonth, setSelectedMonth] = useState(initialDate.month);
 
-  const [monthTasks, setMonthTasks] = useState([]);
+const [semesters, setSemesters] = useState([]);
+const [selectedSemesterId, setSelectedSemesterId] = useState("");
+
+const [semesterStatus, setSemesterStatus] = useState({
+  generated: false,
+  taskCount: 0,
+});
+
+const [monthTasks, setMonthTasks] = useState([]);
   const [monthSummary, setMonthSummary] = useState([]);
   const [todayTasks, setTodayTasks] = useState([]);
 
@@ -211,7 +221,7 @@ function CleaningPage() {
   const [loadingMonth, setLoadingMonth] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
   const [savingRule, setSavingRule] = useState(false);
-  const [generatingMonth, setGeneratingMonth] = useState(false);
+  const [generatingSemester, setGeneratingSemester] = useState(false);
   const [savingTeacherSettingId, setSavingTeacherSettingId] = useState("");
   const [reassigningTaskId, setReassigningTaskId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -223,8 +233,9 @@ function CleaningPage() {
   const [expandedDate, setExpandedDate] = useState("");
 
   useEffect(() => {
-    loadData();
-  }, []);
+  loadData();
+  loadSemesters();
+}, []);
 
   useEffect(() => {
     loadMonth();
@@ -235,6 +246,144 @@ function CleaningPage() {
       loadToday();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+  if (!selectedSemesterId) {
+    return;
+  }
+
+  const semester =
+    semesters.find(
+      (item) =>
+        item.id ===
+        selectedSemesterId
+    );
+
+  if (!semester) {
+    return;
+  }
+
+  refreshSemesterStatus(
+    selectedSemesterId
+  );
+
+  const currentMonthKey =
+    `${selectedYear}-${String(
+      selectedMonth
+    ).padStart(2, "0")}`;
+
+  const startMonthKey =
+    semester.start_date.slice(
+      0,
+      7
+    );
+
+  const endMonthKey =
+    semester.end_date.slice(
+      0,
+      7
+    );
+
+  if (
+    currentMonthKey <
+      startMonthKey ||
+    currentMonthKey >
+      endMonthKey
+  ) {
+    const today =
+      getTodayDateString();
+
+    const targetDate =
+      today >=
+        semester.start_date &&
+      today <=
+        semester.end_date
+        ? today
+        : semester.start_date;
+
+    const [
+      year,
+      month,
+    ] =
+      targetDate
+        .split("-")
+        .map(Number);
+
+    setSelectedYear(year);
+    setSelectedMonth(month);
+  }
+}, [
+  selectedSemesterId,
+  semesters,
+]);
+
+  async function loadSemesters() {
+  try {
+    const rows = await getCleaningSemesters();
+
+    setSemesters(rows);
+
+    if (rows.length === 0) {
+      setSelectedSemesterId("");
+      return;
+    }
+
+    const today = getTodayDateString();
+
+    const currentSemester =
+      rows.find(
+        (semester) =>
+          today >= semester.start_date &&
+          today <= semester.end_date
+      ) ||
+      rows.find(
+        (semester) =>
+          semester.start_date > today
+      ) ||
+      rows[0];
+
+    setSelectedSemesterId(
+      currentSemester.id
+    );
+  } catch (error) {
+    console.error(
+      "讀取學期資料失敗：",
+      error
+    );
+
+    setErrorMessage(
+      `讀取學期資料失敗：${error.message}`
+    );
+  }
+}
+
+
+async function refreshSemesterStatus(
+  semesterId
+) {
+  if (!semesterId) {
+    setSemesterStatus({
+      generated: false,
+      taskCount: 0,
+    });
+
+    return;
+  }
+
+  try {
+    const status =
+      await getCleaningSemesterStatus(
+        semesterId
+      );
+
+    setSemesterStatus(status);
+  } catch (error) {
+    console.error(
+      "讀取學期清潔狀態失敗：",
+      error
+    );
+  }
+}
 
   async function loadData() {
     try {
@@ -753,7 +902,7 @@ function CleaningPage() {
 
       setSuccessMessage(
         editingRule
-          ? "已更新清潔規則。請重新產生本月未完成排班。"
+          ? "已更新清潔規則。請回月清潔表更新本學期排班。"
           : "已建立清潔規則。"
       );
 
@@ -788,31 +937,39 @@ function CleaningPage() {
     }
   }
 
-  async function handleGenerateMonth() {
+  async function handleGenerateSemester() {
+    if (!selectedSemesterId) {
+      setErrorMessage("請先選擇學期。");
+      return;
+    }
+
     try {
-      setGeneratingMonth(true);
+      setGeneratingSemester(true);
       clearMessages();
 
-      const result = await generateCleaningMonth(
-        selectedYear,
-        selectedMonth
+      const result = await generateCleaningSemester(
+        selectedSemesterId
       );
 
-      setMonthTasks(result.tasks || []);
-      setMonthSummary(result.summary || []);
+      await loadMonth();
+      await refreshSemesterStatus(
+        selectedSemesterId
+      );
 
       setSuccessMessage(
-        result.semesters?.length === 0
-          ? "這個月份不在學期區間內，不產生學期清潔排班。"
-          : `本月排班完成：新產生 ${result.generated || 0} 筆，保留 ${
-              result.preserved || 0
-            } 筆手動／已處理任務。`
+        `${result.semester?.name || "本學期"}排班完成：新產生 ${
+          result.generated || 0
+        } 筆，保留 ${
+          result.preserved || 0
+        } 筆歷史／手動／已處理任務。`
       );
     } catch (error) {
-      console.error("產生清潔月表失敗：", error);
-      setErrorMessage(`產生清潔月表失敗：${error.message}`);
+      console.error("產生學期清潔排班失敗：", error);
+      setErrorMessage(
+        `產生學期清潔排班失敗：${error.message}`
+      );
     } finally {
-      setGeneratingMonth(false);
+      setGeneratingSemester(false);
     }
   }
 
@@ -904,6 +1061,15 @@ function CleaningPage() {
       setErrorMessage(`更新清潔任務失敗：${error.message}`);
     }
   }
+
+  const selectedSemester = useMemo(
+    () =>
+      semesters.find(
+        (semester) =>
+          semester.id === selectedSemesterId
+      ) || null,
+    [semesters, selectedSemesterId]
+  );
 
   const itemMap = useMemo(
     () => new Map(items.map((item) => [item.id, item])),
@@ -1291,44 +1457,124 @@ function CleaningPage() {
 
       {activeTab === "MONTH" && (
         <section className="cleaningMonth">
-          <div className="cleaningCard cleaningMonth__toolbar">
-            <div>
-              <p>MONTHLY SCHEDULE</p>
-              <h2>
-                {selectedYear} 年 {selectedMonth} 月
-              </h2>
-            </div>
+          <div className="cleaningCard cleaningSemesterPanel">
+            <div className="cleaningSemesterPanel__main">
+              <div className="cleaningSemesterPanel__title">
+                <p>SEMESTER SCHEDULE</p>
+                <h2>學期清潔排班</h2>
+              </div>
 
-            <div className="cleaningMonth__actions">
-              <button type="button" onClick={() => changeMonth(-1)}>
-                上個月
-              </button>
+              <label className="cleaningSemesterPanel__select">
+                <span>學期</span>
 
-              <button
-                type="button"
-                onClick={() => {
-                  const now = getDateParts();
-                  setSelectedYear(now.year);
-                  setSelectedMonth(now.month);
-                }}
+                <select
+                  value={selectedSemesterId}
+                  onChange={(event) =>
+                    setSelectedSemesterId(event.target.value)
+                  }
+                >
+                  {semesters.length === 0 && (
+                    <option value="">尚未建立學期</option>
+                  )}
+
+                  {semesters.map((semester) => (
+                    <option
+                      key={semester.id}
+                      value={semester.id}
+                    >
+                      {semester.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="cleaningSemesterPanel__meta">
+                <span>排班期間</span>
+                <strong>
+                  {selectedSemester
+                    ? `${selectedSemester.start_date.replaceAll(
+                        "-",
+                        "/"
+                      )} ～ ${selectedSemester.end_date.replaceAll(
+                        "-",
+                        "/"
+                      )}`
+                    : "—"}
+                </strong>
+              </div>
+
+              <div
+                className={[
+                  "cleaningSemesterPanel__status",
+                  semesterStatus.generated
+                    ? "is-ready"
+                    : "is-empty",
+                ].join(" ")}
               >
-                本月
-              </button>
+                <span>
+                  {semesterStatus.generated
+                    ? "已產生排班"
+                    : "尚未產生"}
+                </span>
 
-              <button type="button" onClick={() => changeMonth(1)}>
-                下個月
-              </button>
+                {semesterStatus.generated && (
+                  <small>
+                    {semesterStatus.taskCount} 筆任務
+                  </small>
+                )}
+              </div>
 
               <button
                 type="button"
                 className="primary"
-                onClick={handleGenerateMonth}
-                disabled={generatingMonth}
+                onClick={handleGenerateSemester}
+                disabled={
+                  !selectedSemesterId ||
+                  generatingSemester
+                }
               >
-                {generatingMonth
+                {generatingSemester
                   ? "排班中…"
-                  : "產生／重新整理本月排班"}
+                  : semesterStatus.generated
+                    ? "更新本學期排班"
+                    : "產生本學期排班"}
               </button>
+            </div>
+
+            <div className="cleaningMonth__toolbar">
+              <div>
+                <p>MONTHLY VIEW</p>
+                <h2>
+                  {selectedYear} 年 {selectedMonth} 月
+                </h2>
+              </div>
+
+              <div className="cleaningMonth__actions">
+                <button
+                  type="button"
+                  onClick={() => changeMonth(-1)}
+                >
+                  上個月
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = getDateParts();
+                    setSelectedYear(now.year);
+                    setSelectedMonth(now.month);
+                  }}
+                >
+                  本月
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => changeMonth(1)}
+                >
+                  下個月
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1435,11 +1681,21 @@ function CleaningPage() {
                       >
                         <div className="cleaningCalendarDay__header">
                           <strong>{cell.day}</strong>
-
-                          {override && (
-                            <span>{getOverrideLabel(override)}</span>
-                          )}
                         </div>
+
+                        {override && (
+                          <div
+                            className={[
+                              "cleaningCalendarDay__override",
+                              override.override_type === "SPECIAL_WORKDAY"
+                                ? "is-workday"
+                                : "is-holiday",
+                            ].join(" ")}
+                            title={getOverrideLabel(override)}
+                          >
+                            {getOverrideLabel(override)}
+                          </div>
+                        )}
 
                         <div className="cleaningCalendarDay__tasks">
                           {visibleTasks.map((task) => (
@@ -1556,7 +1812,7 @@ function CleaningPage() {
 
           {todayTasks.length === 0 ? (
             <div className="cleaningEmpty">
-              今天沒有清潔任務。若是工作日但尚未排班，請先到月清潔表產生本月排班。
+              今天沒有清潔任務。若是工作日但尚未排班，請先到月清潔表產生本學期排班。
             </div>
           ) : (
             <div className="cleaningTodayList">
