@@ -5,7 +5,7 @@ const CLOSURE_SCOPES = [
   {
     value: "ALL",
     label: "全體停接",
-    description: "適用於國定假日、颱風停課或全區共同休假",
+    description: "適用於颱風停課、臨時停課或其他全區特殊停接",
   },
   {
     value: "SCHOOL",
@@ -318,7 +318,7 @@ function PickupClosuresPanel() {
             </h2>
 
             <p>
-              全體停接適用於共同休假；指定學校停接則只影響單一學校。
+              國定假日與教室休假由行事曆自動套用；這裡只管理接送系統的臨時停接。
             </p>
           </div>
 
@@ -406,7 +406,7 @@ function PickupClosuresPanel() {
             <textarea
               placeholder={
                 form.closure_scope === "ALL"
-                  ? "例如：國定假日、颱風停課或全區共同休假"
+                  ? "例如：颱風停課、臨時停課或其他全區特殊停接"
                   : "例如：校慶補假、運動會或臨時停課"
               }
               value={form.reason}
@@ -477,7 +477,7 @@ function PickupClosuresPanel() {
               <strong>目前沒有停接紀錄</strong>
 
               <span>
-                遇到共同休假或學校補假時，再從左側新增即可。
+                國定假日與教室休假不需在這裡重複建立；有臨時全體停接或指定學校停接時再新增即可。
               </span>
             </div>
           ) : (

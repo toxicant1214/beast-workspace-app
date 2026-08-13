@@ -54,6 +54,8 @@ function TodayPickupPanel() {
   const [students, setStudents] = useState([]);
   const [rules, setRules] = useState([]);
   const [staffRules, setStaffRules] = useState([]);
+  const [closures, setClosures] = useState([]);
+  const [dayOverrides, setDayOverrides] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -70,21 +72,35 @@ function TodayPickupPanel() {
     setIsLoading(true);
     setErrorMessage("");
 
-    const [studentsResult, rulesResult, staffResult] =
-      await Promise.all([
-        supabase
-          .from("students")
-          .select("*")
-          .eq("student_status", "ACTIVE"),
-        supabase
-          .from("pickup_rules")
-          .select("*")
-          .eq("is_active", true),
-        supabase
-          .from("pickup_staff_rules")
-          .select("*")
-          .eq("is_active", true),
-      ]);
+    const [
+      studentsResult,
+      rulesResult,
+      staffResult,
+      closuresResult,
+      overridesResult,
+    ] = await Promise.all([
+      supabase
+        .from("students")
+        .select("*")
+        .eq("student_status", "ACTIVE"),
+      supabase
+        .from("pickup_rules")
+        .select("*")
+        .eq("is_active", true),
+      supabase
+        .from("pickup_staff_rules")
+        .select("*")
+        .eq("is_active", true),
+      supabase
+        .from("pickup_closures")
+        .select("*")
+        .eq("is_active", true),
+      supabase
+        .from("calendar_day_overrides")
+        .select(
+          "id, semester_id, override_date, override_type, title, notes"
+        ),
+    ]);
 
     if (studentsResult.error) {
       setErrorMessage(
@@ -110,14 +126,68 @@ function TodayPickupPanel() {
       return;
     }
 
+    if (closuresResult.error) {
+      setErrorMessage(
+        `讀取臨時停接安排失敗：${closuresResult.error.message}`
+      );
+      setIsLoading(false);
+      return;
+    }
+
+    if (overridesResult.error) {
+      setErrorMessage(
+        `讀取行事曆重要日期失敗：${overridesResult.error.message}`
+      );
+      setIsLoading(false);
+      return;
+    }
+
     setStudents(studentsResult.data ?? []);
     setRules(rulesResult.data ?? []);
     setStaffRules(staffResult.data ?? []);
+    setClosures(closuresResult.data ?? []);
+    setDayOverrides(overridesResult.data ?? []);
     setIsLoading(false);
+  }
+
+  function getTodayDateString() {
+    const now = new Date();
+    const offset = now.getTimezoneOffset();
+
+    return new Date(now.getTime() - offset * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  const todayDateString = getTodayDateString();
+
+  const sharedDayOff = dayOverrides.find(
+    (item) =>
+      item.override_date === todayDateString &&
+      (
+        item.override_type === "HOLIDAY" ||
+        item.override_type === "CLASSROOM_CLOSED"
+      )
+  );
+
+  const allClosure = closures.find(
+    (closure) =>
+      closure.closure_date === todayDateString &&
+      closure.closure_scope === "ALL"
+  );
+
+  function getSchoolClosure(school) {
+    return closures.find(
+      (closure) =>
+        closure.closure_date === todayDateString &&
+        closure.closure_scope === "SCHOOL" &&
+        closure.school === school
+    );
   }
 
   const pickupGroups = useMemo(() => {
     if (!todayConfig) return [];
+    if (sharedDayOff || allClosure) return [];
 
     const groupMap = new Map();
 
@@ -127,6 +197,7 @@ function TodayPickupPanel() {
         GRADE_GROUP_MAP[student.current_grade];
 
       if (!school || !gradeGroup) return;
+      if (getSchoolClosure(school)) return;
 
       const matchingRule = rules.find(
         (rule) =>
@@ -197,6 +268,10 @@ function TodayPickupPanel() {
     staffRules,
     todayConfig,
     todayWeekday,
+    closures,
+    dayOverrides,
+    sharedDayOff,
+    allClosure,
   ]);
 
   const totalStudents = useMemo(
@@ -269,7 +344,17 @@ function TodayPickupPanel() {
         </div>
       )}
 
-      {!todayConfig ? (
+      {sharedDayOff || allClosure ? (
+        <div className="pickupEmptyState">
+          <span className="pickupEmptyState__icon">🌿</span>
+          <h2>今天全體停接</h2>
+          <p>
+            {sharedDayOff?.title ||
+              allClosure?.reason ||
+              "今天沒有接車安排。"}
+          </p>
+        </div>
+      ) : !todayConfig ? (
         <div className="pickupEmptyState">
           <span className="pickupEmptyState__icon">🌿</span>
           <h2>今天沒有固定接車安排</h2>

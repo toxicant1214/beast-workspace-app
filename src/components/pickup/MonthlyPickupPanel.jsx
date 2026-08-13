@@ -131,6 +131,7 @@ function MonthlyPickupPanel() {
   const [students, setStudents] = useState([]);
   const [rules, setRules] = useState([]);
   const [closures, setClosures] = useState([]);
+  const [dayOverrides, setDayOverrides] = useState([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -144,7 +145,12 @@ function MonthlyPickupPanel() {
     setIsLoading(true);
     setErrorMessage("");
 
-    const [studentsResult, rulesResult, closuresResult] = await Promise.all([
+    const [
+      studentsResult,
+      rulesResult,
+      closuresResult,
+      overridesResult,
+    ] = await Promise.all([
       supabase
         .from("students")
         .select(
@@ -193,6 +199,19 @@ function MonthlyPickupPanel() {
           `
         )
         .eq("is_active", true),
+
+      supabase
+        .from("calendar_day_overrides")
+        .select(
+          `
+            id,
+            semester_id,
+            override_date,
+            override_type,
+            title,
+            notes
+          `
+        ),
     ]);
 
     if (studentsResult.error) {
@@ -207,14 +226,26 @@ function MonthlyPickupPanel() {
       return;
     }
 
-    // 如果停接表尚未建立或欄位名稱不同，不阻擋月表第一版
     if (closuresResult.error) {
-      console.warn("讀取停接安排失敗：", closuresResult.error);
+      setErrorMessage(
+        `讀取臨時停接安排失敗：${closuresResult.error.message}`
+      );
+      setIsLoading(false);
+      return;
+    }
+
+    if (overridesResult.error) {
+      setErrorMessage(
+        `讀取行事曆重要日期失敗：${overridesResult.error.message}`
+      );
+      setIsLoading(false);
+      return;
     }
 
     setStudents(studentsResult.data ?? []);
     setRules(rulesResult.data ?? []);
     setClosures(closuresResult.data ?? []);
+    setDayOverrides(overridesResult.data ?? []);
     setIsLoading(false);
   }
 
@@ -306,6 +337,22 @@ function MonthlyPickupPanel() {
   }
 
   function getClosure(studentSchool, dateString) {
+    const sharedDayOff = dayOverrides.find(
+      (item) =>
+        item.override_date === dateString &&
+        (
+          item.override_type === "HOLIDAY" ||
+          item.override_type === "CLASSROOM_CLOSED"
+        )
+    );
+
+    if (sharedDayOff) {
+      return {
+        reason: sharedDayOff.title || "行事曆休假",
+        source: "CALENDAR",
+      };
+    }
+
     return closures.find((closure) => {
       if (closure.closure_date !== dateString) return false;
 
@@ -435,7 +482,7 @@ function MonthlyPickupPanel() {
       const safeSchoolName =
         school === "ALL"
           ? "各校"
-          : school.replace(/[\/:*?"<>|]/g, "");
+          : school.replace(/[**\\/**:\*?"<>|]/g, "");
 
       pdf.save(`${year}年${month}月_${safeSchoolName}_接車點名表.pdf`);
     } catch (error) {
