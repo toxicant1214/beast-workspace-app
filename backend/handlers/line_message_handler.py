@@ -1,3 +1,5 @@
+import os
+
 from datetime import datetime, timedelta
 
 from handlers.line_common import (
@@ -31,6 +33,8 @@ from services.workflow_service import (
     get_workflow,
     update_workflow,
 )
+
+ADMIN_LINE_USER_ID = os.getenv("ADMIN_LINE_USER_ID")
 
 
 def handle_text_message(text, reply_token, line_user_id):
@@ -169,6 +173,35 @@ def handle_text_message(text, reply_token, line_user_id):
             "✅ 老師任務通知\n"
             "✅ 截止時間提醒\n"
             "✅ 每日工作摘要",
+        )
+        return
+
+    # -------------------------------------------------
+    # LINE 身分安全檢查
+    #
+    # 已綁定老師：
+    #   可以繼續使用老師功能。
+    #
+    # 主管：
+    #   必須符合 ADMIN_LINE_USER_ID，
+    #   才能繼續使用私人待辦與主管功能。
+    #
+    # 其他尚未綁定的 LINE 使用者：
+    #   只能進行老師 LINE 綁定。
+    # -------------------------------------------------
+    is_admin = (
+        bool(ADMIN_LINE_USER_ID)
+        and line_user_id == ADMIN_LINE_USER_ID
+    )
+
+    if not bound_teacher and not is_admin:
+        reply_message(
+            reply_token,
+            "🔒 此 LINE 尚未完成身分綁定。\n\n"
+            "如果您是老師，請先登入 "
+            "BEAST Workspace，產生六碼 LINE 綁定碼。\n\n"
+            "取得後請傳送：\n"
+            "綁定 ABC123",
         )
         return
 
