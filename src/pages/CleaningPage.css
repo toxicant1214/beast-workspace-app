@@ -401,3 +401,301 @@
     font-size: 23px;
   }
 }
+/* ===== Cleaning monthly schedule ===== */
+
+.cleaningMonth {
+  display: grid;
+  gap: 16px;
+}
+
+.cleaningMonth__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cleaningMonth__toolbar p {
+  margin: 0 0 5px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #7c8d83;
+}
+
+.cleaningMonth__toolbar h2 {
+  margin: 0;
+}
+
+.cleaningMonth__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cleaningMonth__actions button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #d9e0db;
+  border-radius: 10px;
+  background: #fff;
+  color: #56625b;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cleaningMonth__actions button.primary {
+  border-color: #6f8b78;
+  background: #6f8b78;
+  color: #fff;
+}
+
+.cleaningMonth__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.cleaningMonth__summary article {
+  padding: 14px;
+  border: 1px solid #dfe5e0;
+  border-radius: 14px;
+  background: #fbfcf9;
+}
+
+.cleaningMonth__summary strong,
+.cleaningMonth__summary span,
+.cleaningMonth__summary small {
+  display: block;
+}
+
+.cleaningMonth__summary span {
+  margin-top: 4px;
+  color: #6f7b74;
+  font-size: 13px;
+}
+
+.cleaningMonth__summary small {
+  margin-top: 7px;
+  color: #808984;
+  line-height: 1.5;
+}
+
+.cleaningMonth__tableWrap {
+  overflow-x: auto;
+}
+
+.cleaningMonth__table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.cleaningMonth__table th,
+.cleaningMonth__table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #e6ebe7;
+  text-align: left;
+  vertical-align: top;
+}
+
+.cleaningMonth__table th {
+  color: #6c776f;
+  font-size: 13px;
+}
+
+.cleaningMonth__table td:first-child {
+  width: 76px;
+  font-weight: 700;
+}
+
+.cleaningMonth__table td:nth-child(2) {
+  width: 56px;
+  font-weight: 700;
+}
+
+.cleaningMonth__table .is-heavy-day {
+  color: #9a655a;
+}
+
+.cleaningMonth__taskList {
+  display: grid;
+  gap: 7px;
+}
+
+.cleaningMonth__task {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(130px, 180px) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.cleaningMonth__task select {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid #d9e0db;
+  border-radius: 9px;
+  background: #fff;
+  font: inherit;
+}
+
+.cleaningMonth__task > span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #f2e9d8;
+  color: #7e6744;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cleaningMonth__emptyDay {
+  color: #a0a7a2;
+}
+
+.cleaningTodayList {
+  display: grid;
+  gap: 10px;
+}
+
+.cleaningTodayList article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid #e0e6e2;
+  border-radius: 12px;
+}
+
+.cleaningTodayList article > div {
+  display: grid;
+  gap: 4px;
+}
+
+.cleaningTodayList article span {
+  color: #778079;
+}
+
+.cleaningTodayList label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.cleaningChoiceGroup__scope {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.cleaningChoiceGroup__scope button {
+  min-height: 84px;
+  display: grid;
+  gap: 5px;
+  align-content: center;
+  padding: 10px;
+}
+
+.cleaningChoiceGroup__scope button small {
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.cleaningWeekdayPicker {
+  display: grid;
+  gap: 8px;
+}
+
+.cleaningWeekdayPicker > span {
+  font-weight: 700;
+  color: #4b5850;
+}
+
+.cleaningWeekdayPicker > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.cleaningWeekdayPicker button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #d9e0db;
+  border-radius: 10px;
+  background: #fff;
+  color: #5f6963;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cleaningWeekdayPicker button.selected {
+  border-color: #90aa9a;
+  background: #edf4ef;
+  color: #355444;
+}
+
+.cleaningTeacherSettings {
+  display: grid;
+  gap: 10px;
+}
+
+.cleaningTeacherSettings article {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1fr) minmax(220px, 1.5fr);
+  gap: 16px;
+  align-items: center;
+  padding: 14px 15px;
+  border: 1px solid #e0e6e2;
+  border-radius: 13px;
+}
+
+.cleaningTeacherSettings label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cleaningTeacherSettings label:last-child {
+  display: grid;
+  gap: 6px;
+}
+
+.cleaningTeacherSettings input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid #d9e0db;
+  border-radius: 9px;
+  font: inherit;
+}
+
+@media (max-width: 900px) {
+  .cleaningMonth__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cleaningMonth__actions {
+    justify-content: flex-start;
+  }
+
+  .cleaningTeacherSettings article {
+    grid-template-columns: 1fr;
+  }
+
+  .cleaningChoiceGroup__scope {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .cleaningMonth__task {
+    grid-template-columns: 1fr;
+  }
+
+  .cleaningMonth__actions button {
+    flex: 1 1 auto;
+  }
+}
