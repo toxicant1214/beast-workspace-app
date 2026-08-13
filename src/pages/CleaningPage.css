@@ -1,0 +1,403 @@
+.cleaningPage {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 0 40px;
+  color: #29312d;
+}
+
+.cleaningPage__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.cleaningPage__eyebrow,
+.cleaningCard__header p,
+.cleaningTodayPlaceholder > p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  color: #7c8d83;
+}
+
+.cleaningPage__header h1,
+.cleaningCard__header h2,
+.cleaningTodayPlaceholder h2 {
+  margin: 0;
+}
+
+.cleaningPage__header > div > p:last-child {
+  margin: 8px 0 0;
+  color: #707972;
+  line-height: 1.7;
+}
+
+.cleaningPage__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.cleaningPage__stats article {
+  padding: 16px 18px;
+  border: 1px solid #dfe5e0;
+  border-radius: 16px;
+  background: #fbfcf9;
+}
+
+.cleaningPage__stats span,
+.cleaningPage__stats small {
+  display: block;
+  color: #7a817c;
+}
+
+.cleaningPage__stats strong {
+  display: block;
+  margin: 6px 0 4px;
+  font-size: 28px;
+}
+
+.cleaningPage__tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 5px;
+  border: 1px solid #e1e5e1;
+  border-radius: 14px;
+  background: #f7f8f5;
+}
+
+.cleaningPage__tabs button {
+  flex: 1;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #707872;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cleaningPage__tabs button.active {
+  background: #ffffff;
+  color: #35473d;
+  box-shadow: 0 2px 10px rgba(42, 56, 48, 0.08);
+}
+
+.cleaningPage__layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.75fr) minmax(0, 1.25fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.cleaningCard {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #dfe5e0;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.cleaningCard__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.cleaningCard__header > strong {
+  color: #78847d;
+}
+
+.cleaningForm {
+  display: grid;
+  gap: 15px;
+}
+
+.cleaningForm label,
+.cleaningMemberPicker,
+.cleaningChoiceGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.cleaningForm label > span,
+.cleaningMemberPicker > span,
+.cleaningChoiceGroup > span {
+  font-weight: 700;
+  color: #4b5850;
+}
+
+.cleaningForm input,
+.cleaningForm select,
+.cleaningForm textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid #d7ded9;
+  border-radius: 11px;
+  background: #ffffff;
+  color: inherit;
+  font: inherit;
+}
+
+.cleaningForm textarea {
+  resize: vertical;
+}
+
+.cleaningSwitchRow {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 13px 14px;
+  border: 1px solid #e2e7e3;
+  border-radius: 12px;
+  background: #fafbf8;
+}
+
+.cleaningSwitchRow small {
+  display: block;
+  margin-top: 4px;
+  color: #818984;
+}
+
+.cleaningSwitchRow input {
+  width: 20px;
+  height: 20px;
+}
+
+.cleaningChoiceGroup > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cleaningChoiceGroup button,
+.cleaningMemberPicker button {
+  min-height: 40px;
+  border: 1px solid #d9e0db;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #5f6963;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cleaningChoiceGroup button.active,
+.cleaningMemberPicker button.selected {
+  border-color: #90aa9a;
+  background: #edf4ef;
+  color: #355444;
+  font-weight: 700;
+}
+
+.cleaningMemberPicker > small {
+  color: #858c87;
+}
+
+.cleaningMemberPicker > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cleaningMemberPicker button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+}
+
+.cleaningMemberPicker button b {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #65816f;
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.cleaningForm__actions,
+.cleaningListItem__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cleaningForm__actions button,
+.cleaningListItem__actions button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #d8dfda;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #56625b;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cleaningForm__actions .primary {
+  border-color: #6f8b78;
+  background: #6f8b78;
+  color: #ffffff;
+}
+
+.cleaningListItem__actions .danger {
+  border-color: #e4c8c4;
+  color: #a15a51;
+  background: #fff9f8;
+}
+
+.cleaningList {
+  display: grid;
+  gap: 10px;
+}
+
+.cleaningListItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 15px 16px;
+  border: 1px solid #e0e6e2;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.cleaningListItem.is-inactive {
+  opacity: 0.62;
+  background: #fafafa;
+}
+
+.cleaningListItem__title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.cleaningListItem__title span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #edf3ef;
+  color: #65766c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cleaningListItem p {
+  margin: 6px 0 0;
+  color: #727b75;
+  line-height: 1.6;
+}
+
+.cleaningListItem small {
+  display: block;
+  margin-top: 5px;
+  color: #8a918c;
+}
+
+.cleaningPage__message {
+  margin-bottom: 14px;
+  padding: 11px 14px;
+  border-radius: 11px;
+}
+
+.cleaningPage__message--error {
+  background: #fff1ef;
+  color: #9b493f;
+}
+
+.cleaningPage__message--success {
+  background: #eef6f0;
+  color: #416650;
+}
+
+.cleaningEmpty,
+.cleaningPage__loading {
+  padding: 30px 18px;
+  text-align: center;
+  color: #818984;
+}
+
+.cleaningTodayPlaceholder {
+  display: grid;
+  gap: 8px;
+  min-height: 220px;
+  place-content: center;
+  text-align: center;
+}
+
+.cleaningTodayPlaceholder > strong {
+  font-size: 20px;
+}
+
+.cleaningTodayPlaceholder > span {
+  max-width: 560px;
+  color: #788079;
+  line-height: 1.8;
+}
+
+@media (max-width: 980px) {
+  .cleaningPage__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cleaningPage__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .cleaningPage {
+    padding-bottom: 28px;
+  }
+
+  .cleaningPage__stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cleaningPage__tabs {
+    overflow-x: auto;
+  }
+
+  .cleaningPage__tabs button {
+    min-width: 105px;
+    flex: none;
+  }
+
+  .cleaningCard {
+    padding: 15px;
+    border-radius: 15px;
+  }
+
+  .cleaningChoiceGroup > div {
+    grid-template-columns: 1fr;
+  }
+
+  .cleaningListItem {
+    grid-template-columns: 1fr;
+  }
+
+  .cleaningListItem__actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .cleaningPage__stats article {
+    padding: 13px;
+  }
+
+  .cleaningPage__stats strong {
+    font-size: 23px;
+  }
+}
