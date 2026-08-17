@@ -1300,7 +1300,9 @@ function buildFixedTask({
   if (
     !rule.fixed_teacher_id
   ) {
-    return null;
+    throw new Error(
+      `固定專責規則「${item?.name || "未命名清潔工作"}」尚未指定負責老師。`
+    );
   }
 
   return {
@@ -1353,16 +1355,18 @@ function buildOwnAreaTasks({
             teacher.id
           );
 
+        if (
+          setting
+            ?.participates_in_rotation ===
+          false
+        ) {
+          return null;
+        }
+
         const ownAreaLabel =
           setting
             ?.own_area_label
             ?.trim();
-
-        if (
-          !ownAreaLabel
-        ) {
-          return null;
-        }
 
         return {
           cleaning_rule_id:
@@ -1393,7 +1397,7 @@ function buildOwnAreaTasks({
             rule.note ||
             ownAreaLabel ||
             item?.description ||
-            null,
+            "自己的區域",
         };
       }
     )
@@ -1767,8 +1771,12 @@ export async function generateCleaningSemester(
       );
 
     const scope =
-      rule.assignment_scope ||
-      "PUBLIC";
+      String(
+        rule.assignment_scope ||
+        "PUBLIC"
+      )
+        .trim()
+        .toUpperCase();
 
     const dueDates =
       [];
