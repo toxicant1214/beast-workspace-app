@@ -920,7 +920,8 @@ return hasPagePermission(
 
 
   if (
-    loadingCurrentTeacher
+    loadingCurrentTeacher &&
+    !currentTeacher
   ) {
     return (
       <main className="workspace-auth-loading">
