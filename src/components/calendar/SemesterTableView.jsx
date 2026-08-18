@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import SemesterExportView from "./SemesterExportView";
 
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
@@ -968,8 +969,20 @@ function SemesterTableView({
         </div>
 
 
-        <div className="semester-table-view__summary">
-          共 {weeks.length} 週
+        <div className="semester-table-view__headerActions">
+          <div className="semester-table-view__summary">
+            共 {weeks.length} 週
+          </div>
+
+          <SemesterExportView
+            semesterId={semesterId}
+            semesterName={semesterName}
+            startDate={startDate}
+            endDate={endDate}
+            weeks={weeks}
+            events={events}
+            schoolNames={schoolNames}
+          />
         </div>
       </header>
 
