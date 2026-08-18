@@ -216,6 +216,9 @@ const [semesterStatus, setSemesterStatus] = useState({
 const [monthTasks, setMonthTasks] = useState([]);
   const [monthSummary, setMonthSummary] = useState([]);
   const [todayTasks, setTodayTasks] = useState([]);
+  const [selectedTodayDate, setSelectedTodayDate] = useState(
+    getTodayDateString()
+  );
 
   const [loading, setLoading] = useState(true);
   const [loadingMonth, setLoadingMonth] = useState(false);
@@ -245,7 +248,7 @@ const [monthTasks, setMonthTasks] = useState([]);
     if (activeTab === "TODAY") {
       loadToday();
     }
-  }, [activeTab]);
+  }, [activeTab, selectedTodayDate]);
 
   useEffect(() => {
   if (!selectedSemesterId) {
@@ -561,7 +564,9 @@ async function refreshSemesterStatus(
 
   async function loadToday() {
     try {
-      const tasks = await getCleaningTasksForDate();
+      const tasks = await getCleaningTasksForDate(
+        selectedTodayDate
+      );
       setTodayTasks(tasks || []);
     } catch (error) {
       console.error("讀取今日清潔失敗：", error);
@@ -1877,15 +1882,51 @@ async function refreshSemesterStatus(
           <div className="cleaningCard__header">
             <div>
               <p>TODAY CLEANING</p>
-              <h2>今日清潔</h2>
+              <h2>
+                {selectedTodayDate === getTodayDateString()
+                  ? "今日清潔"
+                  : `${formatDate(selectedTodayDate)} 清潔`}
+              </h2>
             </div>
 
-            <strong>{todayTasks.length} 項</strong>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                flexWrap: "wrap",
+                justifyContent: "flex-end",
+              }}
+            >
+              <input
+                type="date"
+                value={selectedTodayDate}
+                onChange={(event) =>
+                  setSelectedTodayDate(event.target.value)
+                }
+              />
+
+              {selectedTodayDate !== getTodayDateString() && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedTodayDate(getTodayDateString())
+                  }
+                >
+                  回到今天
+                </button>
+              )}
+
+              <strong>{todayTasks.length} 項</strong>
+            </div>
           </div>
 
           {todayTasks.length === 0 ? (
             <div className="cleaningEmpty">
-              今天沒有清潔任務。若是工作日但尚未排班，請先到月清潔表產生本學期排班。
+              {selectedTodayDate === getTodayDateString()
+                ? "今天沒有清潔任務。"
+                : `${formatDate(selectedTodayDate)} 沒有清潔任務。`}
+              若是工作日但尚未排班，請先到月清潔表產生本學期排班。
             </div>
           ) : (
             <div className="cleaningTodayList">
