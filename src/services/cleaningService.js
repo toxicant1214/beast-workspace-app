@@ -985,14 +985,16 @@ function getRotationCandidates(
       )
     );
 
+  /*
+   * 公共輪值改為動態讀取所有在職老師。
+   * 新老師不需要逐條加入 cleaning_rule_members；
+   * 只要沒有在老師設定中退出輪值，就會自動成為候選人。
+   */
   const candidateIds =
-    memberIds.length >
-    0
-      ? memberIds
-      : teachers.map(
-          (teacher) =>
-            teacher.id
-        );
+    teachers.map(
+      (teacher) =>
+        teacher.id
+    );
 
   return candidateIds
     .map(

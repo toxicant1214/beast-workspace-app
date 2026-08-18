@@ -46,7 +46,7 @@ const SCOPE_OPTIONS = [
   {
     value: "PUBLIC",
     label: "公共輪值",
-    description: "公共區域工作，依公平負擔自動輪值。",
+    description: "所有在職且未退出輪值的老師，自動依公平負擔輪值。",
   },
   {
     value: "OWN_AREA",
@@ -811,14 +811,6 @@ async function refreshSemesterStatus(
       return;
     }
 
-    if (
-      ruleForm.assignment_scope === "PUBLIC" &&
-      ruleForm.member_ids.length === 0
-    ) {
-      setErrorMessage("公共輪值至少要選一位老師。");
-      return;
-    }
-
     const payload = {
       cleaning_item_id: ruleForm.cleaning_item_id,
       assignment_scope: ruleForm.assignment_scope,
@@ -880,25 +872,6 @@ async function refreshSemesterStatus(
         .eq("cleaning_rule_id", ruleId);
 
       if (deleteMembersError) throw deleteMembersError;
-
-      if (
-        ruleForm.assignment_scope === "PUBLIC" &&
-        ruleForm.member_ids.length > 0
-      ) {
-        const memberPayload = ruleForm.member_ids.map(
-          (teacherId, index) => ({
-            cleaning_rule_id: ruleId,
-            teacher_id: teacherId,
-            sort_order: index,
-          })
-        );
-
-        const { error: insertMembersError } = await supabase
-          .from("cleaning_rule_members")
-          .insert(memberPayload);
-
-        if (insertMembersError) throw insertMembersError;
-      }
 
       setSuccessMessage(
         editingRule
@@ -1421,14 +1394,17 @@ async function refreshSemesterStatus(
       return teacher ? getTeacherName(teacher) : "尚未指定";
     }
 
-    const names = ruleMembers
-      .filter((member) => member.cleaning_rule_id === rule.id)
-      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-      .map((member) => teacherMap.get(member.teacher_id))
-      .filter(Boolean)
+    const activeRotationTeachers = teachers
+      .filter(
+        (teacher) =>
+          settingMap.get(teacher.id)
+            ?.participates_in_rotation !== false
+      )
       .map(getTeacherName);
 
-    return names.length > 0 ? names.join("、") : "尚未設定輪值";
+    return activeRotationTeachers.length > 0
+      ? `自動輪值｜${activeRotationTeachers.join("、")}`
+      : "目前沒有參與輪值的老師";
   }
 
   const activeItems = items.filter((item) => item.is_active);
