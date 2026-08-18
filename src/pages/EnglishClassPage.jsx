@@ -184,6 +184,24 @@ function EnglishClassPage() {
     setDetailClass(null);
   }
 
+  async function deleteEnglishClass(classItem) {
+    if (!classItem?.id) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("english_classes")
+      .delete()
+      .eq("id", classItem.id);
+
+    if (error) {
+      throw error;
+    }
+
+    setDetailClass(null);
+    await loadEnglishClasses();
+  }
+
   async function saveEnglishClass(
     event
   ) {
@@ -607,6 +625,9 @@ function EnglishClassPage() {
           }
           onClose={
             closeClassDetail
+          }
+          onDelete={
+            deleteEnglishClass
           }
         />
       )}

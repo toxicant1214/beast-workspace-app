@@ -34,6 +34,7 @@ const WEEKDAY_LABELS = {
 function EnglishClassDetailDrawer({
   classItem,
   onClose,
+  onDelete,
 }) {
   const [isAddStudentsOpen, setIsAddStudentsOpen] =
     useState(false);
@@ -46,6 +47,9 @@ function EnglishClassDetailDrawer({
 
   const [processingId, setProcessingId] =
     useState(null);
+
+  const [isDeletingClass, setIsDeletingClass] =
+    useState(false);
 
   useEffect(() => {
     if (classItem?.id) {
@@ -119,6 +123,57 @@ function EnglishClassDetailDrawer({
 
   async function handleStudentsAdded() {
     await loadClassStudents();
+  }
+
+  async function deleteClassPermanently() {
+    if (!onDelete || isDeletingClass) {
+      return;
+    }
+
+    const className =
+      classItem.class_name ||
+      "這個美語班";
+
+    const firstConfirmed =
+      window.confirm(
+        `確定要永久刪除美語班「${className}」嗎？\n\n刪除後：\n・班級資料會永久移除\n・每週上課時段會一併刪除\n・學生的美語班編班紀錄會一併刪除\n・既有補課紀錄會保留，但不再連結此美語班\n\n若只是暫時不使用這個班級，請取消並改用停用功能。`
+      );
+
+    if (!firstConfirmed) {
+      return;
+    }
+
+    const secondConfirmed =
+      window.confirm(
+        `⚠️ 最後確認\n\n確定要永久刪除「${className}」嗎？\n\n此操作無法復原。`
+      );
+
+    if (!secondConfirmed) {
+      return;
+    }
+
+    try {
+      setIsDeletingClass(true);
+
+      await onDelete(
+        classItem
+      );
+
+      window.alert(
+        `已永久刪除美語班「${className}」。`
+      );
+    } catch (error) {
+      console.error(
+        "永久刪除美語班失敗：",
+        error
+      );
+
+      window.alert(
+        `刪除美語班失敗：${error.message}`
+      );
+    } finally {
+      setIsDeletingClass(false);
+    }
   }
 
   async function removeMistakenStudent(item) {
@@ -444,6 +499,59 @@ function EnglishClassDetailDrawer({
                   )}
                 </div>
               )}
+            </section>
+
+            <section
+              className="englishClassDetail__section"
+              style={{
+                border: "1px solid #ead1cc",
+                background: "#fff8f6",
+              }}
+            >
+              <div className="englishClassDetail__sectionHeading">
+                <p>DANGER ZONE</p>
+                <h3>永久刪除班級</h3>
+              </div>
+
+              <p
+                style={{
+                  margin: "0 0 14px",
+                  color: "#7f655f",
+                  lineHeight: 1.7,
+                }}
+              >
+                僅建議用於測試班級、誤建班級或確定不需保留的資料。
+                刪除後無法復原。
+              </p>
+
+              <button
+                type="button"
+                onClick={
+                  deleteClassPermanently
+                }
+                disabled={
+                  isDeletingClass
+                }
+                style={{
+                  width: "100%",
+                  minHeight: "44px",
+                  border: "1px solid #d8a39a",
+                  borderRadius: "12px",
+                  background: "#fff",
+                  color: "#a64f43",
+                  fontWeight: 700,
+                  cursor: isDeletingClass
+                    ? "not-allowed"
+                    : "pointer",
+                  opacity: isDeletingClass
+                    ? 0.6
+                    : 1,
+                }}
+              >
+                {isDeletingClass
+                  ? "刪除中…"
+                  : "永久刪除班級"}
+              </button>
             </section>
 
             {classItem.note && (
