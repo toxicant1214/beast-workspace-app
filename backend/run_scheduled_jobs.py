@@ -25,6 +25,7 @@ from send_task_reminders import (
 from send_teacher_daily_summary import (
     build_teacher_daily_summary,
     get_active_line_teachers,
+    get_today_cleaning_by_teacher_id,
     get_today_makeups_by_teacher_id,
 )
 
@@ -213,6 +214,10 @@ def send_teacher_reports_if_due(
     每位老師只取得：
     1. 自己兩週內或已逾期的老師任務
     2. notify_teacher_id 指定給自己的今日補課
+    3. 自己今天的清潔任務
+
+    即使今天沒有被安排清潔，
+    晨報仍會顯示維持環境整潔提醒。
 
     老師手動查詢全部自己的任務不受影響。
     不會查詢主管個人待辦。
@@ -297,6 +302,13 @@ def send_teacher_reports_if_due(
                 )
             )
 
+            cleaning_tasks = (
+                get_today_cleaning_by_teacher_id(
+                    teacher_id,
+                    today_date,
+                )
+            )
+
             delivery = (
                 claim_notification_delivery(
                     source_type=(
@@ -340,6 +352,9 @@ def send_teacher_reports_if_due(
                             assignments
                         ),
                         makeups=makeups,
+                        cleaning_tasks=(
+                            cleaning_tasks
+                        ),
                         today=now,
                     )
                 )

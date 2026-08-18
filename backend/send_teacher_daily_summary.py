@@ -105,6 +105,104 @@ def get_today_makeups_by_teacher_id(
     return response.data or []
 
 
+def get_today_cleaning_by_teacher_id(
+    teacher_id,
+    today_date,
+):
+    """
+    取得指定老師今天的清潔任務。
+
+    cleaning_tasks 底層仍保留每位老師自己的任務，
+    因此公共輪值、固定專責、共同任務都可以直接
+    依 teacher_id + task_date 查詢。
+    """
+
+    task_response = (
+        supabase
+        .table("cleaning_tasks")
+        .select(
+            """
+            id,
+            cleaning_item_id,
+            cleaning_rule_id,
+            teacher_id,
+            task_date,
+            status,
+            note
+            """
+        )
+        .eq(
+            "teacher_id",
+            teacher_id,
+        )
+        .eq(
+            "task_date",
+            today_date,
+        )
+        .execute()
+    )
+
+    tasks = task_response.data or []
+
+    if not tasks:
+        return []
+
+    item_ids = list(
+        dict.fromkeys(
+            task.get("cleaning_item_id")
+            for task in tasks
+            if task.get("cleaning_item_id")
+        )
+    )
+
+    item_map = {}
+
+    if item_ids:
+        item_response = (
+            supabase
+            .table("cleaning_items")
+            .select(
+                """
+                id,
+                name
+                """
+            )
+            .in_(
+                "id",
+                item_ids,
+            )
+            .execute()
+        )
+
+        item_map = {
+            item["id"]: item
+            for item in (
+                item_response.data
+                or []
+            )
+        }
+
+    result = []
+
+    for task in tasks:
+        item = item_map.get(
+            task.get(
+                "cleaning_item_id"
+            )
+        ) or {}
+
+        result.append(
+            {
+                **task,
+                "cleaning_item_name":
+                    item.get("name")
+                    or "清潔工作",
+            }
+        )
+
+    return result
+
+
 def format_time(time_string):
     if not time_string:
         return ""
@@ -156,6 +254,7 @@ def build_teacher_daily_summary(
     teacher,
     assignments,
     makeups,
+    cleaning_tasks,
     today,
 ):
     teacher_name = (
@@ -278,6 +377,30 @@ def build_teacher_daily_summary(
             "今天沒有補課安排。"
         )
 
+    lines.extend(
+        [
+            "",
+            "🧹 今日清潔",
+        ]
+    )
+
+    if cleaning_tasks:
+        for task in cleaning_tasks:
+            item_name = (
+                task.get(
+                    "cleaning_item_name"
+                )
+                or "清潔工作"
+            )
+
+            lines.append(
+                f"・{item_name}"
+            )
+    else:
+        lines.append(
+            "今日無輪值，請協助維持教室與個人區域整潔。"
+        )
+
     return "\n".join(lines)
 
 
@@ -321,11 +444,21 @@ def main():
             )
         )
 
+        cleaning_tasks = (
+            get_today_cleaning_by_teacher_id(
+                teacher_id,
+                today_date,
+            )
+        )
+
         message = (
             build_teacher_daily_summary(
                 teacher=teacher,
                 assignments=assignments,
                 makeups=makeups,
+                cleaning_tasks=(
+                    cleaning_tasks
+                ),
                 today=now,
             )
         )
