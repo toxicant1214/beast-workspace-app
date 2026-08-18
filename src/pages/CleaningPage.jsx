@@ -1179,6 +1179,59 @@ async function refreshSemesterStatus(
     )}`;
   }
 
+  function groupTasksForCalendar(tasks, includeTeacher = true) {
+    if (!includeTeacher) {
+      return tasks.map((task) => ({
+        key: task.id,
+        task,
+        label: getVisibleTaskText(task, false),
+        isOwnAreaGroup: false,
+      }));
+    }
+
+    const grouped = [];
+    const ownAreaMap = new Map();
+
+    tasks.forEach((task) => {
+      const rule = rules.find(
+        (item) => item.id === task.cleaning_rule_id
+      );
+
+      if (rule?.assignment_scope === "OWN_AREA") {
+        const key = [
+          task.task_date,
+          task.cleaning_rule_id,
+          task.cleaning_item_id,
+        ].join("|");
+
+        if (!ownAreaMap.has(key)) {
+          ownAreaMap.set(key, {
+            key,
+            task,
+            label: `共同任務｜${
+              itemMap.get(task.cleaning_item_id)?.name || "清潔工作"
+            }`,
+            isOwnAreaGroup: true,
+            memberCount: 0,
+          });
+          grouped.push(ownAreaMap.get(key));
+        }
+
+        ownAreaMap.get(key).memberCount += 1;
+        return;
+      }
+
+      grouped.push({
+        key: task.id,
+        task,
+        label: getVisibleTaskText(task, true),
+        isOwnAreaGroup: false,
+      });
+    });
+
+    return grouped;
+  }
+
   function exportCalendarImage(mode = "CURRENT") {
     const exportTeacherId =
       mode === "MY"
@@ -1203,6 +1256,15 @@ async function refreshSemesterStatus(
       if (!taskMap.has(task.task_date)) taskMap.set(task.task_date, []);
       taskMap.get(task.task_date).push(task);
     });
+
+    if (includeTeacher) {
+      for (const [dateString, tasks] of taskMap.entries()) {
+        taskMap.set(
+          dateString,
+          groupTasksForCalendar(tasks, true)
+        );
+      }
+    }
 
     const width = 1540;
     const sidePadding = 56;
@@ -1308,13 +1370,25 @@ async function refreshSemesterStatus(
         }
 
         context.textAlign = "left";
-        tasks.forEach((task, taskIndex) => {
+        tasks.forEach((entry, taskIndex) => {
           context.fillStyle = "#46564d";
           context.font = "500 15px system-ui, -apple-system, sans-serif";
-          const raw = getVisibleTaskText(task, includeTeacher);
+
+          const raw = includeTeacher
+            ? entry.label
+            : getVisibleTaskText(entry, false);
+
           const maxChars = includeTeacher ? 16 : 20;
-          const text = raw.length > maxChars ? `${raw.slice(0, maxChars - 1)}…` : raw;
-          context.fillText(text, x + 14, y + 60 + taskIndex * 28);
+          const text =
+            raw.length > maxChars
+              ? `${raw.slice(0, maxChars - 1)}…`
+              : raw;
+
+          context.fillText(
+            text,
+            x + 14,
+            y + 60 + taskIndex * 28
+          );
         });
       }
 
@@ -1648,10 +1722,17 @@ async function refreshSemesterStatus(
                   {calendarCells.map((cell) => {
                     const tasks = visibleTasksByDate.get(cell.dateString) || [];
                     const override = overrideMap.get(cell.dateString);
-                    const visibleTasks = tasks.slice(0, MAX_VISIBLE_TASKS_PER_DAY);
+                    const displayTasks = groupTasksForCalendar(
+                      tasks,
+                      !activeViewTeacherId
+                    );
+                    const visibleTasks = displayTasks.slice(
+                      0,
+                      MAX_VISIBLE_TASKS_PER_DAY
+                    );
                     const hiddenCount = Math.max(
                       0,
-                      tasks.length - MAX_VISIBLE_TASKS_PER_DAY
+                      displayTasks.length - MAX_VISIBLE_TASKS_PER_DAY
                     );
                     const isToday = cell.dateString === getTodayDateString();
                     const isWeekend = cell.weekday === 0 || cell.weekday === 6;
@@ -1698,26 +1779,42 @@ async function refreshSemesterStatus(
                         )}
 
                         <div className="cleaningCalendarDay__tasks">
-                          {visibleTasks.map((task) => (
+                          {visibleTasks.map((entry) => (
                             <div
-                              key={task.id}
+                              key={entry.key}
                               className={
-                                task.status === "DONE"
+                                entry.task.status === "DONE"
                                   ? "cleaningCalendarTask is-done"
                                   : "cleaningCalendarTask"
                               }
                             >
-                              <span>
-                                {itemMap.get(task.cleaning_item_id)?.name ||
-                                  "清潔工作"}
-                              </span>
+                              {entry.isOwnAreaGroup ? (
+                                <>
+                                  <span>共同任務</span>
+                                  <b>
+                                    {itemMap.get(
+                                      entry.task.cleaning_item_id
+                                    )?.name || "清潔工作"}
+                                  </b>
+                                </>
+                              ) : (
+                                <>
+                                  <span>
+                                    {itemMap.get(
+                                      entry.task.cleaning_item_id
+                                    )?.name || "清潔工作"}
+                                  </span>
 
-                              {!activeViewTeacherId && (
-                                <b>
-                                  {getTeacherName(
-                                    teacherMap.get(task.teacher_id)
+                                  {!activeViewTeacherId && (
+                                    <b>
+                                      {getTeacherName(
+                                        teacherMap.get(
+                                          entry.task.teacher_id
+                                        )
+                                      )}
+                                    </b>
                                   )}
-                                </b>
+                                </>
                               )}
                             </div>
                           ))}
