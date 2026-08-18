@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import AddStudentsToClassDrawer from "./AddStudentsToClassDrawer";
+import AttendanceSheetModal from "./AttendanceSheetModal";
 
 function formatDate(dateString) {
   if (!dateString) return "未設定";
@@ -19,6 +20,7 @@ function getTodayString() {
 
 function ClassDetailDrawer({ classItem, onClose, onEdit }) {
   const [isAddStudentsOpen, setIsAddStudentsOpen] = useState(false);
+  const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
   const [classStudents, setClassStudents] = useState([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const [activeMenuId, setActiveMenuId] = useState(null);
@@ -336,9 +338,18 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
                   <h3>班級資訊</h3>
                 </div>
 
-                <button type="button" onClick={() => onEdit(classItem)}>
-                  編輯
-                </button>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsAttendanceOpen(true)}
+                  >
+                    產出點名表
+                  </button>
+
+                  <button type="button" onClick={() => onEdit(classItem)}>
+                    編輯
+                  </button>
+                </div>
               </div>
 
               <div className="classDetailDrawer__infoGrid">
@@ -496,6 +507,13 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
           classItem={classItem}
           onClose={closeAddStudents}
           onAdded={handleStudentsAdded}
+        />
+      )}
+
+      {isAttendanceOpen && (
+        <AttendanceSheetModal
+          classItem={classItem}
+          onClose={() => setIsAttendanceOpen(false)}
         />
       )}
     </>
