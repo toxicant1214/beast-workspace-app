@@ -284,37 +284,112 @@
 
 @media print {
   html,
-  body {
+  body,
+  #root {
+    width: 297mm !important;
+    height: 210mm !important;
+    min-width: 297mm !important;
+    min-height: 210mm !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: hidden !important;
     background: #fff !important;
   }
 
-  body * {
-    visibility: hidden !important;
+  /*
+   * 列印時不要用 visibility 隱藏。
+   * visibility 仍會保留原本版面高度，
+   * Safari 可能因此算出第二頁。
+   */
+  #root > * {
+    display: none !important;
   }
 
-  .attendanceSheet,
-  .attendanceSheet * {
-    visibility: visible !important;
+  /*
+   * React 頁面本身被隱藏後，
+   * 只把點名表 Modal 重新顯示為固定列印層。
+   */
+  .attendanceModal__backdrop {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    overflow: hidden !important;
   }
 
-  .attendanceSheet {
-    position: fixed;
-    inset: 0;
-    width: 297mm;
-    height: 210mm;
-    min-height: 210mm;
-    margin: 0;
-    padding: 7mm;
-    box-shadow: none;
-    overflow: hidden;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+  .attendanceModal {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
   }
 
   .attendanceModal__toolbar,
   .attendanceModal__error {
     display: none !important;
+  }
+
+  .attendanceModal__previewWrap {
+    display: block !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .attendanceSheet {
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+
+    /*
+     * 保留少量安全邊界，避免不同瀏覽器／印表機
+     * 因硬體不可列印區而把最後幾毫米推到第二頁。
+     */
+    width: 291mm !important;
+    height: 204mm !important;
+    min-height: 204mm !important;
+
+    margin: 3mm !important;
+    padding: 5mm !important;
+
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .attendanceSheet__table {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .attendanceSheet__table tr,
+  .attendanceSheet__table td,
+  .attendanceSheet__table th {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }

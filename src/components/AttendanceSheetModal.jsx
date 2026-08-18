@@ -589,7 +589,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
         )}
 
         <div className="attendanceModal__previewWrap">
-          <article className="attendanceSheet">
+          <article className="attendanceSheet" id="attendance-print-sheet">
             <div className="attendanceSheet__brand">
               倍思學院
             </div>
