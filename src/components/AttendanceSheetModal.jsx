@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
+import html2canvas from "html2canvas";
 import "./AttendanceSheetModal.css";
 
 function pad2(value) {
@@ -457,8 +458,131 @@ function AttendanceSheetModal({ classItem, onClose }) {
     );
   }
 
-  function printSheet() {
-    window.print();
+  async function exportAttendanceImage() {
+    const sheet = document.getElementById(
+      "attendance-print-sheet"
+    );
+
+    if (!sheet) {
+      window.alert(
+        "找不到點名表內容，請重新開啟後再試一次。"
+      );
+      return;
+    }
+
+    try {
+      const sourceCanvas =
+        await html2canvas(
+          sheet,
+          {
+            backgroundColor:
+              "#ffffff",
+            scale: 2,
+            useCORS: true,
+            logging: false,
+          }
+        );
+
+      /*
+       * 固定輸出 A4 橫式比例：
+       * 3508 × 2480 px（約 300 DPI 比例）
+       *
+       * 不直接下載 html2canvas 原圖，
+       * 避免 DOM 實際尺寸稍有誤差，
+       * 最後仍統一塞進標準 A4 畫布。
+       */
+      const finalCanvas =
+        document.createElement(
+          "canvas"
+        );
+
+      finalCanvas.width = 3508;
+      finalCanvas.height = 2480;
+
+      const context =
+        finalCanvas.getContext(
+          "2d"
+        );
+
+      context.fillStyle =
+        "#ffffff";
+
+      context.fillRect(
+        0,
+        0,
+        finalCanvas.width,
+        finalCanvas.height
+      );
+
+      const safeMargin = 36;
+
+      const availableWidth =
+        finalCanvas.width -
+        safeMargin * 2;
+
+      const availableHeight =
+        finalCanvas.height -
+        safeMargin * 2;
+
+      const scale = Math.min(
+        availableWidth /
+          sourceCanvas.width,
+        availableHeight /
+          sourceCanvas.height
+      );
+
+      const drawWidth =
+        sourceCanvas.width *
+        scale;
+
+      const drawHeight =
+        sourceCanvas.height *
+        scale;
+
+      const drawX =
+        (
+          finalCanvas.width -
+          drawWidth
+        ) / 2;
+
+      const drawY =
+        (
+          finalCanvas.height -
+          drawHeight
+        ) / 2;
+
+      context.drawImage(
+        sourceCanvas,
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight
+      );
+
+      const link =
+        document.createElement(
+          "a"
+        );
+
+      link.download =
+        `${classItem.class_name}_${year}年${month}月_點名表.png`;
+
+      link.href =
+        finalCanvas.toDataURL(
+          "image/png"
+        );
+
+      link.click();
+    } catch (error) {
+      console.error(
+        "產出點名表圖檔失敗：",
+        error
+      );
+
+      window.alert(
+        `產出點名表圖檔失敗：${error.message}`
+      );
+    }
   }
 
   return (
@@ -562,13 +686,13 @@ function AttendanceSheetModal({ classItem, onClose }) {
             <button
               type="button"
               onClick={
-                printSheet
+                exportAttendanceImage
               }
               disabled={
                 loading
               }
             >
-              列印 A4
+              產出 A4 圖檔
             </button>
 
             <button
