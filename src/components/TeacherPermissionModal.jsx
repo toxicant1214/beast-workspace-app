@@ -67,7 +67,8 @@ const PERMISSION_MODULES = [
   {
     key: "cleaning",
     label: "清潔分配",
-    description: "老師清潔工作與輪值安排",
+    description: "僅查看月清潔表與今日清潔",
+    viewOnly: true,
   },
   {
     key: "score_analysis",
@@ -101,6 +102,17 @@ const EDIT_ONLY_LEVEL_OPTIONS = [
   {
     value: "edit",
     label: "可編輯",
+  },
+];
+
+const VIEW_ONLY_LEVEL_OPTIONS = [
+  {
+    value: "hidden",
+    label: "完全不顯示",
+  },
+  {
+    value: "view",
+    label: "僅查看",
   },
 ];
 
@@ -201,6 +213,13 @@ function TeacherPermissionModal({
             nextPermissions[
               row.module_key
             ] = "hidden";
+          } else if (
+            module?.viewOnly &&
+            storedLevel === "edit"
+          ) {
+            nextPermissions[
+              row.module_key
+            ] = "view";
           } else {
             nextPermissions[
               row.module_key
@@ -268,6 +287,15 @@ function TeacherPermissionModal({
             ) {
               permissionLevel =
                 "hidden";
+            }
+
+            if (
+              module.viewOnly &&
+              permissionLevel ===
+                "edit"
+            ) {
+              permissionLevel =
+                "view";
             }
 
 
@@ -401,7 +429,9 @@ function TeacherPermissionModal({
                     const options =
                       module.editOnly
                         ? EDIT_ONLY_LEVEL_OPTIONS
-                        : LEVEL_OPTIONS;
+                        : module.viewOnly
+                          ? VIEW_ONLY_LEVEL_OPTIONS
+                          : LEVEL_OPTIONS;
 
 
                     return (

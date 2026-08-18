@@ -186,7 +186,11 @@ function getOverrideLabel(override) {
   );
 }
 
-function CleaningPage() {
+function CleaningPage({
+  currentTeacher,
+}) {
+  const isAdmin =
+    currentTeacher?.role === "admin";
   const [activeTab, setActiveTab] = useState("MONTH");
   const [items, setItems] = useState([]);
   const [rules, setRules] = useState([]);
@@ -233,6 +237,20 @@ const [monthTasks, setMonthTasks] = useState([]);
   const [currentTeacherId, setCurrentTeacherId] = useState("");
   const [monthOverrides, setMonthOverrides] = useState([]);
   const [expandedDate, setExpandedDate] = useState("");
+
+  useEffect(() => {
+    if (
+      !isAdmin &&
+      !["MONTH", "TODAY"].includes(
+        activeTab
+      )
+    ) {
+      setActiveTab("MONTH");
+    }
+  }, [
+    isAdmin,
+    activeTab,
+  ]);
 
   useEffect(() => {
   loadData();
@@ -1468,9 +1486,13 @@ async function refreshSemesterStatus(
         {[
           ["MONTH", "月清潔表"],
           ["TODAY", "今日清潔"],
-          ["ITEMS", "清潔項目"],
-          ["RULES", "固定規則"],
-          ["TEACHERS", "老師設定"],
+          ...(isAdmin
+            ? [
+                ["ITEMS", "清潔項目"],
+                ["RULES", "固定規則"],
+                ["TEACHERS", "老師設定"],
+              ]
+            : []),
         ].map(([key, label]) => (
           <button
             key={key}
@@ -1567,21 +1589,23 @@ async function refreshSemesterStatus(
                 )}
               </div>
 
-              <button
-                type="button"
-                className="primary"
-                onClick={handleGenerateSemester}
-                disabled={
-                  !selectedSemesterId ||
-                  generatingSemester
-                }
-              >
-                {generatingSemester
-                  ? "排班中…"
-                  : semesterStatus.generated
-                    ? "更新本學期排班"
-                    : "產生本學期排班"}
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={handleGenerateSemester}
+                  disabled={
+                    !selectedSemesterId ||
+                    generatingSemester
+                  }
+                >
+                  {generatingSemester
+                    ? "排班中…"
+                    : semesterStatus.generated
+                      ? "更新本學期排班"
+                      : "產生本學期排班"}
+                </button>
+              )}
             </div>
 
             <div className="cleaningMonth__toolbar">
@@ -1842,19 +1866,37 @@ async function refreshSemesterStatus(
                           </span>
                         </div>
 
-                        <select
-                          value={task.teacher_id || ""}
-                          disabled={reassigningTaskId === task.id}
-                          onChange={(event) =>
-                            handleReassignTask(task.id, event.target.value)
-                          }
-                        >
-                          {teachers.map((teacher) => (
-                            <option key={teacher.id} value={teacher.id}>
-                              {getTeacherName(teacher)}
-                            </option>
-                          ))}
-                        </select>
+                        {isAdmin ? (
+                          <select
+                            value={task.teacher_id || ""}
+                            disabled={
+                              reassigningTaskId === task.id
+                            }
+                            onChange={(event) =>
+                              handleReassignTask(
+                                task.id,
+                                event.target.value
+                              )
+                            }
+                          >
+                            {teachers.map((teacher) => (
+                              <option
+                                key={teacher.id}
+                                value={teacher.id}
+                              >
+                                {getTeacherName(teacher)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span>
+                            {getTeacherName(
+                              teacherMap.get(
+                                task.teacher_id
+                              )
+                            )}
+                          </span>
+                        )}
                       </article>
                     ))}
                   </div>
