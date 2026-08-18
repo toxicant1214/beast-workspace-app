@@ -253,9 +253,9 @@ const [monthTasks, setMonthTasks] = useState([]);
   ]);
 
   useEffect(() => {
-  loadData();
-  loadSemesters();
-}, []);
+    loadData();
+    loadSemesters();
+  }, [currentTeacher?.id]);
 
   useEffect(() => {
     loadMonth();
@@ -431,7 +431,9 @@ async function refreshSemesterStatus(
           .from("cleaning_rule_members")
           .select("*")
           .order("sort_order", { ascending: true }),
-        supabase.from("teachers").select("*"),
+        supabase
+          .from("cleaning_teacher_directory")
+          .select("id, chinese_name, english_name"),
         supabase.from("cleaning_teacher_settings").select("*"),
       ]);
 
@@ -446,43 +448,21 @@ async function refreshSemesterStatus(
       setRuleMembers(membersResult.data || []);
       setTeacherSettings(settingsResult.data || []);
 
-      const teacherRows = (teachersResult.data || []).filter((teacher) => {
-        if (teacher.is_active === false) return false;
-
-        const status = String(
-          teacher.status ||
-            teacher.teacher_status ||
-            teacher.employment_status ||
-            ""
-        ).toUpperCase();
-
-        return !["INACTIVE", "RESIGNED", "LEFT"].includes(status);
-      });
+      const teacherRows =
+        teachersResult.data || [];
 
       setTeachers(
-        teacherRows.sort((a, b) =>
-          getTeacherName(a).localeCompare(getTeacherName(b), "zh-Hant")
+        [...teacherRows].sort((a, b) =>
+          getTeacherName(a).localeCompare(
+            getTeacherName(b),
+            "zh-Hant"
+          )
         )
       );
 
-
-      const { data: authData } = await supabase.auth.getUser();
-      const authUser = authData?.user || null;
-
-      if (authUser) {
-        const matchedTeacher = teacherRows.find((teacher) =>
-          [
-            teacher.auth_user_id,
-            teacher.user_id,
-            teacher.profile_id,
-          ].filter(Boolean).includes(authUser.id) ||
-          (teacher.email &&
-            authUser.email &&
-            teacher.email.toLowerCase() === authUser.email.toLowerCase())
-        );
-
-        setCurrentTeacherId(matchedTeacher?.id || "");
-      }
+      setCurrentTeacherId(
+        currentTeacher?.id || ""
+      );
     } catch (error) {
       console.error("讀取清潔資料失敗：", error);
       setErrorMessage(`讀取清潔資料失敗：${error.message}`);
