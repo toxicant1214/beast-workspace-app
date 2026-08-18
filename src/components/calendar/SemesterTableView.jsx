@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { toPng } from "html-to-image";
 
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
@@ -32,6 +33,14 @@ const WORK_COLUMNS = [
     allowQuickAdd: true,
   },
 ];
+
+const EXPORT_CATEGORY_LABELS = {
+  SCHOOL: "學校",
+  ADMIN: "行政",
+  ACADEMIC: "學科",
+  CLASSROOM: "教室",
+  SOCIAL: "發文",
+};
 
 
 const EVENT_TYPE_LABELS = {
@@ -176,6 +185,55 @@ function formatInlineDate(
 }
 
 
+function formatExportDateRange(
+  eventItem
+) {
+  const start =
+    formatInlineDate(
+      eventItem.start_date
+    );
+
+  const end =
+    eventItem.end_date
+      ? formatInlineDate(
+          eventItem.end_date
+        )
+      : "";
+
+  if (
+    !end ||
+    end === start
+  ) {
+    return start;
+  }
+
+  return `${start}–${end}`;
+}
+
+
+function getExportWeekDateRange(
+  week
+) {
+  const first =
+    week.days?.[0];
+
+  const last =
+    week.days?.[
+      week.days.length - 1
+    ];
+
+  if (!first || !last) {
+    return "";
+  }
+
+  return `${
+    first.getMonth() + 1
+  }/${first.getDate()}–${
+    last.getMonth() + 1
+  }/${last.getDate()}`;
+}
+
+
 function isSameDate(
   dateA,
   dateB
@@ -204,6 +262,159 @@ function buildSemesterWeeks(
     parseLocalDate(
       endDateString
     );
+
+
+  async function exportSemesterOverviewPng() {
+    if (exportingImage) {
+      return;
+    }
+
+    const exportNode =
+      document.getElementById(
+        `semester-export-${semesterId}`
+      );
+
+    if (!exportNode) {
+      setEventError(
+        "找不到學期總表輸出版面，請重新整理後再試。"
+      );
+      return;
+    }
+
+    try {
+      setExportingImage(true);
+      setEventError("");
+
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
+      const rawDataUrl =
+        await toPng(
+          exportNode,
+          {
+            cacheBust: true,
+            pixelRatio: 2,
+            backgroundColor:
+              "#fffdf9",
+          }
+        );
+
+      const image =
+        new Image();
+
+      await new Promise(
+        (
+          resolve,
+          reject
+        ) => {
+          image.onload =
+            resolve;
+          image.onerror =
+            reject;
+          image.src =
+            rawDataUrl;
+        }
+      );
+
+      const canvas =
+        document.createElement(
+          "canvas"
+        );
+
+      canvas.width = 2480;
+      canvas.height = 3508;
+
+      const context =
+        canvas.getContext(
+          "2d"
+        );
+
+      context.fillStyle =
+        "#fffdf9";
+
+      context.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      const safeMargin = 42;
+
+      const availableWidth =
+        canvas.width -
+        safeMargin * 2;
+
+      const availableHeight =
+        canvas.height -
+        safeMargin * 2;
+
+      const scale =
+        Math.min(
+          availableWidth /
+            image.width,
+          availableHeight /
+            image.height
+        );
+
+      const drawWidth =
+        image.width *
+        scale;
+
+      const drawHeight =
+        image.height *
+        scale;
+
+      const drawX =
+        (
+          canvas.width -
+          drawWidth
+        ) / 2;
+
+      const drawY =
+        (
+          canvas.height -
+          drawHeight
+        ) / 2;
+
+      context.drawImage(
+        image,
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight
+      );
+
+      const downloadLink =
+        document.createElement(
+          "a"
+        );
+
+      downloadLink.download =
+        `${semesterName || "學期"}_行事總表_A4直式.png`;
+
+      downloadLink.href =
+        canvas.toDataURL(
+          "image/png"
+        );
+
+      downloadLink.click();
+    } catch (error) {
+      console.error(
+        "輸出學期總表圖檔失敗：",
+        error
+      );
+
+      setEventError(
+        error?.message
+          ? `輸出圖檔失敗：${error.message}`
+          : "輸出圖檔失敗，請稍後再試。"
+      );
+    } finally {
+      setExportingImage(false);
+    }
+  }
 
 
   if (
@@ -436,6 +647,12 @@ function SemesterTableView({
     expandedCells,
     setExpandedCells,
   ] = useState({});
+
+
+  const [
+    exportingImage,
+    setExportingImage,
+  ] = useState(false);
 
 
   const semesterStart =
@@ -968,8 +1185,26 @@ function SemesterTableView({
         </div>
 
 
-        <div className="semester-table-view__summary">
-          共 {weeks.length} 週
+        <div className="semester-table-view__headerActions">
+          <div className="semester-table-view__summary">
+            共 {weeks.length} 週
+          </div>
+
+          <button
+            type="button"
+            className="semester-table-export-button"
+            onClick={
+              exportSemesterOverviewPng
+            }
+            disabled={
+              exportingImage ||
+              loadingEvents
+            }
+          >
+            {exportingImage
+              ? "產出中…"
+              : "輸出 A4 直式圖檔"}
+          </button>
         </div>
       </header>
 
@@ -1244,31 +1479,6 @@ function SemesterTableView({
                                             eventItem.start_date
                                           )}
                                         </small>
-
-                                        {canEdit && (
-                                          <button
-                                            type="button"
-                                            className="semester-table-event__delete"
-                                            onClick={() =>
-                                              handleDeleteEvent(
-                                                eventItem
-                                              )
-                                            }
-                                            disabled={
-                                              deletingEventId ===
-                                              eventItem.id
-                                            }
-                                            aria-label={`刪除 ${getEventTitle(
-                                              eventItem
-                                            )}`}
-                                            title="刪除"
-                                          >
-                                            {deletingEventId ===
-                                            eventItem.id
-                                              ? "…"
-                                              : "×"}
-                                          </button>
-                                        )}
                                       </div>
                                     </div>
 
@@ -1296,140 +1506,7 @@ function SemesterTableView({
                                   ? "收合"
                                   : `＋${hiddenEventCount} 項`}
                               </button>
-                            )}
-
-
-                            {isQuickAdding ? (
-                              <form
-                                className="semester-quick-add"
-                                onSubmit={
-                                  handleQuickAddSubmit
-                                }
-                              >
-                                <input
-                                  type="text"
-                                  name="title"
-                                  value={
-                                    quickAdd.title
-                                  }
-                                  onChange={
-                                    handleQuickAddChange
-                                  }
-                                  placeholder="輸入事項名稱"
-                                  autoFocus
-                                  disabled={
-                                    quickAddSaving
-                                  }
-                                />
-
-
-                                <input
-                                  type="date"
-                                  name="date"
-                                  value={
-                                    quickAdd.date
-                                  }
-                                  min={
-                                    week.startDate <
-                                    startDate
-                                      ? startDate
-                                      : week.startDate
-                                  }
-                                  max={
-                                    week.endDate >
-                                    endDate
-                                      ? endDate
-                                      : week.endDate
-                                  }
-                                  onChange={
-                                    handleQuickAddChange
-                                  }
-                                  disabled={
-                                    quickAddSaving
-                                  }
-                                />
-
-
-                                {quickAdd.category === "SCHOOL" && (
-                                  <select
-                                    name="schoolId"
-                                    value={
-                                      quickAdd.schoolId
-                                    }
-                                    onChange={
-                                      handleQuickAddChange
-                                    }
-                                    disabled={
-                                      quickAddSaving
-                                    }
-                                  >
-                                    <option value="ALL">
-                                      全部學校
-                                    </option>
-
-                                    {semesterSchools.map(
-                                      (school) => (
-                                        <option
-                                          key={
-                                            school.id
-                                          }
-                                          value={
-                                            school.id
-                                          }
-                                        >
-                                          {
-                                            school.name
-                                          }
-                                        </option>
-                                      )
-                                    )}
-                                  </select>
-                                )}
-
-
-                                 <div className="semester-quick-add__actions">
-                                  <button
-                                    type="button"
-                                    onClick={
-                                      closeQuickAdd
-                                    }
-                                    disabled={
-                                      quickAddSaving
-                                    }
-                                  >
-                                    取消
-                                  </button>
-
-                                  <button
-                                    type="submit"
-                                    disabled={
-                                      quickAddSaving
-                                    }
-                                  >
-                                    {quickAddSaving
-                                      ? "儲存中…"
-                                      : "儲存"}
-                                  </button>
-                                </div>
-                              </form>
-                            ) : (
-                              canEdit &&
-                              column.allowQuickAdd && (
-                                <button
-                                  type="button"
-                                  className="semester-quick-add-button"
-                                  onClick={() =>
-                                    openQuickAdd(
-                                      week,
-                                      column.key
-                                    )
-                                  }
-                                >
-                                  ＋新增
-                                </button>
-                              )
-                            )}
-                          </div>
+                            )}                          </div>
                         </td>
                       );
                     }
@@ -1439,6 +1516,198 @@ function SemesterTableView({
             )}
           </tbody>
         </table>
+      </div>
+
+      <div
+        className="semester-export-stage"
+        aria-hidden="true"
+      >
+        <article
+          id={`semester-export-${semesterId}`}
+          className="semester-export-sheet"
+        >
+          <header className="semester-export-header">
+            <p>
+              BEAST ACADEMY · SEMESTER OVERVIEW
+            </p>
+
+            <h1>
+              倍思學院
+            </h1>
+
+            <h2>
+              {semesterName}
+              ｜學期行事總表
+            </h2>
+
+            <div className="semester-export-meta">
+              <span>
+                {formatShortDate(
+                  startDate
+                )}
+                －
+                {formatShortDate(
+                  endDate
+                )}
+              </span>
+
+              <span>
+                共 {weeks.length} 週
+              </span>
+            </div>
+          </header>
+
+          <div className="semester-export-weeks">
+            {weeks.map(
+              (week) => {
+                const exportWeekEvents =
+                  events
+                    .filter(
+                      (eventItem) =>
+                        eventOverlapsWeek(
+                          eventItem,
+                          week
+                        )
+                    )
+                    .slice()
+                    .sort(
+                      (a, b) => {
+                        const dateCompare =
+                          String(
+                            a.start_date ||
+                              ""
+                          ).localeCompare(
+                            String(
+                              b.start_date ||
+                                ""
+                            )
+                          );
+
+                        if (
+                          dateCompare !==
+                          0
+                        ) {
+                          return dateCompare;
+                        }
+
+                        return (
+                          WORK_COLUMNS.findIndex(
+                            (column) =>
+                              column.key ===
+                              (
+                                a.category ||
+                                "SCHOOL"
+                              )
+                          ) -
+                          WORK_COLUMNS.findIndex(
+                            (column) =>
+                              column.key ===
+                              (
+                                b.category ||
+                                "SCHOOL"
+                              )
+                          )
+                        );
+                      }
+                    );
+
+                return (
+                  <section
+                    key={`export-${week.weekNumber}`}
+                    className="semester-export-week"
+                  >
+                    <div className="semester-export-week__heading">
+                      <strong>
+                        第 {week.weekNumber} 週
+                      </strong>
+
+                      <span>
+                        {getExportWeekDateRange(
+                          week
+                        )}
+                      </span>
+
+                      {week.monthRowSpan >
+                        0 && (
+                        <em>
+                          {
+                            week.monthLabel
+                          }
+                        </em>
+                      )}
+                    </div>
+
+                    <div className="semester-export-week__events">
+                      {exportWeekEvents.length ===
+                      0 ? (
+                        <span className="semester-export-week__empty">
+                          本週無安排
+                        </span>
+                      ) : (
+                        exportWeekEvents.map(
+                          (
+                            eventItem
+                          ) => {
+                            const category =
+                              eventItem.category ||
+                              "SCHOOL";
+
+                            const schoolLabel =
+                              eventItem.applies_to_all_schools
+                                ? "全部學校"
+                                : schoolNames[
+                                    eventItem.school_id
+                                  ] ||
+                                  "";
+
+                            return (
+                              <div
+                                key={`export-event-${eventItem.id}`}
+                                className="semester-export-event"
+                              >
+                                <span className="semester-export-event__category">
+                                  {EXPORT_CATEGORY_LABELS[
+                                    category
+                                  ] ||
+                                    "事項"}
+                                </span>
+
+                                <strong>
+                                  {getEventTitle(
+                                    eventItem
+                                  )}
+                                </strong>
+
+                                <small>
+                                  {[
+                                    formatExportDateRange(
+                                      eventItem
+                                    ),
+                                    schoolLabel,
+                                  ]
+                                    .filter(
+                                      Boolean
+                                    )
+                                    .join(
+                                      "・"
+                                    )}
+                                </small>
+                              </div>
+                            );
+                          }
+                        )
+                      )}
+                    </div>
+                  </section>
+                );
+              }
+            )}
+          </div>
+
+          <footer className="semester-export-footer">
+            倍思學院｜{semesterName}
+          </footer>
+        </article>
       </div>
     </section>
   );

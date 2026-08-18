@@ -2354,3 +2354,209 @@ background 0.15s ease;
   cursor: not-allowed;
   opacity: 0.55;
 }
+/* =========================================================
+   學期總表：A4 直式圖檔輸出專用樣式
+   只需加在原本 calendar.css 最底下
+   ========================================================= */
+
+.semester-table-view__headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.semester-table-export-button {
+  min-height: 34px;
+  border: 1px solid #514940;
+  border-radius: 9px;
+  background: #514940;
+  padding: 0 12px;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.semester-table-export-button:hover:not(:disabled) {
+  background: #3c352f;
+}
+
+.semester-table-export-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/*
+ * html-to-image 需要這份 DOM 真正存在並具有尺寸，
+ * 因此不使用 display:none，而是移到畫面外。
+ */
+.semester-export-stage {
+  position: fixed;
+  z-index: -9999;
+  top: 0;
+  left: -10000px;
+  width: 794px;
+  pointer-events: none;
+}
+
+.semester-export-sheet {
+  width: 794px;
+  min-height: 1123px;
+  box-sizing: border-box;
+  background: #fffdf9;
+  padding: 34px 36px 28px;
+  color: #37322d;
+  font-family: "Iansui", "芫荽", sans-serif;
+}
+
+.semester-export-header {
+  border-bottom: 2px solid #5a5148;
+  padding-bottom: 14px;
+  text-align: center;
+}
+
+.semester-export-header p {
+  margin: 0 0 5px;
+  color: #8a7f73;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.semester-export-header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.semester-export-header h2 {
+  margin: 5px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.semester-export-meta {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 7px;
+  color: #786e64;
+  font-size: 9px;
+}
+
+.semester-export-weeks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 9px;
+  margin-top: 14px;
+}
+
+.semester-export-week {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  min-height: 74px;
+  box-sizing: border-box;
+  border: 1px solid #d8d0c6;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.semester-export-week__heading {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  background: #f1ece5;
+  padding: 8px 7px;
+  text-align: center;
+}
+
+.semester-export-week__heading strong {
+  font-size: 10px;
+}
+
+.semester-export-week__heading span {
+  color: #756b61;
+  font-size: 8px;
+}
+
+.semester-export-week__heading em {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  color: #9a8876;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.semester-export-week__events {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 7px;
+}
+
+.semester-export-week__empty {
+  color: #aaa197;
+  font-size: 8px;
+  text-align: center;
+}
+
+.semester-export-event {
+  display: grid;
+  grid-template-columns: 29px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.semester-export-event__category {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 15px;
+  border-radius: 4px;
+  background: #eee8df;
+  color: #6b6157;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.semester-export-event strong {
+  min-width: 0;
+  color: #443d36;
+  font-size: 8px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.semester-export-event small {
+  color: #8a8076;
+  font-size: 6.5px;
+  white-space: nowrap;
+}
+
+.semester-export-footer {
+  margin-top: 12px;
+  border-top: 1px solid #ddd5cb;
+  padding-top: 7px;
+  color: #958a7e;
+  font-size: 7px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .semester-table-view__headerActions {
+    justify-content: flex-start;
+  }
+}
