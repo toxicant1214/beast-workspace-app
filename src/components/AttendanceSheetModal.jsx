@@ -666,15 +666,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
                             )}
                           </small>
 
-                          {day.isHoliday && (
-                            <em
-                              title={
-                                day.holidayLabel
-                              }
-                            >
-                              {day.holidayLabel}
-                            </em>
-                          )}
+
                         </th>
                       )
                     )}
@@ -742,14 +734,38 @@ function AttendanceSheetModal({ classItem, onClose }) {
                             if (
                               day.isHoliday
                             ) {
+                              if (
+                                index !== 0
+                              ) {
+                                return null;
+                              }
+
+                              const verticalHolidayName =
+                                String(
+                                  day.holidayLabel ||
+                                    "休假"
+                                )
+                                  .split("")
+                                  .join("\n");
+
                               return (
                                 <td
                                   key={
                                     day.dateString
                                   }
-                                  className="is-holiday"
+                                  rowSpan={
+                                    students.length
+                                  }
+                                  className="attendanceSheet__holidayMerged"
+                                  title={
+                                    day.holidayLabel
+                                  }
                                 >
-                                  休
+                                  <span>
+                                    {
+                                      verticalHolidayName
+                                    }
+                                  </span>
                                 </td>
                               );
                             }

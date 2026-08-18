@@ -236,10 +236,25 @@
   color: #8d5149;
 }
 
-.attendanceSheet__table td.is-holiday {
-  font-weight: 700;
-  font-size: 8px;
+.attendanceSheet__holidayMerged {
+  background: #f3e8e5;
+  color: #8d5149;
+  padding: 0 !important;
+  text-align: center !important;
+  vertical-align: middle !important;
 }
+
+.attendanceSheet__holidayMerged span {
+  display: inline-block;
+  white-space: pre-line;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.55;
+  letter-spacing: 0.04em;
+}
+
+/* 假日學生區改為整欄合併，不再每格顯示「休」 */
 
 .attendanceSheet__table td.is-inactive {
   background: #f0f1ef;
