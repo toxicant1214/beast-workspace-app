@@ -184,6 +184,38 @@ function EnglishClassPage() {
     setDetailClass(null);
   }
 
+  async function toggleEnglishClassStatus(classItem) {
+    if (!classItem?.id) {
+      return;
+    }
+
+    const nextIsActive =
+      !classItem.is_active;
+
+    const { error } = await supabase
+      .from("english_classes")
+      .update({
+        is_active: nextIsActive,
+      })
+      .eq("id", classItem.id);
+
+    if (error) {
+      throw error;
+    }
+
+    setDetailClass((current) =>
+      current
+        ? {
+            ...current,
+            is_active:
+              nextIsActive,
+          }
+        : current
+    );
+
+    await loadEnglishClasses();
+  }
+
   async function deleteEnglishClass(classItem) {
     if (!classItem?.id) {
       return;
@@ -628,6 +660,9 @@ function EnglishClassPage() {
           }
           onDelete={
             deleteEnglishClass
+          }
+          onToggleStatus={
+            toggleEnglishClassStatus
           }
         />
       )}

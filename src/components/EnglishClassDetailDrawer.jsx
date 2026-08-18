@@ -35,6 +35,7 @@ function EnglishClassDetailDrawer({
   classItem,
   onClose,
   onDelete,
+  onToggleStatus,
 }) {
   const [isAddStudentsOpen, setIsAddStudentsOpen] =
     useState(false);
@@ -49,6 +50,9 @@ function EnglishClassDetailDrawer({
     useState(null);
 
   const [isDeletingClass, setIsDeletingClass] =
+    useState(false);
+
+  const [isChangingClassStatus, setIsChangingClassStatus] =
     useState(false);
 
   useEffect(() => {
@@ -125,6 +129,62 @@ function EnglishClassDetailDrawer({
     await loadClassStudents();
   }
 
+  async function toggleClassStatus() {
+    if (
+      !onToggleStatus ||
+      isChangingClassStatus
+    ) {
+      return;
+    }
+
+    const className =
+      classItem.class_name ||
+      "這個美語班";
+
+    const nextAction =
+      classItem.is_active
+        ? "停用"
+        : "重新啟用";
+
+    const confirmed =
+      window.confirm(
+        classItem.is_active
+          ? `確定要停用美語班「${className}」嗎？\n\n停用只會將班級標記為已停用，班級、學生編班、上課時段與相關歷程都會保留。之後仍可重新啟用。`
+          : `確定要重新啟用美語班「${className}」嗎？`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsChangingClassStatus(
+        true
+      );
+
+      await onToggleStatus(
+        classItem
+      );
+
+      window.alert(
+        `已${nextAction}美語班「${className}」。`
+      );
+    } catch (error) {
+      console.error(
+        `${nextAction}美語班失敗：`,
+        error
+      );
+
+      window.alert(
+        `${nextAction}美語班失敗：${error.message}`
+      );
+    } finally {
+      setIsChangingClassStatus(
+        false
+      );
+    }
+  }
+
   async function deleteClassPermanently() {
     if (!onDelete || isDeletingClass) {
       return;
@@ -136,7 +196,7 @@ function EnglishClassDetailDrawer({
 
     const firstConfirmed =
       window.confirm(
-        `確定要永久刪除美語班「${className}」嗎？\n\n刪除後：\n・班級資料會永久移除\n・每週上課時段會一併刪除\n・學生的美語班編班紀錄會一併刪除\n・既有補課紀錄會保留，但不再連結此美語班\n\n若只是暫時不使用這個班級，請取消並改用停用功能。`
+        `確定要永久刪除美語班「${className}」嗎？\n\n刪除後：\n・班級資料會永久移除\n・每週上課時段會一併刪除\n・學生的美語班編班紀錄會一併刪除\n・既有補課紀錄會保留，但不再連結此美語班`
       );
 
     if (!firstConfirmed) {
@@ -499,6 +559,60 @@ function EnglishClassDetailDrawer({
                   )}
                 </div>
               )}
+            </section>
+
+            <section className="englishClassDetail__section">
+              <div className="englishClassDetail__sectionHeading">
+                <p>CLASS STATUS</p>
+                <h3>班級狀態</h3>
+              </div>
+
+              <p
+                style={{
+                  margin: "0 0 14px",
+                  lineHeight: 1.7,
+                }}
+              >
+                目前狀態：
+                <strong>
+                  {classItem.is_active
+                    ? "啟用中"
+                    : "已停用"}
+                </strong>
+                。停用不會刪除任何班級、學生編班、時段或歷程資料。
+              </p>
+
+              <button
+                type="button"
+                onClick={
+                  toggleClassStatus
+                }
+                disabled={
+                  isChangingClassStatus
+                }
+                style={{
+                  width: "100%",
+                  minHeight: "44px",
+                  border: "1px solid #c9cec8",
+                  borderRadius: "12px",
+                  background: "#fff",
+                  fontWeight: 700,
+                  cursor:
+                    isChangingClassStatus
+                      ? "not-allowed"
+                      : "pointer",
+                  opacity:
+                    isChangingClassStatus
+                      ? 0.6
+                      : 1,
+                }}
+              >
+                {isChangingClassStatus
+                  ? "處理中…"
+                  : classItem.is_active
+                    ? "停用班級"
+                    : "重新啟用班級"}
+              </button>
             </section>
 
             <section
