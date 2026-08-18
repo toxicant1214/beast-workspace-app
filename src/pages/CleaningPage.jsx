@@ -8,7 +8,6 @@ import {
   getCleaningTasksForDate,
   reassignCleaningTask,
   saveCleaningTeacherSetting,
-  setCleaningTaskDone,
 } from "../services/cleaningService";
 import "./CleaningPage.css";
 
@@ -1029,17 +1028,6 @@ async function refreshSemesterStatus(
     }
   }
 
-  async function handleDone(task, isDone) {
-    try {
-      await setCleaningTaskDone(task.id, isDone);
-      await loadToday();
-      await loadMonth();
-    } catch (error) {
-      console.error("更新清潔任務失敗：", error);
-      setErrorMessage(`更新清潔任務失敗：${error.message}`);
-    }
-  }
-
   const selectedSemester = useMemo(
     () =>
       semesters.find(
@@ -1930,31 +1918,22 @@ async function refreshSemesterStatus(
             </div>
           ) : (
             <div className="cleaningTodayList">
-              {todayTasks.map((task) => (
-                <article key={task.id}>
+              {groupTasksForCalendar(todayTasks, true).map((entry) => (
+                <article key={entry.key}>
                   <div>
                     <strong>
-                      {itemMap.get(task.cleaning_item_id)?.name ||
+                      {itemMap.get(entry.task.cleaning_item_id)?.name ||
                         "清潔工作"}
                     </strong>
 
                     <span>
-                      {getTeacherName(
-                        teacherMap.get(task.teacher_id)
-                      )}
+                      {entry.isOwnAreaGroup
+                        ? "共同任務"
+                        : getTeacherName(
+                            teacherMap.get(entry.task.teacher_id)
+                          )}
                     </span>
                   </div>
-
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={task.status === "DONE"}
-                      onChange={(event) =>
-                        handleDone(task, event.target.checked)
-                      }
-                    />
-                    完成
-                  </label>
                 </article>
               ))}
             </div>
