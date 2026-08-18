@@ -154,28 +154,87 @@ function AttendanceSheetModal({ classItem, onClose }) {
         throw overridesResult.error;
       }
 
-      const monthStudents =
-        (
-          studentsResult.data ||
-          []
+      /*
+       * 同一位學生在同一班可能有多筆歷程
+       * （例如退出後重新加入）。
+       * 點名表先依 student_id 合併，
+       * 並保留所有加入／退出期間。
+       */
+      const membershipMap =
+        new Map();
+
+      (
+        studentsResult.data ||
+        []
+      )
+        .filter(
+          (row) =>
+            !row.left_at ||
+            row.left_at >=
+              startDate
         )
-          .filter(
-            (row) =>
-              !row.left_at ||
-              row.left_at >=
-                startDate
-          )
-          .sort(
-            (a, b) =>
-              getStudentChineseName(
-                a
-              ).localeCompare(
-                getStudentChineseName(
-                  b
-                ),
-                "zh-Hant"
-              )
+        .forEach((row) => {
+          const studentId =
+            row.student_id;
+
+          if (!studentId) {
+            return;
+          }
+
+          if (
+            !membershipMap.has(
+              studentId
+            )
+          ) {
+            membershipMap.set(
+              studentId,
+              {
+                ...row,
+                membershipPeriods:
+                  [],
+              }
+            );
+          }
+
+          const grouped =
+            membershipMap.get(
+              studentId
+            );
+
+          grouped.membershipPeriods.push(
+            {
+              joined_at:
+                row.joined_at ||
+                null,
+              left_at:
+                row.left_at ||
+                null,
+              status:
+                row.status ||
+                null,
+            }
           );
+
+          if (row.students) {
+            grouped.students =
+              row.students;
+          }
+        });
+
+      const monthStudents =
+        Array.from(
+          membershipMap.values()
+        ).sort(
+          (a, b) =>
+            getStudentChineseName(
+              a
+            ).localeCompare(
+              getStudentChineseName(
+                b
+              ),
+              "zh-Hant"
+            )
+        );
 
       const studentIds =
         monthStudents
@@ -841,19 +900,46 @@ function AttendanceSheetModal({ classItem, onClose }) {
                           (
                             day
                           ) => {
-                            const joined =
-                              !row.joined_at ||
-                              row.joined_at <=
-                                day.dateString;
-
-                            const notLeft =
-                              !row.left_at ||
-                              row.left_at >=
-                                day.dateString;
+                            const periods =
+                              Array.isArray(
+                                row.membershipPeriods
+                              ) &&
+                              row.membershipPeriods
+                                .length >
+                                0
+                                ? row.membershipPeriods
+                                : [
+                                    {
+                                      joined_at:
+                                        row.joined_at ||
+                                        null,
+                                      left_at:
+                                        row.left_at ||
+                                        null,
+                                    },
+                                  ];
 
                             const activeOnDate =
-                              joined &&
-                              notLeft;
+                              periods.some(
+                                (
+                                  period
+                                ) => {
+                                  const joined =
+                                    !period.joined_at ||
+                                    period.joined_at <=
+                                      day.dateString;
+
+                                  const notLeft =
+                                    !period.left_at ||
+                                    period.left_at >=
+                                      day.dateString;
+
+                                  return (
+                                    joined &&
+                                    notLeft
+                                  );
+                                }
+                              );
 
                             if (
                               day.isHoliday
@@ -905,9 +991,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
                                     : "is-inactive"
                                 }
                               >
-                                {activeOnDate
-                                  ? ""
-                                  : "—"}
+                                {""}
                               </td>
                             );
                           }
