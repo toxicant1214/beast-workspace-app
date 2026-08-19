@@ -598,3 +598,238 @@
     flex-direction: column;
   }
 }
+/* =========================================================
+   Camp Periods
+   追加到 src/components/camp/camp.css 最底下
+   ========================================================= */
+
+.campPeriodsPanel {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 28px;
+  color: #514a43;
+}
+
+.campPeriodsPanel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 20px;
+}
+
+.campPeriodsPanel__header h2 {
+  margin: 0;
+  color: #403a34;
+  font-size: 28px;
+}
+
+.campPeriodsPanel__header p:last-child {
+  margin: 7px 0 0;
+  color: #91857a;
+  font-size: 12px;
+}
+
+.campPeriodList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.campPeriodCard {
+  border: 1px solid #e1d8ce;
+  border-radius: 14px;
+  background: #fffdf9;
+  padding: 16px 18px;
+}
+
+.campPeriodCard__main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.campPeriodCard h3 {
+  margin: 0;
+  color: #443d36;
+  font-size: 18px;
+}
+
+.campPeriodCard__date {
+  margin: 7px 0 0;
+  color: #756b61;
+  font-size: 12px;
+}
+
+.campPeriodCard__note {
+  margin: 7px 0 0;
+  color: #988d83;
+  font-size: 11px;
+}
+
+.campPeriodCard__count {
+  min-width: 90px;
+  border-radius: 11px;
+  background: #f4eee6;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.campPeriodCard__count span {
+  display: block;
+  color: #8e8277;
+  font-size: 9px;
+}
+
+.campPeriodCard__count strong {
+  display: block;
+  margin-top: 3px;
+  color: #5b5147;
+  font-size: 15px;
+}
+
+.campPeriodCard__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+  border-top: 1px solid #eee6dd;
+  padding-top: 12px;
+}
+
+.campPrimaryButton--small,
+.campSecondaryButton--small {
+  padding: 7px 10px;
+  font-size: 10px;
+}
+
+.campDangerButton {
+  border: 0;
+  background: transparent;
+  padding: 7px 8px;
+  color: #a65f57;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.campModal--wide {
+  width: min(760px, 100%);
+}
+
+.campPeriodStudentsModal__sub {
+  margin: 5px 0 0;
+  color: #91867b;
+  font-size: 11px;
+}
+
+.campPeriodStudentsModal__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #ebe3da;
+  padding: 15px 20px;
+}
+
+.campPeriodStudentsModal__toolbar input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #ddd4ca;
+  border-radius: 10px;
+  background: #fff;
+  padding: 9px 11px;
+  color: #514940;
+  font: inherit;
+  font-size: 12px;
+}
+
+.campPeriodStudentsModal__toolbar > div {
+  display: flex;
+  gap: 6px;
+}
+
+.campPeriodStudentsModal__list {
+  max-height: 430px;
+  overflow-y: auto;
+  padding: 12px 20px;
+}
+
+.campPeriodStudentRow {
+  display: grid;
+  grid-template-columns: 24px 72px minmax(120px, 1fr) minmax(120px, 1.3fr);
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #eee7df;
+  padding: 10px 8px;
+  cursor: pointer;
+}
+
+.campPeriodStudentRow.is-selected {
+  background: #faf4eb;
+}
+
+.campPeriodStudentRow__grade {
+  color: #7d7166;
+  font-size: 10px;
+}
+
+.campPeriodStudentRow strong {
+  color: #4a423b;
+  font-size: 12px;
+}
+
+.campPeriodStudentRow__school {
+  color: #91867c;
+  font-size: 11px;
+}
+
+.campPeriodStudentsModal__empty {
+  padding: 45px 15px;
+  color: #9d9288;
+  text-align: center;
+  font-size: 12px;
+}
+
+.campPeriodStudentsModal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #e9e1d8;
+  padding: 15px 20px;
+}
+
+.campPeriodStudentsModal__footer > div {
+  display: flex;
+  gap: 8px;
+}
+
+.campPeriodStudentsModal__footer strong {
+  color: #5e544a;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .campPeriodsPanel {
+    padding: 20px;
+  }
+
+  .campPeriodsPanel__header,
+  .campPeriodCard__main,
+  .campPeriodStudentsModal__toolbar,
+  .campPeriodStudentsModal__footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .campPeriodStudentRow {
+    grid-template-columns: 24px 65px 1fr;
+  }
+
+  .campPeriodStudentRow__school {
+    grid-column: 3;
+  }
+}
