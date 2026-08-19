@@ -2812,3 +2812,47 @@ background 0.15s ease;
   font-size: 8px;
   text-align: center;
 }
+/* =========================================================
+   學期總表長圖：事件改為單行精簡顯示
+   追加到 calendar.css 最底下
+   ========================================================= */
+
+.semester-long-export-work-content {
+  gap: 2px;
+}
+
+.semester-long-export-event-line {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  min-width: 0;
+  padding: 1px 0;
+  color: #4f463d;
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.semester-long-export-event-line__date {
+  flex: 0 0 auto;
+  color: #7d7166;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.semester-long-export-event-line__divider,
+.semester-long-export-event-line__slash {
+  flex: 0 0 auto;
+  color: #a09284;
+}
+
+.semester-long-export-event-line__title {
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+
+.semester-long-export-event-line__school {
+  min-width: 0;
+  color: #81766b;
+  overflow-wrap: break-word;
+}

@@ -525,28 +525,36 @@ function SemesterExportView({
                                         key={
                                           eventItem.id
                                         }
-                                        className="semester-long-export-event"
+                                        className="semester-long-export-event-line"
                                       >
-                                        <div className="semester-long-export-event__heading">
-                                          <strong>
-                                            {getEventTitle(
-                                              eventItem
-                                            )}
-                                          </strong>
+                                        <span className="semester-long-export-event-line__date">
+                                          {
+                                            dateText
+                                          }
+                                        </span>
 
-                                          <small>
-                                            {
-                                              dateText
-                                            }
-                                          </small>
-                                        </div>
+                                        <span className="semester-long-export-event-line__divider">
+                                          ｜
+                                        </span>
+
+                                        <span className="semester-long-export-event-line__title">
+                                          {getEventTitle(
+                                            eventItem
+                                          )}
+                                        </span>
 
                                         {schoolLabel && (
-                                          <span>
-                                            {
-                                              schoolLabel
-                                            }
-                                          </span>
+                                          <>
+                                            <span className="semester-long-export-event-line__slash">
+                                              ／
+                                            </span>
+
+                                            <span className="semester-long-export-event-line__school">
+                                              {
+                                                schoolLabel
+                                              }
+                                            </span>
+                                          </>
                                         )}
                                       </div>
                                     );
