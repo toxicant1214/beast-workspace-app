@@ -1,94 +1,135 @@
 import { useState } from "react";
 import { toPng } from "html-to-image";
 
-const CATEGORY_LABELS = {
-  SCHOOL: "學校",
-  ADMIN: "行政",
-  ACADEMIC: "學科",
-  CLASSROOM: "教室",
-  SOCIAL: "發文",
+const WEEKDAY_LABELS = [
+  "一",
+  "二",
+  "三",
+  "四",
+  "五",
+  "六",
+  "日",
+];
+
+const WORK_COLUMNS = [
+  { key: "SCHOOL", label: "學校重要事務" },
+  { key: "ADMIN", label: "行政表單與固定事務" },
+  { key: "ACADEMIC", label: "學科事務安排" },
+  { key: "CLASSROOM", label: "教室活動安排" },
+  { key: "SOCIAL", label: "臉書發文排程" },
+];
+
+const EVENT_TYPE_LABELS = {
+  OPENING_DAY: "開學日",
+  MIDTERM_EXAM: "期中考",
+  FINAL_EXAM: "期末考",
+  EXAM: "考試",
+  SPORTS_DAY: "運動會",
+  SCHOOL_ANNIVERSARY: "校慶",
+  PARENT_MEETING: "親師活動",
+  GRADUATION: "畢業活動",
+  MOCK_EXAM: "模擬考",
+  EXAM_REVIEW: "考前複習",
+  REVIEW_WEEK: "複習週",
+  OTHER: "其他",
 };
 
+function parseLocalDate(dateString) {
+  if (!dateString) return null;
+
+  const [year, month, day] = String(dateString)
+    .split("-")
+    .map(Number);
+
+  if (!year || !month || !day) return null;
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    12,
+    0,
+    0
+  );
+}
+
 function formatShortDate(dateString) {
-  if (!dateString) return "";
+  const date = parseLocalDate(dateString);
 
-  const [year, month, day] =
-    String(dateString).split("-");
-
-  if (!year || !month || !day) {
-    return dateString;
+  if (!date) {
+    return "—";
   }
 
-  return `${year}/${month}/${day}`;
+  return `${date.getFullYear()}/${String(
+    date.getMonth() + 1
+  ).padStart(
+    2,
+    "0"
+  )}/${String(
+    date.getDate()
+  ).padStart(
+    2,
+    "0"
+  )}`;
 }
 
 function formatInlineDate(dateString) {
-  if (!dateString) return "";
+  const date = parseLocalDate(dateString);
 
-  const [, month, day] =
-    String(dateString).split("-");
-
-  if (!month || !day) {
-    return dateString;
-  }
-
-  return `${Number(month)}/${Number(day)}`;
-}
-
-function formatEventDate(eventItem) {
-  const start =
-    formatInlineDate(
-      eventItem.start_date
-    );
-
-  const end =
-    eventItem.end_date
-      ? formatInlineDate(
-          eventItem.end_date
-        )
-      : "";
-
-  if (!end || end === start) {
-    return start;
-  }
-
-  return `${start}–${end}`;
-}
-
-function getWeekDateRange(week) {
-  const first =
-    week?.days?.[0];
-
-  const last =
-    week?.days?.[
-      week.days.length - 1
-    ];
-
-  if (!first || !last) {
+  if (!date) {
     return "";
   }
 
-  return `${
-    first.getMonth() + 1
-  }/${first.getDate()}–${
-    last.getMonth() + 1
-  }/${last.getDate()}`;
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function formatDay(date) {
+  return date.getDate();
+}
+
+function isSameDate(dateA, dateB) {
+  if (!dateA || !dateB) {
+    return false;
+  }
+
+  return (
+    dateA.getFullYear() === dateB.getFullYear() &&
+    dateA.getMonth() === dateB.getMonth() &&
+    dateA.getDate() === dateB.getDate()
+  );
 }
 
 function eventOverlapsWeek(
   eventItem,
   week
 ) {
-  const start =
-    eventItem.start_date;
-
-  const end =
+  const eventStart = eventItem.start_date;
+  const eventEnd =
     eventItem.end_date ||
     eventItem.start_date;
 
   return (
-    start <= week.endDate &&
-    end >= week.startDate
+    eventStart <= week.endDate &&
+    eventEnd >= week.startDate
+  );
+}
+
+function getEventTitle(eventItem) {
+  if (
+    eventItem.event_type === "OTHER"
+  ) {
+    return (
+      eventItem.title ||
+      "其他行事"
+    );
+  }
+
+  return (
+    EVENT_TYPE_LABELS[
+      eventItem.event_type
+    ] ||
+    eventItem.title ||
+    "行事項目"
   );
 }
 
@@ -106,6 +147,56 @@ function SemesterExportView({
     setExporting,
   ] = useState(false);
 
+  const semesterStart =
+    parseLocalDate(startDate);
+
+  const semesterEnd =
+    parseLocalDate(endDate);
+
+  function getWeekEvents(
+    week,
+    category
+  ) {
+    return events
+      .filter((eventItem) => {
+        const eventCategory =
+          eventItem.category ||
+          "SCHOOL";
+
+        return (
+          eventCategory === category &&
+          eventOverlapsWeek(
+            eventItem,
+            week
+          )
+        );
+      })
+      .slice()
+      .sort((a, b) => {
+        const dateCompare =
+          String(
+            a.start_date || ""
+          ).localeCompare(
+            String(
+              b.start_date || ""
+            )
+          );
+
+        if (dateCompare !== 0) {
+          return dateCompare;
+        }
+
+        return (
+          Number(
+            a.display_order || 0
+          ) -
+          Number(
+            b.display_order || 0
+          )
+        );
+      });
+  }
+
   async function handleExport() {
     if (exporting) {
       return;
@@ -113,12 +204,12 @@ function SemesterExportView({
 
     const node =
       document.getElementById(
-        `semester-export-sheet-${semesterId}`
+        `semester-long-export-${semesterId}`
       );
 
     if (!node) {
       window.alert(
-        "找不到輸出版面，請重新整理後再試。"
+        "找不到完整總表輸出版面，請重新整理後再試。"
       );
       return;
     }
@@ -130,7 +221,7 @@ function SemesterExportView({
         await document.fonts.ready;
       }
 
-      const rawDataUrl =
+      const dataUrl =
         await toPng(
           node,
           {
@@ -141,109 +232,26 @@ function SemesterExportView({
           }
         );
 
-      const image = new Image();
-
-      await new Promise(
-        (resolve, reject) => {
-          image.onload = resolve;
-          image.onerror = reject;
-          image.src = rawDataUrl;
-        }
-      );
-
-      /*
-       * A4 直式 300 DPI
-       * 2480 × 3508 px
-       *
-       * 只做等比例縮放，不拉伸。
-       */
-      const canvas =
-        document.createElement(
-          "canvas"
-        );
-
-      canvas.width = 2480;
-      canvas.height = 3508;
-
-      const context =
-        canvas.getContext(
-          "2d"
-        );
-
-      context.fillStyle =
-        "#fffdf9";
-
-      context.fillRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
-
-      const safeMargin = 42;
-
-      const maxWidth =
-        canvas.width -
-        safeMargin * 2;
-
-      const maxHeight =
-        canvas.height -
-        safeMargin * 2;
-
-      const scale =
-        Math.min(
-          maxWidth / image.width,
-          maxHeight / image.height
-        );
-
-      const drawWidth =
-        image.width * scale;
-
-      const drawHeight =
-        image.height * scale;
-
-      const drawX =
-        (
-          canvas.width -
-          drawWidth
-        ) / 2;
-
-      const drawY =
-        (
-          canvas.height -
-          drawHeight
-        ) / 2;
-
-      context.drawImage(
-        image,
-        drawX,
-        drawY,
-        drawWidth,
-        drawHeight
-      );
-
       const link =
         document.createElement(
           "a"
         );
 
       link.download =
-        `${semesterName || "學期"}_行事總表_A4直式.png`;
+        `${semesterName || "學期"}_完整行事總表.png`;
 
-      link.href =
-        canvas.toDataURL(
-          "image/png"
-        );
-
+      link.href = dataUrl;
       link.click();
     } catch (error) {
       console.error(
-        "輸出學期行事總表失敗：",
+        "輸出完整學期總表失敗：",
         error
       );
 
       window.alert(
-        `輸出失敗：${error.message}`
+        error?.message
+          ? `輸出失敗：${error.message}`
+          : "輸出失敗，請稍後再試。"
       );
     } finally {
       setExporting(false);
@@ -254,24 +262,24 @@ function SemesterExportView({
     <>
       <button
         type="button"
-        className="semester-export-trigger"
+        className="semester-table-export-button"
         onClick={handleExport}
         disabled={exporting}
       >
         {exporting
           ? "產出中…"
-          : "輸出 A4 直式圖檔"}
+          : "輸出完整學期圖檔"}
       </button>
 
       <div
-        className="semester-export-stage"
+        className="semester-long-export-stage"
         aria-hidden="true"
       >
         <article
-          id={`semester-export-sheet-${semesterId}`}
-          className="semester-export-sheet"
+          id={`semester-long-export-${semesterId}`}
+          className="semester-long-export-sheet"
         >
-          <header className="semester-export-header">
+          <header className="semester-long-export-header">
             <p>
               BEAST ACADEMY · SEMESTER OVERVIEW
             </p>
@@ -285,7 +293,7 @@ function SemesterExportView({
               ｜學期行事總表
             </h2>
 
-            <div className="semester-export-meta">
+            <div className="semester-long-export-meta">
               <span>
                 {formatShortDate(
                   startDate
@@ -302,133 +310,261 @@ function SemesterExportView({
             </div>
           </header>
 
-          <div className="semester-export-weeks">
-            {weeks.map(
-              (week) => {
-                const weekEvents =
-                  events
-                    .filter(
-                      (eventItem) =>
-                        eventOverlapsWeek(
-                          eventItem,
-                          week
-                        )
-                    )
-                    .slice()
-                    .sort(
-                      (a, b) =>
-                        String(
-                          a.start_date ||
-                            ""
-                        ).localeCompare(
-                          String(
-                            b.start_date ||
-                              ""
-                          )
-                        )
-                    );
+          <div className="semester-long-export-table-wrap">
+            <table className="semester-long-export-table">
+              <colgroup>
+                <col className="semester-long-export-col--month" />
+                <col className="semester-long-export-col--week" />
 
-                return (
-                  <section
-                    key={
-                      week.weekNumber
-                    }
-                    className="semester-export-week"
+                {WEEKDAY_LABELS.map(
+                  (weekday) => (
+                    <col
+                      key={`export-date-col-${weekday}`}
+                      className="semester-long-export-col--date"
+                    />
+                  )
+                )}
+
+                {WORK_COLUMNS.map(
+                  (column) => (
+                    <col
+                      key={`export-work-col-${column.key}`}
+                      className="semester-long-export-col--work"
+                    />
+                  )
+                )}
+              </colgroup>
+
+              <thead>
+                <tr>
+                  <th
+                    className="semester-long-export-month-heading"
+                    rowSpan="2"
                   >
-                    <div className="semester-export-week__heading">
-                      <strong>
-                        第{" "}
+                    月份
+                  </th>
+
+                  <th
+                    className="semester-long-export-week-heading"
+                    rowSpan="2"
+                  >
+                    週次
+                  </th>
+
+                  <th colSpan="7">
+                    日期
+                  </th>
+
+                  {WORK_COLUMNS.map(
+                    (column) => (
+                      <th
+                        key={
+                          column.key
+                        }
+                        className="semester-long-export-work-heading"
+                        rowSpan="2"
+                      >
                         {
-                          week.weekNumber
-                        }{" "}
-                        週
-                      </strong>
+                          column.label
+                        }
+                      </th>
+                    )
+                  )}
+                </tr>
 
-                      <span>
-                        {getWeekDateRange(
-                          week
-                        )}
-                      </span>
+                <tr>
+                  {WEEKDAY_LABELS.map(
+                    (weekday) => (
+                      <th
+                        key={weekday}
+                        className="semester-long-export-day-heading"
+                      >
+                        {weekday}
+                      </th>
+                    )
+                  )}
+                </tr>
+              </thead>
 
+              <tbody>
+                {weeks.map(
+                  (week) => (
+                    <tr
+                      key={
+                        week.weekNumber
+                      }
+                    >
                       {week.monthRowSpan >
                         0 && (
-                        <em>
+                        <td
+                          className="semester-long-export-month"
+                          rowSpan={
+                            week.monthRowSpan
+                          }
+                        >
                           {
                             week.monthLabel
                           }
-                        </em>
+                        </td>
                       )}
-                    </div>
 
-                    <div className="semester-export-week__events">
-                      {weekEvents.length ===
-                      0 ? (
-                        <span className="semester-export-week__empty">
-                          本週無安排
-                        </span>
-                      ) : (
-                        weekEvents.map(
-                          (
-                            eventItem
-                          ) => {
-                            const category =
-                              eventItem.category ||
-                              "SCHOOL";
+                      <td className="semester-long-export-week">
+                        {
+                          week.weekNumber
+                        }
+                      </td>
 
-                            const schoolLabel =
-                              eventItem.applies_to_all_schools
-                                ? "全部學校"
-                                : schoolNames[
-                                    eventItem.school_id
-                                  ] ||
-                                  "";
+                      {week.days.map(
+                        (date) => {
+                          const outsideSemester =
+                            date < semesterStart ||
+                            date > semesterEnd;
 
-                            return (
-                              <div
-                                key={
-                                  eventItem.id
-                                }
-                                className="semester-export-event"
-                              >
-                                <span className="semester-export-event__category">
-                                  {CATEGORY_LABELS[
-                                    category
-                                  ] ||
-                                    "事項"}
-                                </span>
-
-                                <strong>
-                                  {eventItem.title ||
-                                    "行事項目"}
-                                </strong>
-
-                                <small>
-                                  {[
-                                    formatEventDate(
-                                      eventItem
-                                    ),
-                                    schoolLabel,
-                                  ]
-                                    .filter(
-                                      Boolean
-                                    )
-                                    .join(
-                                      "・"
-                                    )}
-                                </small>
-                              </div>
+                          const isSemesterStart =
+                            isSameDate(
+                              date,
+                              semesterStart
                             );
-                          }
-                        )
+
+                          const isSemesterEnd =
+                            isSameDate(
+                              date,
+                              semesterEnd
+                            );
+
+                          return (
+                            <td
+                              key={
+                                date.toISOString()
+                              }
+                              className={[
+                                "semester-long-export-date",
+                                outsideSemester
+                                  ? "is-outside"
+                                  : "",
+                                isSemesterStart
+                                  ? "is-start"
+                                  : "",
+                                isSemesterEnd
+                                  ? "is-end"
+                                  : "",
+                              ]
+                                .filter(
+                                  Boolean
+                                )
+                                .join(
+                                  " "
+                                )}
+                            >
+                              <span>
+                                {formatDay(
+                                  date
+                                )}
+                              </span>
+
+                              {isSemesterStart && (
+                                <small>
+                                  開始
+                                </small>
+                              )}
+
+                              {isSemesterEnd && (
+                                <small>
+                                  結束
+                                </small>
+                              )}
+                            </td>
+                          );
+                        }
                       )}
-                    </div>
-                  </section>
-                );
-              }
-            )}
+
+                      {WORK_COLUMNS.map(
+                        (column) => {
+                          const weekEvents =
+                            getWeekEvents(
+                              week,
+                              column.key
+                            );
+
+                          return (
+                            <td
+                              key={`${week.weekNumber}-${column.key}`}
+                              className="semester-long-export-work-cell"
+                            >
+                              <div className="semester-long-export-work-content">
+                                {weekEvents.map(
+                                  (eventItem) => {
+                                    const schoolLabel =
+                                      eventItem.applies_to_all_schools
+                                        ? "全部學校"
+                                        : schoolNames[
+                                            eventItem.school_id
+                                          ] ||
+                                          "";
+
+                                    const startText =
+                                      formatInlineDate(
+                                        eventItem.start_date
+                                      );
+
+                                    const endText =
+                                      eventItem.end_date
+                                        ? formatInlineDate(
+                                            eventItem.end_date
+                                          )
+                                        : "";
+
+                                    const dateText =
+                                      endText &&
+                                      endText !== startText
+                                        ? `${startText}–${endText}`
+                                        : startText;
+
+                                    return (
+                                      <div
+                                        key={
+                                          eventItem.id
+                                        }
+                                        className="semester-long-export-event"
+                                      >
+                                        <div className="semester-long-export-event__heading">
+                                          <strong>
+                                            {getEventTitle(
+                                              eventItem
+                                            )}
+                                          </strong>
+
+                                          <small>
+                                            {
+                                              dateText
+                                            }
+                                          </small>
+                                        </div>
+
+                                        {schoolLabel && (
+                                          <span>
+                                            {
+                                              schoolLabel
+                                            }
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+                                )}
+                              </div>
+                            </td>
+                          );
+                        }
+                      )}
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
           </div>
 
-          <footer className="semester-export-footer">
+          <footer className="semester-long-export-footer">
             倍思學院｜{semesterName}
           </footer>
         </article>
