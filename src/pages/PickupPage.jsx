@@ -16,8 +16,8 @@ import "../App.css";
 const PICKUP_TABS = [
   {
     key: "today",
-    label: "今日接車",
-    description: "查看今天各學校的接車時間與負責老師",
+    label: "接車查詢",
+    description: "查看指定日期各學校的接車時間與負責老師",
   },
   {
     key: "monthly",
@@ -46,6 +46,94 @@ const PICKUP_TABS = [
 ];
 
 
+function getLocalDateKey(
+  date = new Date()
+) {
+  const year =
+    date.getFullYear();
+
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(
+      2,
+      "0"
+    );
+
+  const day =
+    String(
+      date.getDate()
+    ).padStart(
+      2,
+      "0"
+    );
+
+  return `${year}-${month}-${day}`;
+}
+
+
+function shiftDateKey(
+  dateKey,
+  amount
+) {
+  const [
+    year,
+    month,
+    day,
+  ] = dateKey
+    .split("-")
+    .map(Number);
+
+  const date =
+    new Date(
+      year,
+      month - 1,
+      day,
+      12,
+      0,
+      0
+    );
+
+  date.setDate(
+    date.getDate() +
+      amount
+  );
+
+  return getLocalDateKey(
+    date
+  );
+}
+
+
+function formatDisplayDate(
+  dateKey
+) {
+  if (!dateKey) {
+    return "";
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] = dateKey
+    .split("-")
+    .map(Number);
+
+  return `${year}/${String(
+    month
+  ).padStart(
+    2,
+    "0"
+  )}/${String(
+    day
+  ).padStart(
+    2,
+    "0"
+  )}`;
+}
+
+
 function PickupPage({
   currentTeacher,
 }) {
@@ -53,6 +141,14 @@ function PickupPage({
     activeTab,
     setActiveTab,
   ] = useState("today");
+
+  const [
+    selectedDate,
+    setSelectedDate,
+  ] = useState(
+    () =>
+      getLocalDateKey()
+  );
 
 
   const {
@@ -99,8 +195,12 @@ function PickupPage({
       );
 
 
-    if (!canAccessActiveTab) {
-      setActiveTab("today");
+    if (
+      !canAccessActiveTab
+    ) {
+      setActiveTab(
+        "today"
+      );
     }
   }, [
     visibleTabs,
@@ -117,18 +217,52 @@ function PickupPage({
     visibleTabs[0];
 
 
+  function goPreviousDay() {
+    setSelectedDate(
+      (current) =>
+        shiftDateKey(
+          current,
+          -1
+        )
+    );
+  }
+
+
+  function goNextDay() {
+    setSelectedDate(
+      (current) =>
+        shiftDateKey(
+          current,
+          1
+        )
+    );
+  }
+
+
+  function goToday() {
+    setSelectedDate(
+      getLocalDateKey()
+    );
+  }
+
+
   function renderTabContent() {
     if (
       activeTab === "today"
     ) {
       return (
-        <TodayPickupPanel />
+        <TodayPickupPanel
+          selectedDate={
+            selectedDate
+          }
+        />
       );
     }
 
 
     if (
-      activeTab === "monthly" &&
+      activeTab ===
+        "monthly" &&
       canEdit
     ) {
       return (
@@ -138,7 +272,8 @@ function PickupPage({
 
 
     if (
-      activeTab === "rules" &&
+      activeTab ===
+        "rules" &&
       isAdmin
     ) {
       return (
@@ -148,7 +283,8 @@ function PickupPage({
 
 
     if (
-      activeTab === "staff" &&
+      activeTab ===
+        "staff" &&
       isAdmin
     ) {
       return (
@@ -158,7 +294,8 @@ function PickupPage({
 
 
     if (
-      activeTab === "exceptions" &&
+      activeTab ===
+        "exceptions" &&
       canEdit
     ) {
       return (
@@ -168,7 +305,11 @@ function PickupPage({
 
 
     return (
-      <TodayPickupPanel />
+      <TodayPickupPanel
+        selectedDate={
+          selectedDate
+        }
+      />
     );
   }
 
@@ -189,10 +330,10 @@ function PickupPage({
 
           <p className="summary">
             {isViewOnly
-              ? "查看今日各學校的接車時間與負責老師。"
+              ? "查看指定日期各學校的接車時間與負責老師。"
               : isAdmin
               ? "管理固定接車時間、接車老師、停接日期與每月接車安排。"
-              : "查看今日接車、月接車表，並管理停接安排。"}
+              : "查看指定日期接車、月接車表，並管理停接安排。"}
           </p>
         </div>
       </header>
@@ -250,7 +391,80 @@ function PickupPage({
             }
           </h2>
         </div>
+
+
+        {activeTab ===
+          "today" && (
+          <div className="pickupDateNavigator">
+            <button
+              type="button"
+              className="pickupDateNavigator__arrow"
+              onClick={
+                goPreviousDay
+              }
+            >
+              ← 前一天
+            </button>
+
+
+            <label className="pickupDateNavigator__picker">
+              <span>
+                查詢日期
+              </span>
+
+              <input
+                type="date"
+                value={
+                  selectedDate
+                }
+                onChange={(
+                  event
+                ) =>
+                  setSelectedDate(
+                    event.target
+                      .value
+                  )
+                }
+              />
+            </label>
+
+
+            <button
+              type="button"
+              className="pickupDateNavigator__today"
+              onClick={
+                goToday
+              }
+            >
+              今天
+            </button>
+
+
+            <button
+              type="button"
+              className="pickupDateNavigator__arrow"
+              onClick={
+                goNextDay
+              }
+            >
+              後一天 →
+            </button>
+          </div>
+        )}
       </div>
+
+
+      {activeTab ===
+        "today" && (
+        <div className="pickupSelectedDate">
+          目前查看：
+          <strong>
+            {formatDisplayDate(
+              selectedDate
+            )}
+          </strong>
+        </div>
+      )}
 
 
       {renderTabContent()}

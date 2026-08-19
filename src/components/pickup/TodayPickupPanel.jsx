@@ -41,16 +41,59 @@ function getSchoolOrder(school) {
   return index === -1 ? 999 : index;
 }
 
-function formatToday() {
+function parseDateKey(dateKey) {
+  if (!dateKey) {
+    return null;
+  }
+
+  const [year, month, day] = String(dateKey)
+    .split("-")
+    .map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    12,
+    0,
+    0
+  );
+}
+
+function formatSelectedDate(dateKey) {
+  const date = parseDateKey(dateKey);
+
+  if (!date) {
+    return "";
+  }
+
   return new Intl.DateTimeFormat("zh-TW", {
     year: "numeric",
     month: "long",
     day: "numeric",
     weekday: "long",
-  }).format(new Date());
+  }).format(date);
 }
 
-function TodayPickupPanel() {
+function getTodayDateKey() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+
+  return new Date(
+    now.getTime() -
+      offset * 60 * 1000
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
+function TodayPickupPanel({
+  selectedDate,
+}) {
   const [students, setStudents] = useState([]);
   const [rules, setRules] = useState([]);
   const [staffRules, setStaffRules] = useState([]);
@@ -59,10 +102,24 @@ function TodayPickupPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const todayWeekday = new Date().getDay();
-  const todayConfig = WEEKDAYS.find(
-    (weekday) => weekday.value === todayWeekday
-  );
+  const effectiveSelectedDate =
+    selectedDate ||
+    getTodayDateKey();
+
+  const selectedDateObject =
+    parseDateKey(
+      effectiveSelectedDate
+    );
+
+  const selectedWeekday =
+    selectedDateObject?.getDay();
+
+  const selectedConfig =
+    WEEKDAYS.find(
+      (weekday) =>
+        weekday.value ===
+        selectedWeekday
+    );
 
   useEffect(() => {
     loadData();
@@ -150,20 +207,10 @@ function TodayPickupPanel() {
     setIsLoading(false);
   }
 
-  function getTodayDateString() {
-    const now = new Date();
-    const offset = now.getTimezoneOffset();
-
-    return new Date(now.getTime() - offset * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
-  }
-
-  const todayDateString = getTodayDateString();
 
   const sharedDayOff = dayOverrides.find(
     (item) =>
-      item.override_date === todayDateString &&
+      item.override_date === effectiveSelectedDate &&
       (
         item.override_type === "HOLIDAY" ||
         item.override_type === "CLASSROOM_CLOSED"
@@ -172,21 +219,21 @@ function TodayPickupPanel() {
 
   const allClosure = closures.find(
     (closure) =>
-      closure.closure_date === todayDateString &&
+      closure.closure_date === effectiveSelectedDate &&
       closure.closure_scope === "ALL"
   );
 
   function getSchoolClosure(school) {
     return closures.find(
       (closure) =>
-        closure.closure_date === todayDateString &&
+        closure.closure_date === effectiveSelectedDate &&
         closure.closure_scope === "SCHOOL" &&
         closure.school === school
     );
   }
 
   const pickupGroups = useMemo(() => {
-    if (!todayConfig) return [];
+    if (!selectedConfig) return [];
     if (sharedDayOff || allClosure) return [];
 
     const groupMap = new Map();
@@ -206,7 +253,7 @@ function TodayPickupPanel() {
       );
 
       const pickupTime = normalizeTime(
-        matchingRule?.[todayConfig.column]
+        matchingRule?.[selectedConfig.column]
       );
 
       if (!pickupTime) return;
@@ -217,7 +264,7 @@ function TodayPickupPanel() {
         const matchingStaffRule = staffRules.find(
           (staffRule) =>
             staffRule.school === school &&
-            Number(staffRule.weekday) === todayWeekday &&
+            Number(staffRule.weekday) === selectedWeekday &&
             normalizeTime(staffRule.pickup_time) === pickupTime
         );
 
@@ -266,8 +313,8 @@ function TodayPickupPanel() {
     students,
     rules,
     staffRules,
-    todayConfig,
-    todayWeekday,
+    selectedConfig,
+    selectedWeekday,
     closures,
     dayOverrides,
     sharedDayOff,
@@ -288,7 +335,7 @@ function TodayPickupPanel() {
       <section className="pickupPanel">
         <div className="pickupEmptyState">
           <span className="pickupEmptyState__icon">🚌</span>
-          <h2>正在整理今日接車安排</h2>
+          <h2>正在整理接車安排</h2>
           <p>請稍候一下。</p>
         </div>
       </section>
@@ -314,9 +361,9 @@ function TodayPickupPanel() {
         }}
       >
         <div>
-          <p className="eyebrow">TODAY PICKUP</p>
+          <p className="eyebrow">PICKUP SCHEDULE</p>
           <h2 style={{ margin: "4px 0 8px" }}>
-            今日接車安排
+            接車安排
           </h2>
           <p
             style={{
@@ -325,7 +372,7 @@ function TodayPickupPanel() {
               lineHeight: 1.7,
             }}
           >
-            {formatToday()}
+            {formatSelectedDate(effectiveSelectedDate)}
           </p>
         </div>
 
@@ -347,23 +394,23 @@ function TodayPickupPanel() {
       {sharedDayOff || allClosure ? (
         <div className="pickupEmptyState">
           <span className="pickupEmptyState__icon">🌿</span>
-          <h2>今天全體停接</h2>
+          <h2>當日全體停接</h2>
           <p>
             {sharedDayOff?.title ||
               allClosure?.reason ||
-              "今天沒有接車安排。"}
+              "當日沒有接車安排。"}
           </p>
         </div>
-      ) : !todayConfig ? (
+      ) : !selectedConfig ? (
         <div className="pickupEmptyState">
           <span className="pickupEmptyState__icon">🌿</span>
-          <h2>今天沒有固定接車安排</h2>
+          <h2>當日沒有固定接車安排</h2>
           <p>週末不會顯示平日接車規則。</p>
         </div>
       ) : pickupGroups.length === 0 ? (
         <div className="pickupEmptyState">
           <span className="pickupEmptyState__icon">🚌</span>
-          <h2>今天沒有接車資料</h2>
+          <h2>當日沒有接車資料</h2>
           <p>
             請確認學生學校、年級與接車規則是否已完整設定。
           </p>
@@ -388,7 +435,7 @@ function TodayPickupPanel() {
               }}
             >
               <small style={{ color: "#777b76" }}>
-                今日接車人數
+                當日接車人數
               </small>
               <strong
                 style={{
