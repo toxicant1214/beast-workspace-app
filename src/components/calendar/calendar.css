@@ -2856,3 +2856,47 @@ background 0.15s ease;
   color: #81766b;
   overflow-wrap: break-word;
 }
+/* =========================================================
+   學期總表：純顯示＋精簡單行事件
+   追加到 calendar.css 最底下
+   ========================================================= */
+
+.semester-table__work-content {
+  gap: 2px;
+}
+
+.semester-table-event-line {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  min-width: 0;
+  padding: 1px 0;
+  color: #4f463d;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.semester-table-event-line__date {
+  flex: 0 0 auto;
+  color: #7d7166;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.semester-table-event-line__divider,
+.semester-table-event-line__slash {
+  flex: 0 0 auto;
+  color: #a09284;
+}
+
+.semester-table-event-line__title {
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+
+.semester-table-event-line__school {
+  min-width: 0;
+  color: #81766b;
+  overflow-wrap: break-word;
+}

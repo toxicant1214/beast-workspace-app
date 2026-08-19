@@ -390,7 +390,6 @@ function SemesterTableView({
   semesterName,
   startDate,
   endDate,
-  canEdit = false,
 }) {
   const [
     events,
@@ -402,10 +401,6 @@ function SemesterTableView({
     setSchoolNames,
   ] = useState({});
 
-  const [
-    semesterSchools,
-    setSemesterSchools,
-  ] = useState([]);
 
   const [
     loadingEvents,
@@ -417,21 +412,6 @@ function SemesterTableView({
     setEventError,
   ] = useState("");
 
-  const [
-    quickAdd,
-    setQuickAdd,
-  ] = useState(null);
-
-  const [
-    quickAddSaving,
-    setQuickAddSaving,
-  ] = useState(false);
-
-
-  const [
-    deletingEventId,
-    setDeletingEventId,
-  ] = useState(null);
 
   const [
     expandedCells,
@@ -468,7 +448,6 @@ function SemesterTableView({
     if (!semesterId) {
       setEvents([]);
       setSchoolNames({});
-      setSemesterSchools([]);
 
       return;
     }
@@ -600,10 +579,6 @@ function SemesterTableView({
           []
       );
 
-      setSemesterSchools(
-        nextSemesterSchools
-      );
-
       setSchoolNames(
         nextSchoolNames
       );
@@ -650,199 +625,6 @@ function SemesterTableView({
   }
 
 
-  function openQuickAdd(
-    week,
-    category
-  ) {
-    if (!canEdit) {
-      return;
-    }
-
-
-    setQuickAdd({
-      weekNumber:
-        week.weekNumber,
-      category,
-      title: "",
-      date:
-        week.firstAvailableDate,
-      schoolId: "ALL",
-    });
-
-
-    setEventError("");
-  }
-
-
-  function closeQuickAdd() {
-    if (
-      quickAddSaving
-    ) {
-      return;
-    }
-
-    setQuickAdd(null);
-  }
-
-
-  function handleQuickAddChange(
-    event
-  ) {
-    const {
-      name,
-      value,
-    } = event.target;
-
-
-    setQuickAdd(
-      (current) => ({
-        ...current,
-        [name]: value,
-      })
-    );
-  }
-
-
-  async function handleQuickAddSubmit(
-    event
-  ) {
-    event.preventDefault();
-
-
-    if (!canEdit) {
-      setEventError(
-        "目前權限為僅查看，無法新增行事項目。"
-      );
-
-      return;
-    }
-
-
-    const title =
-      quickAdd?.title
-        ?.trim();
-
-
-    if (!title) {
-      setEventError(
-        "請先輸入事項名稱。"
-      );
-
-      return;
-    }
-
-
-    if (
-      !quickAdd.date
-    ) {
-      setEventError(
-        "請選擇日期。"
-      );
-
-      return;
-    }
-
-
-    try {
-      setQuickAddSaving(
-        true
-      );
-
-      setEventError("");
-
-
-      const isSchoolEvent =
-        quickAdd.category ===
-        "SCHOOL";
-
-      const selectedSchoolId =
-        isSchoolEvent
-          ? quickAdd.schoolId ||
-            "ALL"
-          : "ALL";
-
-
-      const payload = {
-        semester_id: semesterId,
-
-        school_id:
-          selectedSchoolId ===
-          "ALL"
-            ? null
-            : selectedSchoolId,
-
-        applies_to_all_schools:
-          selectedSchoolId ===
-          "ALL",
-
-        start_date:
-          quickAdd.date,
-
-        end_date:
-          null,
-
-        title,
-
-        event_type:
-          "OTHER",
-
-        category:
-          quickAdd.category,
-
-        display_order:
-          0,
-
-        notes:
-          null,
-
-        affects_pickup:
-          false,
-
-        updated_at:
-          new Date()
-            .toISOString(),
-      };
-
-
-      const {
-        error,
-      } = await supabase
-        .from(
-          "calendar_school_events"
-        )
-        .insert(
-          payload
-        );
-
-
-      if (error) {
-        throw error;
-      }
-
-
-      setQuickAdd(null);
-
-      await loadSemesterEvents();
-    } catch (error) {
-      console.error(
-        "快速新增行事失敗：",
-        error
-      );
-
-
-      setEventError(
-        error?.message
-          ? `新增失敗：${error.message}`
-          : "新增失敗，請稍後再試。"
-      );
-    } finally {
-      setQuickAddSaving(
-        false
-      );
-    }
-  }
-
-
   function toggleCellExpanded(
     cellKey
   ) {
@@ -853,76 +635,6 @@ function SemesterTableView({
           !current[cellKey],
       })
     );
-  }
-
-
-  async function handleDeleteEvent(
-    eventItem
-  ) {
-    if (!canEdit) {
-      setEventError(
-        "目前權限為僅查看，無法刪除行事項目。"
-      );
-
-      return;
-    }
-
-    const eventTitle =
-      getEventTitle(eventItem);
-
-    const confirmed =
-      window.confirm(
-        `確定要刪除「${eventTitle}」嗎？\n\n刪除後無法復原。`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setDeletingEventId(
-        eventItem.id
-      );
-
-      setEventError("");
-
-      const { error } =
-        await supabase
-          .from(
-            "calendar_school_events"
-          )
-          .delete()
-          .eq(
-            "id",
-            eventItem.id
-          );
-
-      if (error) {
-        throw error;
-      }
-
-      setEvents(
-        (currentEvents) =>
-          currentEvents.filter(
-            (item) =>
-              item.id !==
-              eventItem.id
-          )
-      );
-    } catch (error) {
-      console.error(
-        "刪除學期行事失敗：",
-        error
-      );
-
-      setEventError(
-        error?.message
-          ? `刪除失敗：${error.message}`
-          : "刪除失敗，請稍後再試。"
-      );
-    } finally {
-      setDeletingEventId(null);
-    }
   }
 
 
@@ -1193,13 +905,6 @@ function SemesterTableView({
                           column.key
                         );
 
-
-                      const isQuickAdding =
-                        quickAdd?.weekNumber ===
-                          week.weekNumber &&
-                        quickAdd?.category ===
-                          column.key;
-
                       const cellKey =
                         `${week.weekNumber}-${column.key}`;
 
@@ -1242,53 +947,34 @@ function SemesterTableView({
                                 return (
                                   <div
                                     key={eventItem.id}
-                                    className="semester-table-event"
+                                    className="semester-table-event-line"
                                   >
-                                    <div className="semester-table-event__heading">
-                                      <strong>
-                                        {getEventTitle(
-                                          eventItem
-                                        )}
-                                      </strong>
+                                    <span className="semester-table-event-line__date">
+                                      {formatInlineDate(
+                                        eventItem.start_date
+                                      )}
+                                    </span>
 
-                                      <div className="semester-table-event__tools">
-                                        <small>
-                                          {formatInlineDate(
-                                            eventItem.start_date
-                                          )}
-                                        </small>
+                                    <span className="semester-table-event-line__divider">
+                                      ｜
+                                    </span>
 
-                                        {canEdit && (
-                                          <button
-                                            type="button"
-                                            className="semester-table-event__delete"
-                                            onClick={() =>
-                                              handleDeleteEvent(
-                                                eventItem
-                                              )
-                                            }
-                                            disabled={
-                                              deletingEventId ===
-                                              eventItem.id
-                                            }
-                                            aria-label={`刪除 ${getEventTitle(
-                                              eventItem
-                                            )}`}
-                                            title="刪除"
-                                          >
-                                            {deletingEventId ===
-                                            eventItem.id
-                                              ? "…"
-                                              : "×"}
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
+                                    <span className="semester-table-event-line__title">
+                                      {getEventTitle(
+                                        eventItem
+                                      )}
+                                    </span>
 
                                     {schoolLabel && (
-                                      <span>
-                                        {schoolLabel}
-                                      </span>
+                                      <>
+                                        <span className="semester-table-event-line__slash">
+                                          ／
+                                        </span>
+
+                                        <span className="semester-table-event-line__school">
+                                          {schoolLabel}
+                                        </span>
+                                      </>
                                     )}
                                   </div>
                                 );
@@ -1312,136 +998,6 @@ function SemesterTableView({
                             )}
 
 
-                            {isQuickAdding ? (
-                              <form
-                                className="semester-quick-add"
-                                onSubmit={
-                                  handleQuickAddSubmit
-                                }
-                              >
-                                <input
-                                  type="text"
-                                  name="title"
-                                  value={
-                                    quickAdd.title
-                                  }
-                                  onChange={
-                                    handleQuickAddChange
-                                  }
-                                  placeholder="輸入事項名稱"
-                                  autoFocus
-                                  disabled={
-                                    quickAddSaving
-                                  }
-                                />
-
-
-                                <input
-                                  type="date"
-                                  name="date"
-                                  value={
-                                    quickAdd.date
-                                  }
-                                  min={
-                                    week.startDate <
-                                    startDate
-                                      ? startDate
-                                      : week.startDate
-                                  }
-                                  max={
-                                    week.endDate >
-                                    endDate
-                                      ? endDate
-                                      : week.endDate
-                                  }
-                                  onChange={
-                                    handleQuickAddChange
-                                  }
-                                  disabled={
-                                    quickAddSaving
-                                  }
-                                />
-
-
-                                {quickAdd.category === "SCHOOL" && (
-                                  <select
-                                    name="schoolId"
-                                    value={
-                                      quickAdd.schoolId
-                                    }
-                                    onChange={
-                                      handleQuickAddChange
-                                    }
-                                    disabled={
-                                      quickAddSaving
-                                    }
-                                  >
-                                    <option value="ALL">
-                                      全部學校
-                                    </option>
-
-                                    {semesterSchools.map(
-                                      (school) => (
-                                        <option
-                                          key={
-                                            school.id
-                                          }
-                                          value={
-                                            school.id
-                                          }
-                                        >
-                                          {
-                                            school.name
-                                          }
-                                        </option>
-                                      )
-                                    )}
-                                  </select>
-                                )}
-
-
-                                 <div className="semester-quick-add__actions">
-                                  <button
-                                    type="button"
-                                    onClick={
-                                      closeQuickAdd
-                                    }
-                                    disabled={
-                                      quickAddSaving
-                                    }
-                                  >
-                                    取消
-                                  </button>
-
-                                  <button
-                                    type="submit"
-                                    disabled={
-                                      quickAddSaving
-                                    }
-                                  >
-                                    {quickAddSaving
-                                      ? "儲存中…"
-                                      : "儲存"}
-                                  </button>
-                                </div>
-                              </form>
-                            ) : (
-                              canEdit &&
-                              column.allowQuickAdd && (
-                                <button
-                                  type="button"
-                                  className="semester-quick-add-button"
-                                  onClick={() =>
-                                    openQuickAdd(
-                                      week,
-                                      column.key
-                                    )
-                                  }
-                                >
-                                  ＋新增
-                                </button>
-                              )
-                            )}
                           </div>
                         </td>
                       );
