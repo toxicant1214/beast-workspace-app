@@ -17,7 +17,6 @@ import CampPage from "./pages/CampPage";
 import CalendarPage from "./pages/CalendarPage";
 import PickupPage from "./pages/PickupPage";
 import LearningReportPage from "./pages/LearningReportPage";
-import CampSchedulePage from "./pages/CampSchedulePage";
 import CleaningPage from "./pages/CleaningPage";
 import LineReminderPage from "./pages/LineReminderPage";
 import ScoreAnalysisPage from "./pages/ScoreAnalysisPage";
@@ -86,10 +85,6 @@ const PAGE_OPTIONS = [
   {
     label: "學習報告書",
     key: "learning_reports",
-  },
-  {
-    label: "營隊排班",
-    key: "camp_schedule",
   },
   {
     label: "清潔分配",
@@ -814,21 +809,6 @@ return hasPagePermission(
         />
       );
     }
-
-
-    if (
-      activePage ===
-      "營隊排班"
-    ) {
-      return (
-        <CampSchedulePage
-          currentTeacher={
-            currentTeacher
-          }
-        />
-      );
-    }
-
 
     if (
       activePage ===

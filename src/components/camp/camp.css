@@ -465,3 +465,136 @@
     grid-template-columns: 1fr;
   }
 }
+.campSectionCard--ready {
+  border-color: #cfc0ad;
+  background: #fffaf3;
+}
+
+.campSectionCard__open {
+  cursor: pointer !important;
+  color: #695a4b !important;
+  font-weight: 700 !important;
+}
+
+.campStudentsPanel {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 28px;
+  color: #514a43;
+}
+
+.campStudentsPanel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 20px;
+}
+
+.campStudentsPanel__header h2 {
+  margin: 0;
+  color: #403a34;
+  font-size: 28px;
+}
+
+.campStudentsPanel__header p:last-child {
+  margin: 7px 0 0;
+  color: #91857a;
+  font-size: 12px;
+}
+
+.campStudentsPanel__summary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 16px;
+  border: 1px solid #e2d9cf;
+  border-radius: 12px;
+  background: #fffdf9;
+  padding: 11px 15px;
+}
+
+.campStudentsPanel__summary span {
+  color: #8c8177;
+  font-size: 11px;
+}
+
+.campStudentsPanel__summary strong {
+  color: #50473f;
+  font-size: 17px;
+}
+
+.campStudentsTableWrap {
+  overflow-x: auto;
+  border: 1px solid #e2d9cf;
+  border-radius: 14px;
+  background: #fffdf9;
+}
+
+.campStudentsTable {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.campStudentsTable th {
+  border-bottom: 1px solid #ddd4ca;
+  background: #f3eee7;
+  padding: 11px 12px;
+  color: #61574e;
+  font-size: 10px;
+  text-align: left;
+}
+
+.campStudentsTable td {
+  border-bottom: 1px solid #eee7df;
+  padding: 11px 12px;
+  color: #6c6259;
+  vertical-align: middle;
+}
+
+.campStudentsTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.campStudentsTable__name {
+  color: #443d37 !important;
+  font-weight: 700;
+}
+
+.campStudentsTable__actions {
+  width: 110px;
+  text-align: center !important;
+}
+
+.campStudentsTable__actions button {
+  border: 0;
+  background: transparent;
+  padding: 3px 5px;
+  color: #76685b;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.campStudentsTable__actions button.is-danger {
+  color: #a55d56;
+}
+
+.campStudentsTable__empty {
+  padding: 45px 16px !important;
+  color: #a2978d !important;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .campStudentsPanel {
+    padding: 20px;
+  }
+
+  .campStudentsPanel__header {
+    flex-direction: column;
+  }
+}
