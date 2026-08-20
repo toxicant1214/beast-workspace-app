@@ -80,10 +80,15 @@ const CAMP_SECTIONS = [
 
 
 function formatDate(dateString) {
-  if (!dateString) return "—";
+  if (!dateString) {
+    return "—";
+  }
 
-  const [year, month, day] =
-    String(dateString).split("-");
+  const [
+    year,
+    month,
+    day,
+  ] = String(dateString).split("-");
 
   return `${year}/${month}/${day}`;
 }
@@ -99,24 +104,34 @@ function CampDetailPage({
   ] = useState("folder");
 
 
-  if (activeSection === "students") {
+  if (
+    activeSection ===
+    "students"
+  ) {
     return (
       <CampStudentsPanel
         camp={camp}
         onBack={() =>
-          setActiveSection("folder")
+          setActiveSection(
+            "folder"
+          )
         }
       />
     );
   }
 
 
-  if (activeSection === "periods") {
+  if (
+    activeSection ===
+    "periods"
+  ) {
     return (
       <CampPeriodsPanel
         camp={camp}
         onBack={() =>
-          setActiveSection("folder")
+          setActiveSection(
+            "folder"
+          )
         }
       />
     );
@@ -131,19 +146,26 @@ function CampDetailPage({
       <CampPeriodStudentsPanel
         camp={camp}
         onBack={() =>
-          setActiveSection("folder")
+          setActiveSection(
+            "folder"
+          )
         }
       />
     );
   }
 
 
-  if (activeSection === "daily") {
+  if (
+    activeSection ===
+    "daily"
+  ) {
     return (
       <CampDailyRegistrationPanel
         camp={camp}
         onBack={() =>
-          setActiveSection("folder")
+          setActiveSection(
+            "folder"
+          )
         }
       />
     );
@@ -167,17 +189,26 @@ function CampDetailPage({
             CAMP FOLDER
           </p>
 
-          <h1>{camp.name}</h1>
+          <h1>
+            {camp.name}
+          </h1>
 
           <p>
-            {formatDate(camp.start_date)}
+            {formatDate(
+              camp.start_date
+            )}
             {" — "}
-            {formatDate(camp.end_date)}
+            {formatDate(
+              camp.end_date
+            )}
           </p>
         </div>
 
         <span className="campDetailHeader__status">
-          {STATUS_LABELS[camp.status] || camp.status}
+          {STATUS_LABELS[
+            camp.status
+          ] ||
+            camp.status}
         </span>
       </header>
 
