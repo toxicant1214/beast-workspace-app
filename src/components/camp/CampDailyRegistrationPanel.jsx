@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -102,6 +103,10 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const recordsRef = useRef({});
+  const selectedStudentRef = useRef("");
+  const activeDatesRef = useRef([]);
 
   useEffect(() => {
     loadPeriods();
@@ -126,6 +131,18 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
     if (!selectedPeriod) return [];
     return getWeekdayDates(selectedPeriod.start_date, selectedPeriod.end_date);
   }, [selectedPeriod]);
+
+  useEffect(() => {
+    recordsRef.current = recordsByDate;
+  }, [recordsByDate]);
+
+  useEffect(() => {
+    selectedStudentRef.current = selectedStudentId;
+  }, [selectedStudentId]);
+
+  useEffect(() => {
+    activeDatesRef.current = activeDates;
+  }, [activeDates]);
 
   useEffect(() => {
     if (!selectedPeriodId || !selectedStudentId || activeDates.length === 0) {
@@ -266,6 +283,9 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
       }
 
       setRecordsByDate(next);
+      recordsRef.current = next;
+      setHasUnsavedChanges(false);
+      setSavedMessage("✓ 已載入");
     } catch (error) {
       console.error("讀取學生每日報名失敗：", error);
       setErrorMessage(`讀取每日報名失敗：${error.message}`);
@@ -276,14 +296,20 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
 
   function updateRecord(dateKey, patch) {
     setSavedMessage("");
+    setHasUnsavedChanges(true);
 
-    setRecordsByDate((current) => ({
-      ...current,
-      [dateKey]: {
-        ...(current[dateKey] || createEmptyRecord()),
-        ...patch,
-      },
-    }));
+    setRecordsByDate((current) => {
+      const next = {
+        ...current,
+        [dateKey]: {
+          ...(current[dateKey] || createEmptyRecord()),
+          ...patch,
+        },
+      };
+
+      recordsRef.current = next;
+      return next;
+    });
   }
 
   async function ensureCampDates() {
@@ -324,23 +350,59 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
     return map;
   }
 
-  async function handleSave() {
-    if (!selectedStudentId || !selectedPeriod) return;
+  async function saveCurrentStudent() {
+    const studentId = selectedStudentRef.current;
+    const dates = activeDatesRef.current;
+    const records = recordsRef.current;
+
+    if (!studentId || !selectedPeriod || dates.length === 0) return true;
 
     try {
       setIsSaving(true);
       setErrorMessage("");
-      setSavedMessage("");
+      setSavedMessage("儲存中…");
 
-      const dateIdMap = await ensureCampDates();
+      const { data: existingRows, error: existingError } = await supabase
+        .from("camp_dates")
+        .select("id, camp_date")
+        .eq("camp_id", camp.id)
+        .in("camp_date", dates);
 
-      const rows = activeDates.map((dateKey) => {
-        const record = recordsByDate[dateKey] || createEmptyRecord();
+      if (existingError) throw existingError;
+
+      const dateIdMap = {};
+      for (const row of existingRows ?? []) {
+        dateIdMap[row.camp_date] = row.id;
+      }
+
+      const missing = dates.filter((dateKey) => !dateIdMap[dateKey]);
+
+      if (missing.length > 0) {
+        const { data: insertedRows, error: insertError } = await supabase
+          .from("camp_dates")
+          .insert(
+            missing.map((dateKey) => ({
+              camp_id: camp.id,
+              camp_date: dateKey,
+              day_type: "GENERAL",
+            }))
+          )
+          .select("id, camp_date");
+
+        if (insertError) throw insertError;
+
+        for (const row of insertedRows ?? []) {
+          dateIdMap[row.camp_date] = row.id;
+        }
+      }
+
+      const rows = dates.map((dateKey) => {
+        const record = records[dateKey] || createEmptyRecord();
 
         return {
           camp_id: camp.id,
           camp_date_id: dateIdMap[dateKey],
-          student_id: selectedStudentId,
+          student_id: studentId,
           attendance_status: !record.registered
             ? "ABSENT"
             : record.status === "LEAVE"
@@ -379,13 +441,39 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
 
       if (error) throw error;
 
-      setSavedMessage("已儲存每日報名。");
+      setHasUnsavedChanges(false);
+      setSavedMessage("✓ 已自動儲存");
+      return true;
     } catch (error) {
       console.error("儲存每日報名失敗：", error);
       setErrorMessage(`儲存失敗：${error.message}`);
+      setSavedMessage("儲存失敗");
+      return false;
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function handleStudentChange(nextStudentId) {
+    if (nextStudentId === selectedStudentId) return;
+
+    if (hasUnsavedChanges && selectedStudentId) {
+      const ok = await saveCurrentStudent();
+      if (!ok) return;
+    }
+
+    setSelectedStudentId(nextStudentId);
+  }
+
+  async function handlePeriodChange(nextPeriodId) {
+    if (nextPeriodId === selectedPeriodId) return;
+
+    if (hasUnsavedChanges && selectedStudentId) {
+      const ok = await saveCurrentStudent();
+      if (!ok) return;
+    }
+
+    setSelectedPeriodId(nextPeriodId);
   }
 
   if (isLoading) {
@@ -409,14 +497,13 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
           <p>{camp.name}</p>
         </div>
 
-        <button
-          type="button"
-          className="campPrimaryButton"
-          onClick={handleSave}
-          disabled={isSaving || !selectedStudentId}
-        >
-          {isSaving ? "儲存中…" : "儲存每日報名"}
-        </button>
+        <div className="campDailySaveStatus" aria-live="polite">
+          {isSaving
+            ? "儲存中…"
+            : hasUnsavedChanges
+            ? "切換學生時自動儲存"
+            : savedMessage || "✓ 已儲存"}
+        </div>
       </div>
 
       <section className="campDailySelectors">
@@ -424,7 +511,8 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
           <span>1. 選擇活動梯次</span>
           <select
             value={selectedPeriodId}
-            onChange={(event) => setSelectedPeriodId(event.target.value)}
+            onChange={(event) => handlePeriodChange(event.target.value)}
+            disabled={isSaving}
           >
             {periods.map((period) => (
               <option key={period.id} value={period.id}>
@@ -438,8 +526,8 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
           <span>2. 選擇學生</span>
           <select
             value={selectedStudentId}
-            onChange={(event) => setSelectedStudentId(event.target.value)}
-            disabled={isLoadingStudent || students.length === 0}
+            onChange={(event) => handleStudentChange(event.target.value)}
+            disabled={isSaving || isLoadingStudent || students.length === 0}
           >
             {students.length === 0 ? (
               <option value="">此梯次尚未選擇學生</option>
@@ -467,7 +555,7 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
       ) : students.length === 0 ? (
         <div className="campEmptyState">
           <strong>此梯次目前沒有學生</strong>
-          <p>請先回到「活動梯次」，在管理學生中勾選本梯參加者。</p>
+          <p>請先回到「梯次學生」，勾選本梯參加者。</p>
         </div>
       ) : !selectedStudentId ? (
         <div className="campEmptyState">請選擇學生。</div>
