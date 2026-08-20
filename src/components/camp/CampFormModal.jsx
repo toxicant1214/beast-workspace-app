@@ -15,6 +15,8 @@ function CampFormModal({
   isOpen,
   onClose,
   onSubmit,
+  camp = null,
+  mode = "create",
 }) {
   const [formData, setFormData] = useState(
     INITIAL_FORM
@@ -22,15 +24,28 @@ function CampFormModal({
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const isEditMode = mode === "edit";
+
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    setFormData(INITIAL_FORM);
+    if (isEditMode && camp) {
+      setFormData({
+        name: camp.name || "",
+        campType: camp.camp_type || "SUMMER",
+        startDate: camp.start_date || "",
+        endDate: camp.end_date || "",
+        notes: camp.notes || "",
+      });
+    } else {
+      setFormData(INITIAL_FORM);
+    }
+
     setErrorMessage("");
     setIsSaving(false);
-  }, [isOpen]);
+  }, [isOpen, isEditMode, camp]);
 
   if (!isOpen) {
     return null;
@@ -70,12 +85,22 @@ function CampFormModal({
     try {
       setIsSaving(true);
       setErrorMessage("");
-      await onSubmit(formData);
+
+      if (isEditMode && camp) {
+        await onSubmit(camp.id, formData);
+      } else {
+        await onSubmit(formData);
+      }
+
+      onClose();
     } catch (error) {
-      console.error("建立營隊失敗：", error);
+      console.error(
+        isEditMode ? "修改營隊失敗：" : "建立營隊失敗：",
+        error
+      );
 
       setErrorMessage(
-        `建立營隊失敗：${error.message}`
+        `${isEditMode ? "修改" : "建立"}營隊失敗：${error.message}`
       );
       setIsSaving(false);
     }
@@ -99,9 +124,14 @@ function CampFormModal({
       >
         <div className="campModal__header">
           <div>
-            <p className="campEyebrow">NEW CAMP</p>
+            <p className="campEyebrow">
+              {isEditMode ? "EDIT CAMP" : "NEW CAMP"}
+            </p>
+
             <h2 id="camp-form-title">
-              建立營隊資料夾
+              {isEditMode
+                ? "修改營隊資料"
+                : "建立營隊資料夾"}
             </h2>
           </div>
 
@@ -110,6 +140,7 @@ function CampFormModal({
             className="campModal__close"
             onClick={onClose}
             aria-label="關閉"
+            disabled={isSaving}
           >
             ×
           </button>
@@ -183,6 +214,12 @@ function CampFormModal({
             />
           </label>
 
+          {isEditMode && (
+            <p className="campPeriodFormHint">
+              營隊總期間不可縮小到既有活動梯次之外。
+            </p>
+          )}
+
           {errorMessage && (
             <div className="campMessage campMessage--error">
               {errorMessage}
@@ -204,7 +241,13 @@ function CampFormModal({
               className="campPrimaryButton"
               disabled={isSaving}
             >
-              {isSaving ? "建立中…" : "建立營隊"}
+              {isSaving
+                ? isEditMode
+                  ? "儲存中…"
+                  : "建立中…"
+                : isEditMode
+                ? "儲存修改"
+                : "建立營隊"}
             </button>
           </div>
         </form>

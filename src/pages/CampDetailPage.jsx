@@ -4,6 +4,7 @@ import CampStudentsPanel from "../components/camp/CampStudentsPanel";
 import CampPeriodsPanel from "../components/camp/CampPeriodsPanel";
 import CampPeriodStudentsPanel from "../components/camp/CampPeriodStudentsPanel";
 import CampDailyRegistrationPanel from "../components/camp/CampDailyRegistrationPanel";
+import CampFormModal from "../components/camp/CampFormModal";
 
 const STATUS_LABELS = {
   PLANNING: "規劃中",
@@ -13,12 +14,18 @@ const STATUS_LABELS = {
 
 function formatDate(dateString) {
   if (!dateString) return "—";
+
   const [year, month, day] = String(dateString).split("-");
   return `${year}/${month}/${day}`;
 }
 
-function CampDetailPage({ camp, onBack }) {
+function CampDetailPage({
+  camp,
+  onBack,
+  onUpdateCamp,
+}) {
   const [activeSection, setActiveSection] = useState("folder");
+  const [isEditCampOpen, setIsEditCampOpen] = useState(false);
 
   if (activeSection === "students") {
     return (
@@ -126,7 +133,9 @@ function CampDetailPage({ camp, onBack }) {
       <header className="campDetailHeader">
         <div>
           <p className="campEyebrow">CAMP FOLDER</p>
+
           <h1>{camp.name}</h1>
+
           <p>
             {formatDate(camp.start_date)}
             {" — "}
@@ -134,13 +143,25 @@ function CampDetailPage({ camp, onBack }) {
           </p>
         </div>
 
-        <span className="campDetailHeader__status">
-          {STATUS_LABELS[camp.status] || camp.status}
-        </span>
+        <div>
+          <span className="campDetailHeader__status">
+            {STATUS_LABELS[camp.status] || camp.status}
+          </span>
+
+          <button
+            type="button"
+            className="campSecondaryButton"
+            onClick={() => setIsEditCampOpen(true)}
+            style={{ marginLeft: "12px" }}
+          >
+            編輯營隊資料
+          </button>
+        </div>
       </header>
 
       <section className="campDetailIntro">
         <strong>這是一個獨立營隊資料夾</strong>
+
         <p>
           學生、活動梯次、梯次名單、每日報名、編班、工作人員、
           排班與清潔資料都只屬於這次營隊。
@@ -178,6 +199,14 @@ function CampDetailPage({ camp, onBack }) {
           </article>
         ))}
       </section>
+
+      <CampFormModal
+        isOpen={isEditCampOpen}
+        onClose={() => setIsEditCampOpen(false)}
+        onSubmit={onUpdateCamp}
+        camp={camp}
+        mode="edit"
+      />
     </div>
   );
 }

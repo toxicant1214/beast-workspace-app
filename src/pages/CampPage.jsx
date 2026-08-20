@@ -89,6 +89,64 @@ function CampPage() {
     setIsFormOpen(false);
   }
 
+  async function handleUpdateCamp(campId, formData) {
+    const { data: periodRows, error: periodError } = await supabase
+      .from("camp_periods")
+      .select("id, name, start_date, end_date")
+      .eq("camp_id", campId)
+      .order("start_date", { ascending: true });
+
+    if (periodError) {
+      throw periodError;
+    }
+
+    const outsidePeriod = (periodRows ?? []).find(
+      (period) =>
+        period.start_date < formData.startDate ||
+        period.end_date > formData.endDate
+    );
+
+    if (outsidePeriod) {
+      throw new Error(
+        `「${outsidePeriod.name}」的日期為 ${outsidePeriod.start_date}～${outsidePeriod.end_date}，請先調整該梯次，或將營隊總期間涵蓋這段日期。`
+      );
+    }
+
+    const { data, error } = await supabase
+      .from("camps")
+      .update({
+        name: formData.name.trim(),
+        camp_type: formData.campType,
+        start_date: formData.startDate,
+        end_date: formData.endDate,
+        notes: formData.notes.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", campId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    setCamps((current) =>
+      current
+        .map((camp) =>
+          camp.id === data.id ? data : camp
+        )
+        .sort((a, b) =>
+          String(b.start_date).localeCompare(
+            String(a.start_date)
+          )
+        )
+    );
+
+    setSelectedCamp(data);
+
+    return data;
+  }
+
   const activeCampCount = useMemo(
     () =>
       camps.filter(
@@ -102,6 +160,7 @@ function CampPage() {
       <CampDetailPage
         camp={selectedCamp}
         onBack={() => setSelectedCamp(null)}
+        onUpdateCamp={handleUpdateCamp}
       />
     );
   }

@@ -578,7 +578,11 @@ function CampPeriodsPanel({
         date.getDay();
 
       const occupied =
-        false;
+        periods.some(
+          (period) =>
+            candidate >= period.start_date &&
+            candidate <= period.end_date
+        );
 
 
 
@@ -643,7 +647,11 @@ function CampPeriodsPanel({
       of all
     ) {
       const wouldOverlap =
-        false;
+        periods.some(
+          (period) =>
+            dateKey >= period.start_date &&
+            dateKey <= period.end_date
+        );
 
 
 
@@ -677,7 +685,11 @@ function CampPeriodsPanel({
       ).filter(
         (dateKey) => {
           const occupied =
-            false;
+            periods.some(
+              (period) =>
+                dateKey >= period.start_date &&
+                dateKey <= period.end_date
+            );
 
 
 
@@ -743,7 +755,15 @@ function CampPeriodsPanel({
     }
 
     const hasOverlap =
-      false;
+      periods.some(
+        (period) =>
+          rangesOverlap(
+            formData.start_date,
+            formData.end_date,
+            period.start_date,
+            period.end_date
+          )
+      );
 
 
 
@@ -1292,51 +1312,25 @@ function CampPeriodsPanel({
                     開始日期 *
                   </span>
 
-                  <select
-                    value={
-                      formData.start_date
-                    }
-                    onChange={(
-                      event
-                    ) => {
-                      const value =
-                        event.target
-                          .value;
+                  <input
+                    type="date"
+                    value={formData.start_date}
+                    min={camp.start_date}
+                    max={camp.end_date}
+                    onChange={(event) => {
+                      const value = event.target.value;
 
-                      setFormData(
-                        (current) => ({
-                          ...current,
-                          start_date:
-                            value,
-                          end_date:
-                            value,
-                        })
-                      );
+                      setFormData((current) => ({
+                        ...current,
+                        start_date: value,
+                        end_date:
+                          !current.end_date ||
+                          current.end_date < value
+                            ? value
+                            : current.end_date,
+                      }));
                     }}
-                  >
-                    <option value="">
-                      請選擇開始日期
-                    </option>
-
-                    {availableStartDates.map(
-                      (dateKey) => (
-                        <option
-                          key={
-                            dateKey
-                          }
-                          value={
-                            dateKey
-                          }
-                        >
-                          {
-                            formatDate(
-                              dateKey
-                            )
-                          }
-                        </option>
-                      )
-                    )}
-                  </select>
+                  />
                 </label>
 
 
@@ -1345,56 +1339,25 @@ function CampPeriodsPanel({
                     結束日期 *
                   </span>
 
-                  <select
-                    value={
-                      formData.end_date
+                  <input
+                    type="date"
+                    value={formData.end_date}
+                    min={formData.start_date || camp.start_date}
+                    max={camp.end_date}
+                    disabled={!formData.start_date}
+                    onChange={(event) =>
+                      setFormData((current) => ({
+                        ...current,
+                        end_date: event.target.value,
+                      }))
                     }
-                    disabled={
-                      !formData.start_date
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setFormData(
-                        (current) => ({
-                          ...current,
-                          end_date:
-                            event.target
-                              .value,
-                        })
-                      )
-                    }
-                  >
-                    <option value="">
-                      請選擇結束日期
-                    </option>
-
-                    {availableEndDates.map(
-                      (dateKey) => (
-                        <option
-                          key={
-                            dateKey
-                          }
-                          value={
-                            dateKey
-                          }
-                        >
-                          {
-                            formatDate(
-                              dateKey
-                            )
-                          }
-                        </option>
-                      )
-                    )}
-                  </select>
+                  />
                 </label>
               </div>
 
 
               <p className="campPeriodFormHint">
-                可自由選擇營隊期間內的日期，
-                不同活動梯次的日期可以重疊。
+                日期限於營隊總期間內；已建立的活動梯次日期不可重疊。
               </p>
 
 
