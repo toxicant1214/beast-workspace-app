@@ -833,3 +833,185 @@
     grid-column: 3;
   }
 }
+/* Camp Daily Registration - append to camp.css */
+.campDailyPanel {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 28px;
+  color: #514a43;
+}
+
+.campDailyPanel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 20px;
+}
+
+.campDailyPanel__header h2 {
+  margin: 0;
+  color: #403a34;
+  font-size: 28px;
+}
+
+.campDailyPanel__header p:last-child {
+  margin: 7px 0 0;
+  color: #91857a;
+  font-size: 12px;
+}
+
+.campDailySelectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+  border: 1px solid #e1d8ce;
+  border-radius: 14px;
+  background: #fffdf9;
+  padding: 16px;
+}
+
+.campDailySelectors label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.campDailySelectors label > span {
+  color: #62584f;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.campDailySelectors select {
+  width: 100%;
+  border: 1px solid #dcd3c9;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 11px;
+  color: #4f473f;
+  font: inherit;
+  font-size: 12px;
+}
+
+.campMessage--success {
+  border: 1px solid #cfe1d1;
+  background: #f2faf3;
+  color: #5d7a62;
+}
+
+.campDailyGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.campDailyCard {
+  border: 1px solid #e1d9d0;
+  border-radius: 14px;
+  background: #fffdf9;
+  padding: 15px;
+}
+
+.campDailyCard__top {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #eee6de;
+  padding-bottom: 11px;
+}
+
+.campDailyCard__top strong {
+  color: #443d36;
+  font-size: 12px;
+}
+
+.campDailyCard__top > span {
+  color: #9a8f84;
+  font-size: 10px;
+}
+
+.campDailyCard__top select {
+  justify-self: end;
+  border: 1px solid #ddd4ca;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 8px;
+  color: #655b51;
+  font: inherit;
+  font-size: 10px;
+}
+
+.campDailyRegistered {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid #e9e1d8;
+  border-radius: 10px;
+  padding: 10px 11px;
+  color: #5a5149;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.campDailyOptions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.campDailyOptions label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #ebe3da;
+  border-radius: 10px;
+  padding: 9px 10px;
+  color: #625950;
+  font-size: 10px;
+}
+
+.campDailyCard__leave,
+.campDailyCard__note {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e2d9d0;
+  border-radius: 9px;
+  background: #fff;
+  padding: 9px 10px;
+  color: #5a5149;
+  font: inherit;
+  font-size: 10px;
+}
+
+.campDailyCard__leave,
+.campDailyCard__note {
+  margin-top: 10px;
+}
+
+@media (max-width: 1100px) {
+  .campDailyGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .campDailyPanel {
+    padding: 20px;
+  }
+
+  .campDailyPanel__header {
+    flex-direction: column;
+  }
+
+  .campDailySelectors,
+  .campDailyGrid {
+    grid-template-columns: 1fr;
+  }
+}
