@@ -1015,3 +1015,309 @@
     grid-template-columns: 1fr;
   }
 }
+/* =========================================================
+   Camp Period Structure
+   追加到 src/components/camp/camp.css 最底下
+   ========================================================= */
+
+.campPeriodsLayout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.campPeriodsSidebar,
+.campPeriodDatesArea {
+  border: 1px solid #e2d9cf;
+  border-radius: 14px;
+  background: #fffdf9;
+}
+
+.campPeriodsSidebar {
+  padding: 14px;
+}
+
+.campPeriodsSidebar__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: #5d5349;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.campPeriodsSidebar__title span {
+  border-radius: 999px;
+  background: #eee8e0;
+  padding: 3px 8px;
+  color: #8a7e72;
+  font-size: 9px;
+}
+
+.campPeriodSelectCard {
+  width: 100%;
+  margin-bottom: 8px;
+  border: 1px solid #e8e0d7;
+  border-radius: 12px;
+  background: #fff;
+  padding: 13px;
+  color: #5e554d;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.campPeriodSelectCard.is-active {
+  border-color: #b8a58f;
+  background: #fbf5ed;
+}
+
+.campPeriodSelectCard strong,
+.campPeriodSelectCard span {
+  display: block;
+}
+
+.campPeriodSelectCard strong {
+  font-size: 13px;
+}
+
+.campPeriodSelectCard span {
+  margin-top: 5px;
+  color: #93877c;
+  font-size: 10px;
+}
+
+.campPeriodDatesArea {
+  padding: 16px;
+}
+
+.campPeriodDatesArea__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.campPeriodDatesArea__header h3 {
+  margin: 0;
+  color: #51483f;
+  font-size: 15px;
+}
+
+.campPeriodDatesArea__header p {
+  margin: 4px 0 0;
+  color: #94887d;
+  font-size: 10px;
+}
+
+.campPeriodDateGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(
+        0,
+        1fr
+      )
+    );
+  gap: 10px;
+}
+
+.campPeriodDateCard {
+  border: 1px solid #e8e0d7;
+  border-radius: 11px;
+  background: #fff;
+  padding: 11px;
+}
+
+.campPeriodDateCard > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.campPeriodDateCard strong {
+  color: #4d453e;
+  font-size: 11px;
+}
+
+.campPeriodDateCard span {
+  color: #9a8f84;
+  font-size: 9px;
+}
+
+.campPeriodDateCard select {
+  width: 100%;
+  border: 1px solid #ddd4ca;
+  border-radius: 8px;
+  background: #fff;
+  padding: 7px 8px;
+  color: #655b51;
+  font: inherit;
+  font-size: 10px;
+}
+
+.campPeriodAddDateButton {
+  margin-top: 14px;
+  border: 0;
+  background: transparent;
+  color: #76685a;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.campPeriodStudentsPage {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 28px;
+  color: #514a43;
+}
+
+.campPeriodStudentsPage__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 20px;
+}
+
+.campPeriodStudentsPage__header h2 {
+  margin: 0;
+  color: #403a34;
+  font-size: 28px;
+}
+
+.campPeriodStudentsPage__header p:last-child {
+  margin: 7px 0 0;
+  color: #91857a;
+  font-size: 12px;
+}
+
+.campPeriodStudentsPage__selector {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  border: 1px solid #e1d8ce;
+  border-radius: 14px;
+  background: #fffdf9;
+  padding: 15px 16px;
+}
+
+.campPeriodStudentsPage__selector label {
+  display: flex;
+  width: min(520px, 100%);
+  flex-direction: column;
+  gap: 7px;
+}
+
+.campPeriodStudentsPage__selector label span {
+  color: #62584f;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.campPeriodStudentsPage__selector select,
+.campPeriodStudentsPage__search input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #dcd3c9;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 11px;
+  color: #4f473f;
+  font: inherit;
+  font-size: 12px;
+}
+
+.campPeriodStudentsPage__count {
+  color: #867a6f;
+  font-size: 11px;
+}
+
+.campPeriodStudentsPage__count strong {
+  margin: 0 5px;
+  color: #51483f;
+  font-size: 20px;
+}
+
+.campPeriodStudentsPage__search {
+  margin-bottom: 12px;
+}
+
+.campPeriodStudentsTableWrap {
+  overflow-x: auto;
+  border: 1px solid #e2d9cf;
+  border-radius: 14px;
+  background: #fffdf9;
+}
+
+.campPeriodStudentsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.campPeriodStudentsTable th {
+  border-bottom: 1px solid #ddd4ca;
+  background: #f3eee7;
+  padding: 11px 12px;
+  color: #61574e;
+  font-size: 10px;
+  text-align: left;
+}
+
+.campPeriodStudentsTable td {
+  border-bottom: 1px solid #eee7df;
+  padding: 11px 12px;
+  color: #6c6259;
+}
+
+.campPeriodStudentsTable tr.is-selected {
+  background: #fbf5ed;
+}
+
+.campPeriodStudentsTable__name {
+  color: #443d37 !important;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .campPeriodsLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .campPeriodDateGrid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+}
+
+@media (max-width: 720px) {
+  .campPeriodStudentsPage {
+    padding: 20px;
+  }
+
+  .campPeriodStudentsPage__header,
+  .campPeriodStudentsPage__selector {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .campPeriodDateGrid {
+    grid-template-columns: 1fr;
+  }
+}
