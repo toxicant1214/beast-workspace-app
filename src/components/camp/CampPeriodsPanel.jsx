@@ -6,12 +6,26 @@ import {
 
 import { supabase } from "../../lib/supabase";
 
+
 const DAY_TYPES = [
-  { value: "GENERAL", label: "一般常規上課" },
-  { value: "FIELD_TRIP", label: "戶外教學日" },
-  { value: "OVERNIGHT", label: "兩天一夜" },
-  { value: "CLOSED", label: "不開課" },
+  {
+    value: "GENERAL",
+    label: "一般常規上課",
+  },
+  {
+    value: "FIELD_TRIP",
+    label: "戶外教學日",
+  },
+  {
+    value: "OVERNIGHT",
+    label: "兩天一夜",
+  },
+  {
+    value: "CLOSED",
+    label: "不開課",
+  },
 ];
+
 
 const WEEKDAY_LABELS = [
   "週日",
@@ -23,14 +37,31 @@ const WEEKDAY_LABELS = [
   "週六",
 ];
 
-function parseDateKey(dateKey) {
-  if (!dateKey) return null;
 
-  const [year, month, day] = String(dateKey)
+function parseDateKey(
+  dateKey
+) {
+  if (!dateKey) {
+    return null;
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] = String(
+    dateKey
+  )
     .split("-")
     .map(Number);
 
-  if (!year || !month || !day) return null;
+  if (
+    !year ||
+    !month ||
+    !day
+  ) {
+    return null;
+  }
 
   return new Date(
     year,
@@ -42,66 +73,143 @@ function parseDateKey(dateKey) {
   );
 }
 
-function toDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
+
+function toDateKey(
+  date
+) {
+  const year =
+    date.getFullYear();
+
+  const month =
+    String(
+      date.getMonth() +
+        1
+    ).padStart(
+      2,
+      "0"
+    );
+
+  const day =
+    String(
+      date.getDate()
+    ).padStart(
+      2,
+      "0"
+    );
 
   return `${year}-${month}-${day}`;
 }
 
-function addDays(dateKey, amount) {
-  const date = parseDateKey(dateKey);
-  if (!date) return "";
+
+function addDays(
+  dateKey,
+  amount
+) {
+  const date =
+    parseDateKey(
+      dateKey
+    );
+
+  if (!date) {
+    return "";
+  }
 
   date.setDate(
-    date.getDate() + amount
+    date.getDate() +
+      amount
   );
 
-  return toDateKey(date);
+  return toDateKey(
+    date
+  );
 }
 
-function getAllDates(startDate, endDate) {
-  const start = parseDateKey(startDate);
-  const end = parseDateKey(endDate);
 
-  if (!start || !end) return [];
+function getAllDates(
+  startDate,
+  endDate
+) {
+  const start =
+    parseDateKey(
+      startDate
+    );
+
+  const end =
+    parseDateKey(
+      endDate
+    );
+
+  if (
+    !start ||
+    !end
+  ) {
+    return [];
+  }
 
   const result = [];
-  const current = new Date(start);
+  const current =
+    new Date(start);
 
-  while (current <= end) {
-    result.push(toDateKey(current));
-    current.setDate(current.getDate() + 1);
+  while (
+    current <= end
+  ) {
+    result.push(
+      toDateKey(
+        current
+      )
+    );
+
+    current.setDate(
+      current.getDate() +
+        1
+    );
   }
 
   return result;
 }
 
-function getWeekdayDates(startDate, endDate) {
+
+function getWeekdayDates(
+  startDate,
+  endDate
+) {
   return getAllDates(
     startDate,
     endDate
-  ).filter((dateKey) => {
-    const date = parseDateKey(dateKey);
-    const weekday = date.getDay();
+  ).filter(
+    (dateKey) => {
+      const date =
+        parseDateKey(
+          dateKey
+        );
 
-    return weekday !== 0 && weekday !== 6;
-  });
+      const weekday =
+        date.getDay();
+
+      return (
+        weekday !== 0 &&
+        weekday !== 6
+      );
+    }
+  );
 }
 
-function formatDate(dateKey) {
-  if (!dateKey) return "—";
 
-  return String(dateKey).replaceAll(
+function formatDate(
+  dateKey
+) {
+  if (!dateKey) {
+    return "—";
+  }
+
+  return String(
+    dateKey
+  ).replaceAll(
     "-",
     "/"
   );
 }
+
 
 function rangesOverlap(
   startA,
@@ -115,47 +223,93 @@ function rangesOverlap(
   );
 }
 
+
 function CampPeriodsPanel({
   camp,
   onBack,
 }) {
-  const [periods, setPeriods] = useState([]);
-  const [selectedPeriodId, setSelectedPeriodId] = useState("");
-  const [periodDates, setPeriodDates] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [
+    periods,
+    setPeriods,
+  ] = useState([]);
 
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingPeriod, setEditingPeriod] = useState(null);
+  const [
+    selectedPeriodId,
+    setSelectedPeriodId,
+  ] = useState("");
 
-  const [formData, setFormData] = useState({
+  const [
+    periodDates,
+    setPeriodDates,
+  ] = useState([]);
+
+  const [
+    isLoading,
+    setIsLoading,
+  ] = useState(true);
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
+
+  const [
+    isFormOpen,
+    setIsFormOpen,
+  ] = useState(false);
+
+  const [
+    formData,
+    setFormData,
+  ] = useState({
     name: "",
-    start_date: "",
-    end_date: "",
+    start_date:
+      camp.start_date ||
+      "",
+    end_date:
+      camp.start_date ||
+      "",
   });
 
-  const [isSaving, setIsSaving] = useState(false);
+  const [
+    isSaving,
+    setIsSaving,
+  ] = useState(false);
+
 
   useEffect(() => {
     loadPeriods();
   }, [camp.id]);
 
-  useEffect(() => {
-    if (!selectedPeriodId) {
-      setPeriodDates([]);
-      return;
-    }
 
-    loadPeriodDates(selectedPeriodId);
-  }, [selectedPeriodId]);
+  useEffect(() => {
+    if (
+      selectedPeriodId
+    ) {
+      loadPeriodDates(
+        selectedPeriodId
+      );
+    } else {
+      setPeriodDates([]);
+    }
+  }, [
+    selectedPeriodId,
+    periods,
+  ]);
+
 
   async function loadPeriods() {
     try {
       setIsLoading(true);
       setErrorMessage("");
 
-      const { data, error } = await supabase
-        .from("camp_periods")
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "camp_periods"
+        )
         .select(`
           id,
           name,
@@ -163,27 +317,59 @@ function CampPeriodsPanel({
           end_date,
           sort_order
         `)
-        .eq("camp_id", camp.id)
-        .order("sort_order", { ascending: true })
-        .order("start_date", { ascending: true });
+        .eq(
+          "camp_id",
+          camp.id
+        )
+        .order(
+          "sort_order",
+          {
+            ascending: true,
+          }
+        )
+        .order(
+          "start_date",
+          {
+            ascending: true,
+          }
+        );
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      const rows = data ?? [];
-      setPeriods(rows);
+      const rows =
+        data ?? [];
 
-      setSelectedPeriodId((current) => {
-        if (
-          current &&
-          rows.some((item) => item.id === current)
-        ) {
-          return current;
+      setPeriods(
+        rows
+      );
+
+      setSelectedPeriodId(
+        (current) => {
+          if (
+            current &&
+            rows.some(
+              (item) =>
+                item.id ===
+                current
+            )
+          ) {
+            return current;
+          }
+
+          return (
+            rows[0]?.id ||
+            ""
+          );
         }
-
-        return rows[0]?.id || "";
-      });
+      );
     } catch (error) {
-      console.error("讀取活動梯次失敗：", error);
+      console.error(
+        "讀取活動梯次失敗：",
+        error
+      );
+
       setErrorMessage(
         `讀取失敗：${error.message}`
       );
@@ -192,57 +378,102 @@ function CampPeriodsPanel({
     }
   }
 
-  async function loadPeriodDates(periodId) {
+
+  async function loadPeriodDates(
+    periodId
+  ) {
     try {
       setErrorMessage("");
 
-      const period = periods.find(
-        (item) => item.id === periodId
-      );
+      const period =
+        periods.find(
+          (item) =>
+            item.id ===
+            periodId
+        );
 
-      if (!period) return;
+      if (!period) {
+        return;
+      }
 
-      const { data, error } = await supabase
-        .from("camp_period_dates")
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "camp_period_dates"
+        )
         .select(`
           id,
           camp_date,
           day_type,
           note
         `)
-        .eq("camp_id", camp.id)
-        .eq("period_id", periodId)
-        .order("camp_date", { ascending: true });
+        .eq(
+          "camp_id",
+          camp.id
+        )
+        .eq(
+          "period_id",
+          periodId
+        )
+        .order(
+          "camp_date",
+          {
+            ascending: true,
+          }
+        );
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      if ((data ?? []).length > 0) {
-        setPeriodDates(data);
+      if (
+        (data ?? [])
+          .length > 0
+      ) {
+        setPeriodDates(
+          data
+        );
         return;
       }
 
-      const defaultDates = getWeekdayDates(
-        period.start_date,
-        period.end_date
-      );
+      const defaultDates =
+        getWeekdayDates(
+          period.start_date,
+          period.end_date
+        );
 
-      if (defaultDates.length === 0) {
+      if (
+        defaultDates.length ===
+        0
+      ) {
         setPeriodDates([]);
         return;
       }
 
       const {
-        data: insertedRows,
-        error: insertError,
+        data:
+          insertedRows,
+        error:
+          insertError,
       } = await supabase
-        .from("camp_period_dates")
+        .from(
+          "camp_period_dates"
+        )
         .insert(
-          defaultDates.map((dateKey) => ({
-            camp_id: camp.id,
-            period_id: periodId,
-            camp_date: dateKey,
-            day_type: "GENERAL",
-          }))
+          defaultDates.map(
+            (dateKey) => ({
+              camp_id:
+                camp.id,
+              period_id:
+                periodId,
+              camp_date:
+                dateKey,
+              day_type:
+                "GENERAL",
+            })
+          )
         )
         .select(`
           id,
@@ -251,158 +482,240 @@ function CampPeriodsPanel({
           note
         `);
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        throw insertError;
+      }
 
       setPeriodDates(
-        [...(insertedRows ?? [])].sort((a, b) =>
-          String(a.camp_date).localeCompare(
-            String(b.camp_date)
-          )
+        [
+          ...(
+            insertedRows ??
+            []
+          ),
+        ].sort(
+          (a, b) =>
+            String(
+              a.camp_date
+            ).localeCompare(
+              String(
+                b.camp_date
+              )
+            )
         )
       );
     } catch (error) {
-      console.error("讀取梯次日期失敗：", error);
+      console.error(
+        "讀取梯次日期失敗：",
+        error
+      );
+
       setErrorMessage(
         `讀取日期失敗：${error.message}`
       );
     }
   }
 
-  const selectedPeriod = useMemo(
-    () =>
-      periods.find(
-        (item) => item.id === selectedPeriodId
-      ) || null,
-    [periods, selectedPeriodId]
-  );
 
-  function getAvailableStartDates(excludeId = null) {
-    return getAllDates(
-      camp.start_date,
-      camp.end_date
-    ).filter((dateKey) => {
-      return !periods.some((period) => {
-        if (
-          excludeId &&
-          period.id === excludeId
-        ) {
-          return false;
-        }
+  const selectedPeriod =
+    useMemo(
+      () =>
+        periods.find(
+          (item) =>
+            item.id ===
+            selectedPeriodId
+        ) || null,
+      [
+        periods,
+        selectedPeriodId,
+      ]
+    );
 
-        return (
-          dateKey >= period.start_date &&
-          dateKey <= period.end_date
+
+  function findNextAvailableDate() {
+    if (
+      periods.length ===
+      0
+    ) {
+      return (
+        camp.start_date ||
+        ""
+      );
+    }
+
+    const sorted = [
+      ...periods,
+    ].sort(
+      (a, b) =>
+        String(
+          a.end_date
+        ).localeCompare(
+          String(
+            b.end_date
+          )
+        )
+    );
+
+    let candidate =
+      addDays(
+        sorted[
+          sorted.length -
+            1
+        ].end_date,
+        1
+      );
+
+    while (
+      candidate &&
+      candidate <=
+        camp.end_date
+    ) {
+      const date =
+        parseDateKey(
+          candidate
         );
-      });
-    });
+
+      const weekday =
+        date.getDay();
+
+      const occupied =
+        false;
+
+
+
+
+
+
+
+
+      if (
+        !occupied &&
+        weekday !== 0 &&
+        weekday !== 6
+      ) {
+        return candidate;
+      }
+
+      candidate =
+        addDays(
+          candidate,
+          1
+        );
+    }
+
+    return "";
   }
 
-  function getAvailableEndDates(
-    startDate,
-    excludeId = null
-  ) {
-    if (!startDate) return [];
+
+  function openCreateForm() {
+    const nextStart =
+      findNextAvailableDate();
+
+    setFormData({
+      name: "",
+      start_date:
+        nextStart,
+      end_date:
+        nextStart,
+    });
+
+    setErrorMessage("");
+    setIsFormOpen(true);
+  }
+
+
+  function getAvailableEndDates() {
+    if (
+      !formData.start_date
+    ) {
+      return [];
+    }
+
+    const all =
+      getAllDates(
+        formData.start_date,
+        camp.end_date
+      );
 
     const result = [];
 
     for (
       const dateKey
-      of getAllDates(
-        startDate,
-        camp.end_date
-      )
+      of all
     ) {
-      const overlaps = periods.some((period) => {
-        if (
-          excludeId &&
-          period.id === excludeId
-        ) {
-          return false;
-        }
+      const wouldOverlap =
+        false;
 
-        return rangesOverlap(
-          startDate,
-          dateKey,
-          period.start_date,
-          period.end_date
-        );
-      });
 
-      if (overlaps) break;
 
-      result.push(dateKey);
+
+
+
+
+
+
+
+      if (
+        wouldOverlap
+      ) {
+        break;
+      }
+
+      result.push(
+        dateKey
+      );
     }
 
     return result;
   }
 
-  function findNextAvailableDate() {
-    const available = getAvailableStartDates();
 
-    const weekday = available.find((dateKey) => {
-      const date = parseDateKey(dateKey);
-      const day = date.getDay();
-      return day !== 0 && day !== 6;
-    });
+  const availableStartDates =
+    useMemo(() => {
+      return getAllDates(
+        camp.start_date,
+        camp.end_date
+      ).filter(
+        (dateKey) => {
+          const occupied =
+            false;
 
-    return weekday || available[0] || "";
-  }
 
-  function openCreateForm() {
-    const nextStart = findNextAvailableDate();
 
-    setEditingPeriod(null);
-    setFormData({
-      name: "",
-      start_date: nextStart,
-      end_date: nextStart,
-    });
-    setErrorMessage("");
-    setIsFormOpen(true);
-  }
 
-  function openEditForm(period) {
-    setEditingPeriod(period);
-    setFormData({
-      name: period.name || "",
-      start_date: period.start_date || "",
-      end_date: period.end_date || "",
-    });
-    setErrorMessage("");
-    setIsFormOpen(true);
-  }
 
-  const availableStartDates = useMemo(
-    () =>
-      getAvailableStartDates(
-        editingPeriod?.id || null
-      ),
-    [
-      periods,
+
+
+
+          return !occupied;
+        }
+      );
+    }, [
       camp.start_date,
       camp.end_date,
-      editingPeriod?.id,
-    ]
-  );
-
-  const availableEndDates = useMemo(
-    () =>
-      getAvailableEndDates(
-        formData.start_date,
-        editingPeriod?.id || null
-      ),
-    [
-      formData.start_date,
       periods,
-      camp.end_date,
-      editingPeriod?.id,
-    ]
-  );
+    ]);
 
-  async function handleSubmit(event) {
+
+  const availableEndDates =
+    useMemo(
+      () =>
+        getAvailableEndDates(),
+      [
+        formData.start_date,
+        periods,
+        camp.end_date,
+      ]
+    );
+
+
+  async function handleCreatePeriod(
+    event
+  ) {
     event.preventDefault();
 
-    if (!formData.name.trim()) {
+    if (
+      !formData.name.trim()
+    ) {
       setErrorMessage(
         "請輸入梯次名稱。"
       );
@@ -419,25 +732,31 @@ function CampPeriodsPanel({
       return;
     }
 
-    const overlap = periods.some((period) => {
-      if (
-        editingPeriod &&
-        period.id === editingPeriod.id
-      ) {
-        return false;
-      }
-
-      return rangesOverlap(
-        formData.start_date,
-        formData.end_date,
-        period.start_date,
-        period.end_date
-      );
-    });
-
-    if (overlap) {
+    if (
+      formData.end_date <
+      formData.start_date
+    ) {
       setErrorMessage(
-        "此日期區間與其他梯次重疊，請重新選擇。"
+        "結束日期不能早於開始日期。"
+      );
+      return;
+    }
+
+    const hasOverlap =
+      false;
+
+
+
+
+
+
+
+
+
+
+    if (hasOverlap) {
+      setErrorMessage(
+        "此日期區間已與其他梯次重疊，請重新選擇。"
       );
       return;
     }
@@ -446,191 +765,239 @@ function CampPeriodsPanel({
       setIsSaving(true);
       setErrorMessage("");
 
-      if (editingPeriod) {
-        const { data, error } = await supabase
-          .from("camp_periods")
-          .update({
-            name: formData.name.trim(),
-            start_date: formData.start_date,
-            end_date: formData.end_date,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingPeriod.id)
-          .eq("camp_id", camp.id)
-          .select()
-          .single();
+      const nextSortOrder =
+        periods.length ===
+        0
+          ? 0
+          : Math.max(
+              ...periods.map(
+                (item) =>
+                  Number(
+                    item.sort_order ||
+                      0
+                  )
+              )
+            ) + 1;
 
-        if (error) throw error;
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "camp_periods"
+        )
+        .insert({
+          camp_id:
+            camp.id,
+          name:
+            formData.name.trim(),
+          start_date:
+            formData.start_date,
+          end_date:
+            formData.end_date,
+          sort_order:
+            nextSortOrder,
+        })
+        .select()
+        .single();
 
-        const {
-          error: deleteDatesError,
-        } = await supabase
-          .from("camp_period_dates")
-          .delete()
-          .eq("camp_id", camp.id)
-          .eq("period_id", editingPeriod.id);
-
-        if (deleteDatesError) throw deleteDatesError;
-
-        const dates = getWeekdayDates(
-          formData.start_date,
-          formData.end_date
-        );
-
-        if (dates.length > 0) {
-          const { error: dateError } = await supabase
-            .from("camp_period_dates")
-            .insert(
-              dates.map((dateKey) => ({
-                camp_id: camp.id,
-                period_id: editingPeriod.id,
-                camp_date: dateKey,
-                day_type: "GENERAL",
-              }))
-            );
-
-          if (dateError) throw dateError;
-        }
-
-        setPeriods((current) =>
-          current.map((period) =>
-            period.id === data.id ? data : period
-          )
-        );
-
-        setSelectedPeriodId(data.id);
-      } else {
-        const nextSortOrder =
-          periods.length === 0
-            ? 0
-            : Math.max(
-                ...periods.map((item) =>
-                  Number(item.sort_order || 0)
-                )
-              ) + 1;
-
-        const { data, error } = await supabase
-          .from("camp_periods")
-          .insert({
-            camp_id: camp.id,
-            name: formData.name.trim(),
-            start_date: formData.start_date,
-            end_date: formData.end_date,
-            sort_order: nextSortOrder,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        const dates = getWeekdayDates(
-          formData.start_date,
-          formData.end_date
-        );
-
-        if (dates.length > 0) {
-          const { error: dateError } = await supabase
-            .from("camp_period_dates")
-            .insert(
-              dates.map((dateKey) => ({
-                camp_id: camp.id,
-                period_id: data.id,
-                camp_date: dateKey,
-                day_type: "GENERAL",
-              }))
-            );
-
-          if (dateError) throw dateError;
-        }
-
-        setPeriods((current) => [
-          ...current,
-          data,
-        ]);
-
-        setSelectedPeriodId(data.id);
+      if (error) {
+        throw error;
       }
 
-      setIsFormOpen(false);
-      setEditingPeriod(null);
+      const dates =
+        getWeekdayDates(
+          formData.start_date,
+          formData.end_date
+        );
+
+      if (
+        dates.length > 0
+      ) {
+        const {
+          error:
+            dateError,
+        } = await supabase
+          .from(
+            "camp_period_dates"
+          )
+          .insert(
+            dates.map(
+              (dateKey) => ({
+                camp_id:
+                  camp.id,
+                period_id:
+                  data.id,
+                camp_date:
+                  dateKey,
+                day_type:
+                  "GENERAL",
+              })
+            )
+          );
+
+        if (dateError) {
+          throw dateError;
+        }
+      }
+
+      setPeriods(
+        (current) => [
+          ...current,
+          data,
+        ]
+      );
+
+      setSelectedPeriodId(
+        data.id
+      );
+
+      setIsFormOpen(
+        false
+      );
+
       setFormData({
         name: "",
         start_date: "",
         end_date: "",
       });
     } catch (error) {
-      console.error("儲存活動梯次失敗：", error);
+      console.error(
+        "建立梯次失敗：",
+        error
+      );
+
       setErrorMessage(
-        `儲存失敗：${error.message}`
+        `建立失敗：${error.message}`
       );
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleDelete(period) {
-    const confirmed = window.confirm(
-      `確定要刪除「${period.name}」嗎？\n\n此梯次的日期設定與梯次學生名單也會一起移除。`
-    );
-
-    if (!confirmed) return;
-
-    try {
-      setErrorMessage("");
-
-      const { error } = await supabase
-        .from("camp_periods")
-        .delete()
-        .eq("id", period.id)
-        .eq("camp_id", camp.id);
-
-      if (error) throw error;
-
-      const next = periods.filter(
-        (item) => item.id !== period.id
-      );
-
-      setPeriods(next);
-      setSelectedPeriodId(
-        next[0]?.id || ""
-      );
-    } catch (error) {
-      console.error("刪除活動梯次失敗：", error);
-      setErrorMessage(
-        `刪除失敗：${error.message}`
-      );
-    }
-  }
 
   async function updateDayType(
     row,
     dayType
   ) {
     try {
-      const { data, error } = await supabase
-        .from("camp_period_dates")
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "camp_period_dates"
+        )
         .update({
-          day_type: dayType,
-          updated_at: new Date().toISOString(),
+          day_type:
+            dayType,
+          updated_at:
+            new Date()
+              .toISOString(),
         })
-        .eq("id", row.id)
+        .eq(
+          "id",
+          row.id
+        )
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      setPeriodDates((current) =>
-        current.map((item) =>
-          item.id === data.id ? data : item
-        )
+      setPeriodDates(
+        (current) =>
+          current.map(
+            (item) =>
+              item.id ===
+                data.id
+                ? data
+                : item
+          )
       );
     } catch (error) {
-      console.error("更新日期類型失敗：", error);
+      console.error(
+        "更新日期類型失敗：",
+        error
+      );
+
       setErrorMessage(
         `更新失敗：${error.message}`
       );
     }
   }
+
+
+  async function addSingleDate() {
+    if (
+      !selectedPeriod
+    ) {
+      return;
+    }
+
+    const dateKey =
+      window.prompt(
+        "請輸入要新增的日期（YYYY-MM-DD）"
+      );
+
+    if (!dateKey) {
+      return;
+    }
+
+    try {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "camp_period_dates"
+        )
+        .insert({
+          camp_id:
+            camp.id,
+          period_id:
+            selectedPeriod.id,
+          camp_date:
+            dateKey,
+          day_type:
+            "GENERAL",
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setPeriodDates(
+        (current) =>
+          [
+            ...current,
+            data,
+          ].sort(
+            (a, b) =>
+              String(
+                a.camp_date
+              ).localeCompare(
+                String(
+                  b.camp_date
+                )
+              )
+          )
+      );
+    } catch (error) {
+      console.error(
+        "新增單日失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `新增單日失敗：${error.message}`
+      );
+    }
+  }
+
 
   if (isLoading) {
     return (
@@ -642,6 +1009,7 @@ function CampPeriodsPanel({
     );
   }
 
+
   return (
     <div className="campPeriodsPanel">
       <div className="campPeriodsPanel__header">
@@ -649,7 +1017,9 @@ function CampPeriodsPanel({
           <button
             type="button"
             className="campBackButton"
-            onClick={onBack}
+            onClick={
+              onBack
+            }
           >
             ← 返回營隊資料夾
           </button>
@@ -662,17 +1032,26 @@ function CampPeriodsPanel({
             活動梯次與日期設定
           </h2>
 
-          <p>{camp.name}</p>
+          <p>
+            {camp.name}
+          </p>
         </div>
 
         <button
           type="button"
           className="campPrimaryButton"
-          onClick={openCreateForm}
+          onClick={
+            openCreateForm
+          }
+          disabled={
+            availableStartDates.length ===
+            0
+          }
         >
           ＋ 建立新活動梯次
         </button>
       </div>
+
 
       {errorMessage && (
         <div className="campMessage campMessage--error">
@@ -680,59 +1059,63 @@ function CampPeriodsPanel({
         </div>
       )}
 
+
       <div className="campPeriodsLayout">
         <aside className="campPeriodsSidebar">
           <div className="campPeriodsSidebar__title">
             活動梯次清單
-            <span>{periods.length}</span>
+            <span>
+              {periods.length}
+            </span>
           </div>
 
-          {periods.map((period) => (
-            <div
-              key={period.id}
-              className={[
-                "campPeriodSelectCard",
-                selectedPeriodId === period.id
-                  ? "is-active"
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              <button
-                type="button"
-                className="campPeriodSelectCard__main"
-                onClick={() =>
-                  setSelectedPeriodId(period.id)
-                }
-              >
-                <strong>{period.name}</strong>
-                <span>
-                  {formatDate(period.start_date)}
-                  {" ～ "}
-                  {formatDate(period.end_date)}
-                </span>
-              </button>
-
-              <div className="campPeriodSelectCard__actions">
-                <button
-                  type="button"
-                  onClick={() => openEditForm(period)}
-                >
-                  編輯
-                </button>
-
-                <button
-                  type="button"
-                  className="is-danger"
-                  onClick={() => handleDelete(period)}
-                >
-                  刪除
-                </button>
-              </div>
+          {periods.length ===
+          0 ? (
+            <div className="campPeriodSidebarEmpty">
+              尚未建立梯次
             </div>
-          ))}
+          ) : (
+            periods.map(
+              (period) => (
+                <button
+                  key={
+                    period.id
+                  }
+                  type="button"
+                  className={[
+                    "campPeriodSelectCard",
+                    selectedPeriodId ===
+                    period.id
+                      ? "is-active"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() =>
+                    setSelectedPeriodId(
+                      period.id
+                    )
+                  }
+                >
+                  <strong>
+                    {period.name}
+                  </strong>
+
+                  <span>
+                    {formatDate(
+                      period.start_date
+                    )}
+                    {" ～ "}
+                    {formatDate(
+                      period.end_date
+                    )}
+                  </span>
+                </button>
+              )
+            )
+          )}
         </aside>
+
 
         <section className="campPeriodDatesArea">
           {!selectedPeriod ? (
@@ -749,62 +1132,97 @@ function CampPeriodsPanel({
                   </h3>
 
                   <p>
-                    共 {periodDates.length} 個活動日
+                    共{" "}
+                    {periodDates.length}{" "}
+                    個活動日
                   </p>
                 </div>
               </div>
 
+
               <div className="campPeriodDateGrid">
-                {periodDates.map((row) => {
-                  const date = parseDateKey(
-                    row.camp_date
-                  );
+                {periodDates.map(
+                  (row) => {
+                    const date =
+                      parseDateKey(
+                        row.camp_date
+                      );
 
-                  return (
-                    <article
-                      key={row.id}
-                      className="campPeriodDateCard"
-                    >
-                      <div>
-                        <strong>
-                          {row.camp_date}
-                        </strong>
-
-                        <span>
-                          {
-                            WEEKDAY_LABELS[
-                              date.getDay()
-                            ]
-                          }
-                        </span>
-                      </div>
-
-                      <select
-                        value={row.day_type}
-                        onChange={(event) =>
-                          updateDayType(
-                            row,
-                            event.target.value
-                          )
+                    return (
+                      <article
+                        key={
+                          row.id
                         }
+                        className="campPeriodDateCard"
                       >
-                        {DAY_TYPES.map((option) => (
-                          <option
-                            key={option.value}
-                            value={option.value}
-                          >
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </article>
-                  );
-                })}
+                        <div>
+                          <strong>
+                            {
+                              row.camp_date
+                            }
+                          </strong>
+
+                          <span>
+                            {
+                              WEEKDAY_LABELS[
+                                date.getDay()
+                              ]
+                            }
+                          </span>
+                        </div>
+
+                        <select
+                          value={
+                            row.day_type
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            updateDayType(
+                              row,
+                              event.target
+                                .value
+                            )
+                          }
+                        >
+                          {DAY_TYPES.map(
+                            (option) => (
+                              <option
+                                key={
+                                  option.value
+                                }
+                                value={
+                                  option.value
+                                }
+                              >
+                                {
+                                  option.label
+                                }
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </article>
+                    );
+                  }
+                )}
               </div>
+
+
+              <button
+                type="button"
+                className="campPeriodAddDateButton"
+                onClick={
+                  addSingleDate
+                }
+              >
+                ＋ 手動新增單日上課日期
+              </button>
             </>
           )}
         </section>
       </div>
+
 
       {isFormOpen && (
         <div className="campModalBackdrop">
@@ -812,123 +1230,183 @@ function CampPeriodsPanel({
             <div className="campModal__header">
               <div>
                 <p className="campEyebrow">
-                  {editingPeriod ? "EDIT PERIOD" : "NEW PERIOD"}
+                  NEW PERIOD
                 </p>
 
                 <h2>
-                  {editingPeriod
-                    ? "編輯活動梯次"
-                    : "建立活動梯次"}
+                  建立活動梯次
                 </h2>
               </div>
 
               <button
                 type="button"
                 className="campModal__close"
-                onClick={() => {
-                  setIsFormOpen(false);
-                  setEditingPeriod(null);
-                }}
+                onClick={() =>
+                  setIsFormOpen(
+                    false
+                  )
+                }
               >
                 ×
               </button>
             </div>
 
+
             <form
               className="campForm"
-              onSubmit={handleSubmit}
+              onSubmit={
+                handleCreatePeriod
+              }
             >
               <label className="campForm__field">
-                <span>梯次名稱 *</span>
+                <span>
+                  梯次名稱 *
+                </span>
 
                 <input
                   type="text"
-                  value={formData.name}
-                  onChange={(event) =>
-                    setFormData((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
+                  value={
+                    formData.name
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setFormData(
+                      (current) => ({
+                        ...current,
+                        name:
+                          event.target
+                            .value,
+                      })
+                    )
                   }
                   placeholder="例如：2027寒假第二梯"
                   autoFocus
                 />
               </label>
 
+
               <div className="campForm__dateGrid">
                 <label className="campForm__field">
-                  <span>開始日期 *</span>
+                  <span>
+                    開始日期 *
+                  </span>
 
                   <select
-                    value={formData.start_date}
-                    onChange={(event) => {
-                      const value = event.target.value;
+                    value={
+                      formData.start_date
+                    }
+                    onChange={(
+                      event
+                    ) => {
+                      const value =
+                        event.target
+                          .value;
 
-                      setFormData((current) => ({
-                        ...current,
-                        start_date: value,
-                        end_date: value,
-                      }));
+                      setFormData(
+                        (current) => ({
+                          ...current,
+                          start_date:
+                            value,
+                          end_date:
+                            value,
+                        })
+                      );
                     }}
                   >
                     <option value="">
                       請選擇開始日期
                     </option>
 
-                    {availableStartDates.map((dateKey) => (
-                      <option
-                        key={dateKey}
-                        value={dateKey}
-                      >
-                        {formatDate(dateKey)}
-                      </option>
-                    ))}
+                    {availableStartDates.map(
+                      (dateKey) => (
+                        <option
+                          key={
+                            dateKey
+                          }
+                          value={
+                            dateKey
+                          }
+                        >
+                          {
+                            formatDate(
+                              dateKey
+                            )
+                          }
+                        </option>
+                      )
+                    )}
                   </select>
                 </label>
 
+
                 <label className="campForm__field">
-                  <span>結束日期 *</span>
+                  <span>
+                    結束日期 *
+                  </span>
 
                   <select
-                    value={formData.end_date}
-                    disabled={!formData.start_date}
-                    onChange={(event) =>
-                      setFormData((current) => ({
-                        ...current,
-                        end_date: event.target.value,
-                      }))
+                    value={
+                      formData.end_date
+                    }
+                    disabled={
+                      !formData.start_date
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setFormData(
+                        (current) => ({
+                          ...current,
+                          end_date:
+                            event.target
+                              .value,
+                        })
+                      )
                     }
                   >
                     <option value="">
                       請選擇結束日期
                     </option>
 
-                    {availableEndDates.map((dateKey) => (
-                      <option
-                        key={dateKey}
-                        value={dateKey}
-                      >
-                        {formatDate(dateKey)}
-                      </option>
-                    ))}
+                    {availableEndDates.map(
+                      (dateKey) => (
+                        <option
+                          key={
+                            dateKey
+                          }
+                          value={
+                            dateKey
+                          }
+                        >
+                          {
+                            formatDate(
+                              dateKey
+                            )
+                          }
+                        </option>
+                      )
+                    )}
                   </select>
                 </label>
               </div>
 
+
               <p className="campPeriodFormHint">
-                如果目前第一梯錯誤佔滿整段日期，
-                請先用左側的「編輯」縮短第一梯；
-                之後就能正常建立第二梯、第三梯。
+                可自由選擇營隊期間內的日期，
+                不同活動梯次的日期可以重疊。
               </p>
+
 
               <div className="campModal__actions">
                 <button
                   type="button"
                   className="campSecondaryButton"
-                  onClick={() => {
-                    setIsFormOpen(false);
-                    setEditingPeriod(null);
-                  }}
+                  onClick={() =>
+                    setIsFormOpen(
+                      false
+                    )
+                  }
                 >
                   取消
                 </button>
@@ -936,12 +1414,12 @@ function CampPeriodsPanel({
                 <button
                   type="submit"
                   className="campPrimaryButton"
-                  disabled={isSaving}
+                  disabled={
+                    isSaving
+                  }
                 >
                   {isSaving
-                    ? "儲存中…"
-                    : editingPeriod
-                    ? "儲存修改"
+                    ? "建立中…"
                     : "建立梯次"}
                 </button>
               </div>
@@ -952,5 +1430,6 @@ function CampPeriodsPanel({
     </div>
   );
 }
+
 
 export default CampPeriodsPanel;
