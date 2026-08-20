@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import CampStudentsPanel from "../components/camp/CampStudentsPanel";
 import CampPeriodsPanel from "../components/camp/CampPeriodsPanel";
-import CampPeriodStudentsPanel from "../components/camp/CampPeriodStudentsPanel";
 import CampDailyRegistrationPanel from "../components/camp/CampDailyRegistrationPanel";
 import CampFormModal from "../components/camp/CampFormModal";
 
@@ -45,15 +44,6 @@ function CampDetailPage({
     );
   }
 
-  if (activeSection === "periodStudents") {
-    return (
-      <CampPeriodStudentsPanel
-        camp={camp}
-        onBack={() => setActiveSection("folder")}
-      />
-    );
-  }
-
   if (activeSection === "daily") {
     return (
       <CampDailyRegistrationPanel
@@ -74,12 +64,6 @@ function CampDetailPage({
       key: "periods",
       title: "活動梯次",
       description: "建立梯次、起迄日期，並設定每天的課程類型。",
-      ready: true,
-    },
-    {
-      key: "periodStudents",
-      title: "梯次學生",
-      description: "先選梯次，再從學生總名單勾選這一梯有哪些學生。",
       ready: true,
     },
     {
@@ -163,7 +147,7 @@ function CampDetailPage({
         <strong>這是一個獨立營隊資料夾</strong>
 
         <p>
-          學生、活動梯次、梯次名單、每日報名、編班、工作人員、
+          學生、活動梯次、每日報名、編班、工作人員、
           排班與清潔資料都只屬於這次營隊。
         </p>
       </section>
@@ -180,7 +164,9 @@ function CampDetailPage({
               .join(" ")}
           >
             <span className="campSectionCard__dot" />
+
             <h2>{section.title}</h2>
+
             <p>{section.description}</p>
 
             {section.ready ? (
@@ -192,7 +178,10 @@ function CampDetailPage({
                 進入管理 →
               </button>
             ) : (
-              <button type="button" disabled>
+              <button
+                type="button"
+                disabled
+              >
                 即將建立
               </button>
             )}

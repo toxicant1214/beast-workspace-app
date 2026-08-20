@@ -181,7 +181,7 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
     }
   }
 
-  async function loadPeriodStudents(periodId) {
+  async function loadPeriodStudents() {
     try {
       setIsLoadingStudent(true);
       setErrorMessage("");
@@ -189,36 +189,29 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
       setSelectedStudentId("");
 
       const { data, error } = await supabase
-        .from("camp_period_students")
+        .from("camp_students")
         .select(`
-          student_id,
-          camp_students (
-            id,
-            chinese_name,
-            grade,
-            school
-          )
+          id,
+          chinese_name,
+          grade,
+          school
         `)
-        .eq("camp_id", camp.id)
-        .eq("period_id", periodId);
+        .eq("camp_id", camp.id);
 
       if (error) throw error;
 
-      const nextStudents = (data ?? [])
-        .map((row) => row.camp_students)
-        .filter(Boolean)
-        .sort((a, b) => {
-          const gradeDiff =
-            (GRADE_ORDER[a.grade] ?? 999) -
-            (GRADE_ORDER[b.grade] ?? 999);
+      const nextStudents = (data ?? []).sort((a, b) => {
+        const gradeDiff =
+          (GRADE_ORDER[a.grade] ?? 999) -
+          (GRADE_ORDER[b.grade] ?? 999);
 
-          if (gradeDiff !== 0) return gradeDiff;
+        if (gradeDiff !== 0) return gradeDiff;
 
-          return String(a.chinese_name || "").localeCompare(
-            String(b.chinese_name || ""),
-            "zh-Hant"
-          );
-        });
+        return String(a.chinese_name || "").localeCompare(
+          String(b.chinese_name || ""),
+          "zh-Hant"
+        );
+      });
 
       setStudents(nextStudents);
 
@@ -226,8 +219,8 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
         setSelectedStudentId(nextStudents[0].id);
       }
     } catch (error) {
-      console.error("讀取梯次學生失敗：", error);
-      setErrorMessage(`讀取梯次學生失敗：${error.message}`);
+      console.error("讀取營隊學生失敗：", error);
+      setErrorMessage(`讀取營隊學生失敗：${error.message}`);
     } finally {
       setIsLoadingStudent(false);
     }
@@ -530,7 +523,7 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
             disabled={isSaving || isLoadingStudent || students.length === 0}
           >
             {students.length === 0 ? (
-              <option value="">此梯次尚未選擇學生</option>
+              <option value="">營隊學生總名單目前沒有學生</option>
             ) : (
               students.map((student) => (
                 <option key={student.id} value={student.id}>
@@ -554,8 +547,8 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
         <div className="campEmptyState">尚未建立活動梯次。</div>
       ) : students.length === 0 ? (
         <div className="campEmptyState">
-          <strong>此梯次目前沒有學生</strong>
-          <p>請先回到「梯次學生」，勾選本梯參加者。</p>
+          <strong>營隊學生總名單目前沒有學生</strong>
+          <p>請先回到「學生總名單」加入這次營隊的學生。</p>
         </div>
       ) : !selectedStudentId ? (
         <div className="campEmptyState">請選擇學生。</div>
