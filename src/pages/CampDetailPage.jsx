@@ -3,6 +3,7 @@ import { useState } from "react";
 import CampStudentsPanel from "../components/camp/CampStudentsPanel";
 import CampPeriodsPanel from "../components/camp/CampPeriodsPanel";
 import CampDailyRegistrationPanel from "../components/camp/CampDailyRegistrationPanel";
+import CampClassesPanel from "../components/camp/CampClassesPanel";
 import CampFormModal from "../components/camp/CampFormModal";
 
 const STATUS_LABELS = {
@@ -53,6 +54,15 @@ function CampDetailPage({
     );
   }
 
+  if (activeSection === "classes") {
+    return (
+      <CampClassesPanel
+        camp={camp}
+        onBack={() => setActiveSection("folder")}
+      />
+    );
+  }
+
   const sections = [
     {
       key: "students",
@@ -75,8 +85,8 @@ function CampDetailPage({
     {
       key: "classes",
       title: "營隊編班",
-      description: "建立編班區間並安排各班學生。",
-      ready: false,
+      description: "建立獨立編班區間，再依各區間安排班級與學生。",
+      ready: true,
     },
     {
       key: "staff",
@@ -178,10 +188,7 @@ function CampDetailPage({
                 進入管理 →
               </button>
             ) : (
-              <button
-                type="button"
-                disabled
-              >
+              <button type="button" disabled>
                 即將建立
               </button>
             )}
