@@ -443,8 +443,8 @@ function CampRollCallPanel({ camp, onBack }) {
               width: "100%",
               minHeight: "auto",
               boxSizing: "border-box",
-              padding: "34px 30px 30px",
-              background: "#fbf8f1",
+              padding: "24px 22px 20px",
+              background: "#fffdf8",
               color: "#4b463f",
               fontFamily: '"Iansui", "芫荽", cursive',
               border: "1px solid #e0d8cc",
@@ -452,12 +452,12 @@ function CampRollCallPanel({ camp, onBack }) {
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: "32px", alignItems: "flex-end", marginBottom: "28px" }}>
               <div>
-                <div style={{ fontSize: "30px", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "5px" }}>倍思學院</div>
-                <div style={{ fontSize: "13px", letterSpacing: "0.22em", opacity: 0.62 }}>BEAST ACADEMY</div>
+                <div style={{ fontSize: "26px", fontWeight: 700, letterSpacing: "0.06em", marginBottom: "3px" }}>倍思學院</div>
+                <div style={{ fontSize: "11px", letterSpacing: "0.20em", opacity: 0.58 }}>BEAST ACADEMY</div>
               </div>
 
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "24px", fontWeight: 700, marginBottom: "6px" }}>{camp.name} 點名表</div>
+                <div style={{ fontSize: "20px", fontWeight: 700, marginBottom: "4px" }}>{camp.name} 點名表</div>
                 <div style={{ fontSize: "10px", opacity: 0.72 }}>
                   {selectedPeriod.name}　｜　{selectedClass.name}　｜　{classStudents.length} 人
                 </div>
@@ -466,19 +466,27 @@ function CampRollCallPanel({ camp, onBack }) {
 
             <div style={{ height: "5px", borderRadius: "999px", background: "#9aa58f", opacity: 0.75, marginBottom: "22px" }} />
 
-            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", background: "rgba(255,255,255,0.42)", fontSize: "13px" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                tableLayout: "fixed",
+                background: "#fff",
+                fontSize: "12px",
+              }}
+            >
               <thead>
                 <tr>
-                  <th style={headerCellStyle(46)}>編號</th>
-                  <th style={headerCellStyle(68)}>年級</th>
-                  <th style={headerCellStyle(92)}>中文姓名</th>
-                  <th style={headerCellStyle(88)}>英文姓名</th>
-                  <th style={headerCellStyle(112)}>聯絡電話</th>
+                  <th style={headerCellStyle(42)}>編號</th>
+                  <th style={headerCellStyle(60)}>年級</th>
+                  <th style={headerCellStyle(82)}>中文姓名</th>
+                  <th style={headerCellStyle(82)}>英文姓名</th>
+                  <th style={headerCellStyle(104)}>聯絡電話</th>
 
                   {periodDates.map((dateKey) => {
                     const dayMeta = dayMetaByDate.get(dateKey);
                     return (
-                      <th key={dateKey} style={headerCellStyle(undefined)}>
+                      <th key={dateKey} style={headerCellStyle(62)}>
                         <div>{formatShortDate(dateKey)}</div>
                         <div style={{ fontSize: "14px", opacity: 0.66, marginTop: "3px" }}>
                           （{getWeekday(dateKey)}）{dayMeta?.title ? ` ${dayMeta.title}` : ""}
@@ -510,6 +518,11 @@ function CampRollCallPanel({ camp, onBack }) {
                             ...bodyCellStyle,
                             fontWeight: mark === "/" ? 400 : 700,
                             color: mark === "/" ? "#aaa39a" : "#4b463f",
+                            whiteSpace: "nowrap",
+                            fontSize:
+                              mark.length >= 5
+                                ? "10px"
+                                : "12px",
                           }}
                         >
                           {mark}
@@ -521,7 +534,7 @@ function CampRollCallPanel({ camp, onBack }) {
               </tbody>
             </table>
 
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "28px", marginTop: "26px", fontSize: "15px", opacity: 0.72 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "18px", marginTop: "16px", fontSize: "11px", opacity: 0.66 }}>
               <div>空白＝一般整日　／＝未報名　假＝請假　出＝戶外教學　其餘顯示實際報名內容</div>
               <div>{formatDate(selectedPeriod.start_date)} — {formatDate(selectedPeriod.end_date)}</div>
             </div>
@@ -535,23 +548,25 @@ function CampRollCallPanel({ camp, onBack }) {
 function headerCellStyle(width) {
   return {
     ...(width ? { width } : {}),
-    border: "1px solid #bdb7ae",
-    padding: "8px 4px",
+    border: "1px solid #aaa59d",
+    padding: "7px 3px",
     textAlign: "center",
     verticalAlign: "middle",
-    background: "#e9e6dc",
+    background: "#f1efe9",
     fontWeight: 700,
-    lineHeight: 1.35,
+    lineHeight: 1.25,
+    whiteSpace: "nowrap",
   };
 }
 
 const bodyCellStyle = {
-  border: "1px solid #c9c3ba",
-  padding: "8px 4px",
+  border: "1px solid #b8b3aa",
+  padding: "7px 3px",
   textAlign: "center",
   verticalAlign: "middle",
-  height: "34px",
-  lineHeight: 1.35,
+  height: "36px",
+  lineHeight: 1.2,
+  whiteSpace: "nowrap",
 };
 
 export default CampRollCallPanel;

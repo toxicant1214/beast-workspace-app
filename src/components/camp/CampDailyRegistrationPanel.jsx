@@ -1181,7 +1181,11 @@ function CampDailyRegistrationPanel({
                 !record.registered ||
                 record.status !==
                   "NORMAL" ||
-                outdoorDay;
+                outdoorDay ||
+                (
+                  overnightDay &&
+                  record.overnight_mode === "JOIN"
+                );
 
               return (
                 <article
@@ -1417,6 +1421,34 @@ function CampDailyRegistrationPanel({
                                         .checked
                                         ? "JOIN"
                                         : "INDOOR",
+
+                                    morning:
+                                      event
+                                        .target
+                                        .checked
+                                        ? false
+                                        : record.morning,
+
+                                    afternoon:
+                                      event
+                                        .target
+                                        .checked
+                                        ? false
+                                        : record.afternoon,
+
+                                    meal:
+                                      event
+                                        .target
+                                        .checked
+                                        ? false
+                                        : record.meal,
+
+                                    talent:
+                                      event
+                                        .target
+                                        .checked
+                                        ? false
+                                        : record.talent,
                                   }
                                 )
                               }
