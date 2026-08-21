@@ -541,8 +541,13 @@ function CampDailyRegistrationPanel({
             false,
 
           overnight_mode:
-            row.overnight_mode ||
-            "",
+            row.overnight_mode === "JOIN"
+              ? "JOIN"
+              : row.overnight_mode === "INDOOR"
+              ? "INDOOR"
+              : row.overnight_mode === "ABSENT"
+              ? "ABSENT"
+              : "",
 
           outdoor_joined:
             attendanceStatus ===
@@ -848,13 +853,14 @@ function CampDailyRegistrationPanel({
                   : false,
 
               overnight_mode:
-                overnightDay &&
-                record.registered &&
-                record.status !==
-                  "LEAVE" &&
-                record.overnight_mode ===
-                  "OVERNIGHT"
-                  ? "OVERNIGHT"
+                overnightDay
+                  ? !record.registered
+                    ? "ABSENT"
+                    : record.status === "LEAVE"
+                    ? "ABSENT"
+                    : record.overnight_mode === "JOIN"
+                    ? "JOIN"
+                    : "INDOOR"
                   : null,
 
               leave_type:
@@ -1260,7 +1266,9 @@ function CampDailyRegistrationPanel({
                                 false,
 
                               overnight_mode:
-                                "",
+                                overnightDay
+                                  ? "ABSENT"
+                                  : "",
                             }
                           );
                         } else {
@@ -1326,8 +1334,12 @@ function CampDailyRegistrationPanel({
                               event
                                 .target
                                 .checked
-                                ? record.overnight_mode
-                                : "",
+                                ? (
+                                    record.overnight_mode === "JOIN"
+                                      ? "JOIN"
+                                      : "INDOOR"
+                                  )
+                                : "ABSENT",
                           }
                         )
                       }
@@ -1358,37 +1370,40 @@ function CampDailyRegistrationPanel({
                       >
                         <label
                           style={{
-                            display:
-                              "flex",
-                            alignItems:
-                              "center",
-                            justifyContent:
-                              "space-between",
-                            gap:
-                              "16px",
-                            cursor:
-                              "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "10px",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            flexWrap: "nowrap",
                           }}
                         >
-                          <strong>
-                            兩天一夜過夜營
+                          <strong
+                            style={{
+                              whiteSpace: "nowrap",
+                              fontSize: "14px",
+                              flexShrink: 0,
+                            }}
+                          >
+                            兩天一夜
                           </strong>
 
                           <span
                             style={{
-                              display:
-                                "flex",
-                              alignItems:
-                                "center",
-                              gap:
-                                "8px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              whiteSpace: "nowrap",
+                              flexShrink: 0,
+                              fontSize: "14px",
                             }}
                           >
                             <input
                               type="checkbox"
                               checked={
                                 record.overnight_mode ===
-                                "OVERNIGHT"
+                                "JOIN"
                               }
                               onChange={(
                                 event
@@ -1400,8 +1415,8 @@ function CampDailyRegistrationPanel({
                                       event
                                         .target
                                         .checked
-                                        ? "OVERNIGHT"
-                                        : "",
+                                        ? "JOIN"
+                                        : "INDOOR",
                                   }
                                 )
                               }
@@ -1433,30 +1448,33 @@ function CampDailyRegistrationPanel({
                       >
                         <label
                           style={{
-                            display:
-                              "flex",
-                            alignItems:
-                              "center",
-                            justifyContent:
-                              "space-between",
-                            gap:
-                              "16px",
-                            cursor:
-                              "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "10px",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            flexWrap: "nowrap",
                           }}
                         >
-                          <strong>
+                          <strong
+                            style={{
+                              whiteSpace: "nowrap",
+                              fontSize: "14px",
+                              flexShrink: 0,
+                            }}
+                          >
                             戶外教學
                           </strong>
 
                           <span
                             style={{
-                              display:
-                                "flex",
-                              alignItems:
-                                "center",
-                              gap:
-                                "8px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              whiteSpace: "nowrap",
+                              flexShrink: 0,
+                              fontSize: "14px",
                             }}
                           >
                             <input
