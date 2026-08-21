@@ -66,7 +66,8 @@ function getAttendanceMark(record, dayMeta) {
   if (
     overnightMode.includes("OVERNIGHT") ||
     overnightMode.includes("JOIN") ||
-    overnightMode.includes("STAY")
+    overnightMode.includes("STAY") ||
+    dayType.includes("兩天一夜")
   ) {
     return "兩天一夜";
   }
@@ -82,7 +83,9 @@ function getAttendanceMark(record, dayMeta) {
   // 戶外教學：有參加顯示「出」。
   if (
     dayType.includes("OUTDOOR") ||
-    dayType.includes("FIELD")
+    dayType.includes("FIELD") ||
+    dayType.includes("戶外教學") ||
+    dayType.includes("戶外")
   ) {
     return "出";
   }
@@ -202,77 +205,81 @@ function CampRollCallPanel({ camp, onBack }) {
       setIsLoadingPeriod(true);
       setErrorMessage("");
 
-      const [classResult, assignmentResult, periodDateResult, dayMetaResult, recordResult] =
-        await Promise.all([
-          supabase
-            .from("camp_classes")
-            .select("id, camp_id, period_id, name, sort_order")
-            .eq("camp_id", camp.id)
-            .eq("period_id", periodId)
-            .order("sort_order", { ascending: true })
-            .order("name", { ascending: true }),
+      const [
+        classResult,
+        assignmentResult,
+        periodDateResult,
+        recordResult,
+      ] = await Promise.all([
+        supabase
+          .from("camp_classes")
+          .select("id, camp_id, period_id, name, sort_order")
+          .eq("camp_id", camp.id)
+          .eq("period_id", periodId)
+          .order("sort_order", { ascending: true })
+          .order("name", { ascending: true }),
 
-          supabase
-            .from("camp_class_students")
-            .select("id, camp_id, period_id, class_id, student_id")
-            .eq("camp_id", camp.id)
-            .eq("period_id", periodId),
+        supabase
+          .from("camp_class_students")
+          .select("id, camp_id, period_id, class_id, student_id")
+          .eq("camp_id", camp.id)
+          .eq("period_id", periodId),
 
-          supabase
-            .from("camp_period_dates")
-            .select("camp_date")
-            .eq("camp_id", camp.id)
-            .eq("period_id", periodId)
-            .order("camp_date", { ascending: true }),
+        supabase
+          .from("camp_period_dates")
+          .select("id, camp_date, day_type, note")
+          .eq("camp_id", camp.id)
+          .eq("period_id", periodId)
+          .order("camp_date", { ascending: true }),
 
-          supabase
-            .from("camp_dates")
-            .select("id, camp_id, camp_date, day_type, title, notes")
-            .eq("camp_id", camp.id),
-
-          supabase
-            .from("camp_student_daily_records")
-            .select(`
+        supabase
+          .from("camp_student_daily_records")
+          .select(`
+            id,
+            camp_id,
+            camp_date_id,
+            student_id,
+            attendance_status,
+            morning,
+            afternoon,
+            meal,
+            talent,
+            overnight_mode,
+            leave_type,
+            is_late_registration,
+            note,
+            camp_dates (
               id,
-              camp_id,
-              camp_date_id,
-              student_id,
-              attendance_status,
-              morning,
-              afternoon,
-              meal,
-              talent,
-              overnight_mode,
-              leave_type,
-              is_late_registration,
-              note,
-              camp_dates (
-                id,
-                camp_date,
-                day_type,
-                title
-              )
-            `)
-            .eq("camp_id", camp.id),
-        ]);
+              camp_date
+            )
+          `)
+          .eq("camp_id", camp.id),
+      ]);
 
       if (classResult.error) throw classResult.error;
       if (assignmentResult.error) throw assignmentResult.error;
       if (periodDateResult.error) throw periodDateResult.error;
-      if (dayMetaResult.error) throw dayMetaResult.error;
       if (recordResult.error) throw recordResult.error;
 
       const nextClasses = classResult.data ?? [];
-      const nextPeriodDates = (periodDateResult.data ?? [])
-        .map((row) => row.camp_date)
-        .filter(Boolean)
-        .filter(isWeekday);
-      const dateSet = new Set(nextPeriodDates);
+
+      const nextDayMetaRows =
+        (periodDateResult.data ?? [])
+          .filter((row) => row.camp_date)
+          .filter((row) => isWeekday(row.camp_date));
+
+      const nextPeriodDates =
+        nextDayMetaRows.map(
+          (row) => row.camp_date
+        );
+
+      const dateSet =
+        new Set(nextPeriodDates);
 
       setClasses(nextClasses);
       setClassAssignments(assignmentResult.data ?? []);
       setPeriodDates(nextPeriodDates);
-      setDayMetaRows((dayMetaResult.data ?? []).filter((row) => dateSet.has(row.camp_date)));
+      setDayMetaRows(nextDayMetaRows);
       setDailyRecords(
         (recordResult.data ?? []).filter((row) => {
           const dateKey = row.camp_dates?.camp_date;

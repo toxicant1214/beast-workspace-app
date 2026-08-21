@@ -391,16 +391,16 @@ function CampDailyRegistrationPanel({
     try {
       setErrorMessage("");
 
-      const [
-        periodDateResult,
-        dayMetaResult,
-      ] = await Promise.all([
-        supabase
+      const { data, error } =
+        await supabase
           .from(
             "camp_period_dates"
           )
           .select(`
-            camp_date
+            id,
+            camp_date,
+            day_type,
+            note
           `)
           .eq(
             "camp_id",
@@ -415,59 +415,24 @@ function CampDailyRegistrationPanel({
             {
               ascending: true,
             }
-          ),
+          );
 
-        supabase
-          .from("camp_dates")
-          .select(`
-            id,
-            camp_date,
-            day_type,
-            title
-          `)
-          .eq(
-            "camp_id",
-            camp.id
-          ),
-      ]);
+      if (error) throw error;
 
-      if (
-        periodDateResult.error
-      ) {
-        throw periodDateResult.error;
-      }
-
-      if (
-        dayMetaResult.error
-      ) {
-        throw dayMetaResult.error;
-      }
-
-      const nextPeriodDates =
-        periodDateResult.data ??
-        [];
-
-      const dateSet =
-        new Set(
-          nextPeriodDates.map(
-            (row) =>
-              row.camp_date
-          )
-        );
+      const nextRows =
+        data ?? [];
 
       setPeriodDates(
-        nextPeriodDates
+        nextRows.map(
+          (row) => ({
+            camp_date:
+              row.camp_date,
+          })
+        )
       );
 
       setDayMetaRows(
-        (
-          dayMetaResult.data ??
-          []
-        ).filter((row) =>
-          dateSet.has(
-            row.camp_date
-          )
-        )
+        nextRows
       );
     } catch (error) {
       console.error(
