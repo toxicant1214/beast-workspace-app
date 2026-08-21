@@ -46,37 +46,49 @@ function getGradeLabel(value) {
 
 function parseDateKey(dateKey) {
   if (!dateKey) return null;
-  const [year, month, day] = String(dateKey).split("-").map(Number);
+
+  const [year, month, day] = String(dateKey)
+    .split("-")
+    .map(Number);
+
   if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day, 12, 0, 0);
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    12,
+    0,
+    0
+  );
 }
 
-function toDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function normalizeType(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
 }
 
-function getWeekdayDates(startDate, endDate) {
-  const start = parseDateKey(startDate);
-  const end = parseDateKey(endDate);
-  if (!start || !end) return [];
+function isOvernightDay(dayMeta) {
+  const dayType = normalizeType(dayMeta?.day_type);
+  const title = normalizeType(dayMeta?.title);
 
-  const result = [];
-  const current = new Date(start);
+  return (
+    dayType.includes("OVERNIGHT") ||
+    dayType.includes("CAMP") ||
+    title.includes("兩天一夜")
+  );
+}
 
-  while (current <= end) {
-    const weekday = current.getDay();
+function isOutdoorDay(dayMeta) {
+  const dayType = normalizeType(dayMeta?.day_type);
+  const title = normalizeType(dayMeta?.title);
 
-    if (weekday !== 0 && weekday !== 6) {
-      result.push(toDateKey(current));
-    }
-
-    current.setDate(current.getDate() + 1);
-  }
-
-  return result;
+  return (
+    dayType.includes("OUTDOOR") ||
+    dayType.includes("FIELD") ||
+    title.includes("戶外")
+  );
 }
 
 function createEmptyRecord() {
@@ -87,23 +99,36 @@ function createEmptyRecord() {
     afternoon: true,
     meal: true,
     talent: false,
+    overnight_mode: "",
+    outdoor_joined: false,
     leave_type: "",
     note: "",
   };
 }
 
-function CampDailyRegistrationPanel({ camp, onBack }) {
+function CampDailyRegistrationPanel({
+  camp,
+  onBack,
+}) {
   const [periods, setPeriods] = useState([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState("");
+
   const [students, setStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState("");
+
+  const [periodDates, setPeriodDates] = useState([]);
+  const [dayMetaRows, setDayMetaRows] = useState([]);
+
   const [recordsByDate, setRecordsByDate] = useState({});
+
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingStudent, setIsLoadingStudent] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
   const [errorMessage, setErrorMessage] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
   const recordsRef = useRef({});
   const selectedStudentRef = useRef("");
   const activeDatesRef = useRef([]);
@@ -116,66 +141,138 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
     if (!selectedPeriodId) {
       setStudents([]);
       setSelectedStudentId("");
+      setPeriodDates([]);
+      setDayMetaRows([]);
       return;
     }
 
     loadPeriodStudents(selectedPeriodId);
+    loadPeriodDates(selectedPeriodId);
   }, [selectedPeriodId]);
 
   const selectedPeriod = useMemo(
-    () => periods.find((period) => period.id === selectedPeriodId) || null,
-    [periods, selectedPeriodId]
+    () =>
+      periods.find(
+        (period) =>
+          period.id === selectedPeriodId
+      ) || null,
+    [
+      periods,
+      selectedPeriodId,
+    ]
   );
 
-  const activeDates = useMemo(() => {
-    if (!selectedPeriod) return [];
-    return getWeekdayDates(selectedPeriod.start_date, selectedPeriod.end_date);
-  }, [selectedPeriod]);
+  const activeDates = useMemo(
+    () =>
+      periodDates.map(
+        (item) => item.camp_date
+      ),
+    [periodDates]
+  );
+
+  const dayMetaByDate = useMemo(() => {
+    const map = new Map();
+
+    for (const row of dayMetaRows) {
+      map.set(
+        row.camp_date,
+        row
+      );
+    }
+
+    return map;
+  }, [dayMetaRows]);
 
   useEffect(() => {
-    recordsRef.current = recordsByDate;
+    recordsRef.current =
+      recordsByDate;
   }, [recordsByDate]);
 
   useEffect(() => {
-    selectedStudentRef.current = selectedStudentId;
+    selectedStudentRef.current =
+      selectedStudentId;
   }, [selectedStudentId]);
 
   useEffect(() => {
-    activeDatesRef.current = activeDates;
+    activeDatesRef.current =
+      activeDates;
   }, [activeDates]);
 
   useEffect(() => {
-    if (!selectedPeriodId || !selectedStudentId || activeDates.length === 0) {
+    if (
+      !selectedPeriodId ||
+      !selectedStudentId ||
+      activeDates.length === 0
+    ) {
       setRecordsByDate({});
       return;
     }
 
     loadStudentRecords();
-  }, [selectedPeriodId, selectedStudentId, activeDates.join("|")]);
+  }, [
+    selectedPeriodId,
+    selectedStudentId,
+    activeDates.join("|"),
+  ]);
 
   async function loadPeriods() {
     try {
       setIsLoading(true);
       setErrorMessage("");
 
-      const { data, error } = await supabase
-        .from("camp_periods")
-        .select("id, name, start_date, end_date, sort_order")
-        .eq("camp_id", camp.id)
-        .order("sort_order", { ascending: true })
-        .order("start_date", { ascending: true });
+      const { data, error } =
+        await supabase
+          .from("camp_periods")
+          .select(`
+            id,
+            name,
+            start_date,
+            end_date,
+            sort_order
+          `)
+          .eq(
+            "camp_id",
+            camp.id
+          )
+          .order(
+            "sort_order",
+            {
+              ascending: true,
+            }
+          )
+          .order(
+            "start_date",
+            {
+              ascending: true,
+            }
+          );
 
       if (error) throw error;
 
-      const nextPeriods = data ?? [];
-      setPeriods(nextPeriods);
+      const nextPeriods =
+        data ?? [];
 
-      if (nextPeriods.length > 0) {
-        setSelectedPeriodId(nextPeriods[0].id);
+      setPeriods(
+        nextPeriods
+      );
+
+      if (
+        nextPeriods.length >
+        0
+      ) {
+        setSelectedPeriodId(
+          nextPeriods[0].id
+        );
       }
     } catch (error) {
-      console.error("讀取每日報名梯次失敗：", error);
-      setErrorMessage(`讀取梯次失敗：${error.message}`);
+      console.error(
+        "讀取每日報名梯次失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `讀取梯次失敗：${error.message}`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -188,41 +285,171 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
       setSavedMessage("");
       setSelectedStudentId("");
 
-      const { data, error } = await supabase
-        .from("camp_students")
-        .select(`
-          id,
-          chinese_name,
-          grade,
-          school
-        `)
-        .eq("camp_id", camp.id);
+      const { data, error } =
+        await supabase
+          .from("camp_students")
+          .select(`
+            id,
+            chinese_name,
+            grade,
+            school
+          `)
+          .eq(
+            "camp_id",
+            camp.id
+          );
 
       if (error) throw error;
 
-      const nextStudents = (data ?? []).sort((a, b) => {
-        const gradeDiff =
-          (GRADE_ORDER[a.grade] ?? 999) -
-          (GRADE_ORDER[b.grade] ?? 999);
+      const nextStudents =
+        (data ?? []).sort(
+          (a, b) => {
+            const gradeDiff =
+              (GRADE_ORDER[
+                a.grade
+              ] ?? 999) -
+              (GRADE_ORDER[
+                b.grade
+              ] ?? 999);
 
-        if (gradeDiff !== 0) return gradeDiff;
+            if (
+              gradeDiff !== 0
+            ) {
+              return gradeDiff;
+            }
 
-        return String(a.chinese_name || "").localeCompare(
-          String(b.chinese_name || ""),
-          "zh-Hant"
+            return String(
+              a.chinese_name ||
+                ""
+            ).localeCompare(
+              String(
+                b.chinese_name ||
+                  ""
+              ),
+              "zh-Hant"
+            );
+          }
         );
-      });
 
-      setStudents(nextStudents);
+      setStudents(
+        nextStudents
+      );
 
-      if (nextStudents.length > 0) {
-        setSelectedStudentId(nextStudents[0].id);
+      if (
+        nextStudents.length >
+        0
+      ) {
+        setSelectedStudentId(
+          nextStudents[0].id
+        );
       }
     } catch (error) {
-      console.error("讀取營隊學生失敗：", error);
-      setErrorMessage(`讀取營隊學生失敗：${error.message}`);
+      console.error(
+        "讀取營隊學生失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `讀取營隊學生失敗：${error.message}`
+      );
     } finally {
       setIsLoadingStudent(false);
+    }
+  }
+
+  async function loadPeriodDates(
+    periodId
+  ) {
+    try {
+      setErrorMessage("");
+
+      const [
+        periodDateResult,
+        dayMetaResult,
+      ] = await Promise.all([
+        supabase
+          .from(
+            "camp_period_dates"
+          )
+          .select(`
+            camp_date
+          `)
+          .eq(
+            "camp_id",
+            camp.id
+          )
+          .eq(
+            "period_id",
+            periodId
+          )
+          .order(
+            "camp_date",
+            {
+              ascending: true,
+            }
+          ),
+
+        supabase
+          .from("camp_dates")
+          .select(`
+            id,
+            camp_date,
+            day_type,
+            title
+          `)
+          .eq(
+            "camp_id",
+            camp.id
+          ),
+      ]);
+
+      if (
+        periodDateResult.error
+      ) {
+        throw periodDateResult.error;
+      }
+
+      if (
+        dayMetaResult.error
+      ) {
+        throw dayMetaResult.error;
+      }
+
+      const nextPeriodDates =
+        periodDateResult.data ??
+        [];
+
+      const dateSet =
+        new Set(
+          nextPeriodDates.map(
+            (row) =>
+              row.camp_date
+          )
+        );
+
+      setPeriodDates(
+        nextPeriodDates
+      );
+
+      setDayMetaRows(
+        (
+          dayMetaResult.data ??
+          []
+        ).filter((row) =>
+          dateSet.has(
+            row.camp_date
+          )
+        )
+      );
+    } catch (error) {
+      console.error(
+        "讀取梯次日期設定失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `讀取梯次日期設定失敗：${error.message}`
+      );
     }
   }
 
@@ -232,111 +459,261 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
       setErrorMessage("");
       setSavedMessage("");
 
-      const { data, error } = await supabase
-        .from("camp_student_daily_records")
-        .select(`
-          id,
-          attendance_status,
-          morning,
-          afternoon,
-          meal,
-          talent,
-          leave_type,
-          note,
-          camp_dates (
-            id,
-            camp_date
+      const { data, error } =
+        await supabase
+          .from(
+            "camp_student_daily_records"
           )
-        `)
-        .eq("camp_id", camp.id)
-        .eq("student_id", selectedStudentId);
+          .select(`
+            id,
+            attendance_status,
+            morning,
+            afternoon,
+            meal,
+            talent,
+            overnight_mode,
+            leave_type,
+            note,
+            camp_dates (
+              id,
+              camp_date
+            )
+          `)
+          .eq(
+            "camp_id",
+            camp.id
+          )
+          .eq(
+            "student_id",
+            selectedStudentId
+          );
 
       if (error) throw error;
 
       const next = {};
 
-      for (const dateKey of activeDates) {
-        next[dateKey] = createEmptyRecord();
+      for (
+        const dateKey of
+        activeDates
+      ) {
+        next[dateKey] =
+          createEmptyRecord();
       }
 
-      for (const row of data ?? []) {
-        const dateKey = row.camp_dates?.camp_date;
-        if (!dateKey || !next[dateKey]) continue;
+      for (
+        const row of
+        data ?? []
+      ) {
+        const dateKey =
+          row.camp_dates
+            ?.camp_date;
+
+        if (
+          !dateKey ||
+          !next[dateKey]
+        ) {
+          continue;
+        }
+
+        const attendanceStatus =
+          normalizeType(
+            row.attendance_status
+          );
 
         next[dateKey] = {
-          registered: row.attendance_status !== "ABSENT",
-          status: row.attendance_status === "LEAVE" ? "LEAVE" : "NORMAL",
-          morning: row.morning ?? true,
-          afternoon: row.afternoon ?? true,
-          meal: row.meal ?? true,
-          talent: row.talent ?? false,
-          leave_type: row.leave_type || "",
-          note: row.note || "",
+          registered:
+            attendanceStatus !==
+            "ABSENT",
+
+          status:
+            attendanceStatus ===
+            "LEAVE"
+              ? "LEAVE"
+              : "NORMAL",
+
+          morning:
+            row.morning ??
+            true,
+
+          afternoon:
+            row.afternoon ??
+            true,
+
+          meal:
+            row.meal ??
+            true,
+
+          talent:
+            row.talent ??
+            false,
+
+          overnight_mode:
+            row.overnight_mode ||
+            "",
+
+          outdoor_joined:
+            attendanceStatus ===
+              "OUTDOOR" ||
+            attendanceStatus ===
+              "FIELD_TRIP",
+
+          leave_type:
+            row.leave_type ||
+            "",
+
+          note:
+            row.note || "",
         };
       }
 
-      setRecordsByDate(next);
-      recordsRef.current = next;
-      setHasUnsavedChanges(false);
-      setSavedMessage("✓ 已載入");
+      setRecordsByDate(
+        next
+      );
+
+      recordsRef.current =
+        next;
+
+      setHasUnsavedChanges(
+        false
+      );
+
+      setSavedMessage(
+        "✓ 已載入"
+      );
     } catch (error) {
-      console.error("讀取學生每日報名失敗：", error);
-      setErrorMessage(`讀取每日報名失敗：${error.message}`);
+      console.error(
+        "讀取學生每日報名失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `讀取每日報名失敗：${error.message}`
+      );
     } finally {
       setIsLoadingStudent(false);
     }
   }
 
-  function updateRecord(dateKey, patch) {
+  function updateRecord(
+    dateKey,
+    patch
+  ) {
     setSavedMessage("");
-    setHasUnsavedChanges(true);
+    setHasUnsavedChanges(
+      true
+    );
 
-    setRecordsByDate((current) => {
-      const next = {
-        ...current,
-        [dateKey]: {
-          ...(current[dateKey] || createEmptyRecord()),
-          ...patch,
-        },
-      };
+    setRecordsByDate(
+      (current) => {
+        const next = {
+          ...current,
 
-      recordsRef.current = next;
-      return next;
-    });
+          [dateKey]: {
+            ...(
+              current[
+                dateKey
+              ] ||
+              createEmptyRecord()
+            ),
+
+            ...patch,
+          },
+        };
+
+        recordsRef.current =
+          next;
+
+        return next;
+      }
+    );
   }
 
   async function ensureCampDates() {
-    const { data: existingRows, error: existingError } = await supabase
+    const {
+      data: existingRows,
+      error:
+        existingError,
+    } = await supabase
       .from("camp_dates")
-      .select("id, camp_date")
-      .eq("camp_id", camp.id)
-      .in("camp_date", activeDates);
+      .select(
+        "id, camp_date"
+      )
+      .eq(
+        "camp_id",
+        camp.id
+      )
+      .in(
+        "camp_date",
+        activeDates
+      );
 
-    if (existingError) throw existingError;
-
-    const map = {};
-    for (const row of existingRows ?? []) {
-      map[row.camp_date] = row.id;
+    if (
+      existingError
+    ) {
+      throw existingError;
     }
 
-    const missing = activeDates.filter((dateKey) => !map[dateKey]);
+    const map = {};
 
-    if (missing.length > 0) {
-      const { data: insertedRows, error: insertError } = await supabase
-        .from("camp_dates")
-        .insert(
-          missing.map((dateKey) => ({
-            camp_id: camp.id,
-            camp_date: dateKey,
-            day_type: "GENERAL",
-          }))
+    for (
+      const row of
+      existingRows ?? []
+    ) {
+      map[
+        row.camp_date
+      ] = row.id;
+    }
+
+    const missing =
+      activeDates.filter(
+        (dateKey) =>
+          !map[dateKey]
+      );
+
+    if (
+      missing.length >
+      0
+    ) {
+      const {
+        data:
+          insertedRows,
+        error:
+          insertError,
+      } = await supabase
+        .from(
+          "camp_dates"
         )
-        .select("id, camp_date");
+        .insert(
+          missing.map(
+            (dateKey) => ({
+              camp_id:
+                camp.id,
 
-      if (insertError) throw insertError;
+              camp_date:
+                dateKey,
 
-      for (const row of insertedRows ?? []) {
-        map[row.camp_date] = row.id;
+              day_type:
+                "GENERAL",
+            })
+          )
+        )
+        .select(
+          "id, camp_date"
+        );
+
+      if (
+        insertError
+      ) {
+        throw insertError;
+      }
+
+      for (
+        const row of
+        insertedRows ?? []
+      ) {
+        map[
+          row.camp_date
+        ] = row.id;
       }
     }
 
@@ -344,135 +721,267 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
   }
 
   async function saveCurrentStudent() {
-    const studentId = selectedStudentRef.current;
-    const dates = activeDatesRef.current;
-    const records = recordsRef.current;
+    const studentId =
+      selectedStudentRef.current;
 
-    if (!studentId || !selectedPeriod || dates.length === 0) return true;
+    const dates =
+      activeDatesRef.current;
+
+    const records =
+      recordsRef.current;
+
+    if (
+      !studentId ||
+      !selectedPeriod ||
+      dates.length === 0
+    ) {
+      return true;
+    }
 
     try {
       setIsSaving(true);
       setErrorMessage("");
-      setSavedMessage("儲存中…");
+      setSavedMessage(
+        "儲存中…"
+      );
 
-      const { data: existingRows, error: existingError } = await supabase
-        .from("camp_dates")
-        .select("id, camp_date")
-        .eq("camp_id", camp.id)
-        .in("camp_date", dates);
+      const dateIdMap =
+        await ensureCampDates();
 
-      if (existingError) throw existingError;
+      const rows =
+        dates.map(
+          (dateKey) => {
+            const record =
+              records[
+                dateKey
+              ] ||
+              createEmptyRecord();
 
-      const dateIdMap = {};
-      for (const row of existingRows ?? []) {
-        dateIdMap[row.camp_date] = row.id;
-      }
+            const dayMeta =
+              dayMetaByDate.get(
+                dateKey
+              );
 
-      const missing = dates.filter((dateKey) => !dateIdMap[dateKey]);
+            const overnightDay =
+              isOvernightDay(
+                dayMeta
+              );
 
-      if (missing.length > 0) {
-        const { data: insertedRows, error: insertError } = await supabase
-          .from("camp_dates")
-          .insert(
-            missing.map((dateKey) => ({
-              camp_id: camp.id,
-              camp_date: dateKey,
-              day_type: "GENERAL",
-            }))
+            const outdoorDay =
+              isOutdoorDay(
+                dayMeta
+              );
+
+            let attendanceStatus =
+              "ABSENT";
+
+            if (
+              record.registered
+            ) {
+              if (
+                record.status ===
+                "LEAVE"
+              ) {
+                attendanceStatus =
+                  "LEAVE";
+              } else if (
+                outdoorDay &&
+                record.outdoor_joined
+              ) {
+                attendanceStatus =
+                  "OUTDOOR";
+              } else {
+                attendanceStatus =
+                  "NORMAL";
+              }
+            }
+
+            const lockIndoorOptions =
+              outdoorDay;
+
+            return {
+              camp_id:
+                camp.id,
+
+              camp_date_id:
+                dateIdMap[
+                  dateKey
+                ],
+
+              student_id:
+                studentId,
+
+              attendance_status:
+                attendanceStatus,
+
+              morning:
+                record.registered &&
+                record.status !==
+                  "LEAVE" &&
+                !lockIndoorOptions
+                  ? Boolean(
+                      record.morning
+                    )
+                  : false,
+
+              afternoon:
+                record.registered &&
+                record.status !==
+                  "LEAVE" &&
+                !lockIndoorOptions
+                  ? Boolean(
+                      record.afternoon
+                    )
+                  : false,
+
+              meal:
+                record.registered &&
+                record.status !==
+                  "LEAVE" &&
+                !lockIndoorOptions
+                  ? Boolean(
+                      record.meal
+                    )
+                  : false,
+
+              talent:
+                record.registered &&
+                record.status !==
+                  "LEAVE" &&
+                !lockIndoorOptions
+                  ? Boolean(
+                      record.talent
+                    )
+                  : false,
+
+              overnight_mode:
+                overnightDay &&
+                record.registered &&
+                record.status !==
+                  "LEAVE" &&
+                record.overnight_mode ===
+                  "OVERNIGHT"
+                  ? "OVERNIGHT"
+                  : null,
+
+              leave_type:
+                record.registered &&
+                record.status ===
+                  "LEAVE"
+                  ? record.leave_type.trim() ||
+                    "請假"
+                  : null,
+
+              note:
+                record.note.trim() ||
+                null,
+
+              updated_at:
+                new Date().toISOString(),
+            };
+          }
+        );
+
+      const { error } =
+        await supabase
+          .from(
+            "camp_student_daily_records"
           )
-          .select("id, camp_date");
-
-        if (insertError) throw insertError;
-
-        for (const row of insertedRows ?? []) {
-          dateIdMap[row.camp_date] = row.id;
-        }
-      }
-
-      const rows = dates.map((dateKey) => {
-        const record = records[dateKey] || createEmptyRecord();
-
-        return {
-          camp_id: camp.id,
-          camp_date_id: dateIdMap[dateKey],
-          student_id: studentId,
-          attendance_status: !record.registered
-            ? "ABSENT"
-            : record.status === "LEAVE"
-            ? "LEAVE"
-            : "NORMAL",
-          morning:
-            record.registered && record.status !== "LEAVE"
-              ? Boolean(record.morning)
-              : false,
-          afternoon:
-            record.registered && record.status !== "LEAVE"
-              ? Boolean(record.afternoon)
-              : false,
-          meal:
-            record.registered && record.status !== "LEAVE"
-              ? Boolean(record.meal)
-              : false,
-          talent:
-            record.registered && record.status !== "LEAVE"
-              ? Boolean(record.talent)
-              : false,
-          leave_type:
-            record.registered && record.status === "LEAVE"
-              ? record.leave_type.trim() || "請假"
-              : null,
-          note: record.note.trim() || null,
-          updated_at: new Date().toISOString(),
-        };
-      });
-
-      const { error } = await supabase
-        .from("camp_student_daily_records")
-        .upsert(rows, {
-          onConflict: "camp_date_id,student_id",
-        });
+          .upsert(
+            rows,
+            {
+              onConflict:
+                "camp_date_id,student_id",
+            }
+          );
 
       if (error) throw error;
 
-      setHasUnsavedChanges(false);
-      setSavedMessage("✓ 已自動儲存");
+      setHasUnsavedChanges(
+        false
+      );
+
+      setSavedMessage(
+        "✓ 已自動儲存"
+      );
+
       return true;
     } catch (error) {
-      console.error("儲存每日報名失敗：", error);
-      setErrorMessage(`儲存失敗：${error.message}`);
-      setSavedMessage("儲存失敗");
+      console.error(
+        "儲存每日報名失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `儲存失敗：${error.message}`
+      );
+
+      setSavedMessage(
+        "儲存失敗"
+      );
+
       return false;
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleStudentChange(nextStudentId) {
-    if (nextStudentId === selectedStudentId) return;
+  async function handleStudentChange(
+    nextStudentId
+  ) {
+    if (
+      nextStudentId ===
+      selectedStudentId
+    ) {
+      return;
+    }
 
-    if (hasUnsavedChanges && selectedStudentId) {
-      const ok = await saveCurrentStudent();
+    if (
+      hasUnsavedChanges &&
+      selectedStudentId
+    ) {
+      const ok =
+        await saveCurrentStudent();
+
       if (!ok) return;
     }
 
-    setSelectedStudentId(nextStudentId);
+    setSelectedStudentId(
+      nextStudentId
+    );
   }
 
-  async function handlePeriodChange(nextPeriodId) {
-    if (nextPeriodId === selectedPeriodId) return;
+  async function handlePeriodChange(
+    nextPeriodId
+  ) {
+    if (
+      nextPeriodId ===
+      selectedPeriodId
+    ) {
+      return;
+    }
 
-    if (hasUnsavedChanges && selectedStudentId) {
-      const ok = await saveCurrentStudent();
+    if (
+      hasUnsavedChanges &&
+      selectedStudentId
+    ) {
+      const ok =
+        await saveCurrentStudent();
+
       if (!ok) return;
     }
 
-    setSelectedPeriodId(nextPeriodId);
+    setSelectedPeriodId(
+      nextPeriodId
+    );
   }
 
   if (isLoading) {
     return (
       <div className="campDailyPanel">
-        <div className="campEmptyState">正在讀取每日報名……</div>
+        <div className="campEmptyState">
+          正在讀取每日報名……
+        </div>
       </div>
     );
   }
@@ -481,199 +990,701 @@ function CampDailyRegistrationPanel({ camp, onBack }) {
     <div className="campDailyPanel">
       <div className="campDailyPanel__header">
         <div>
-          <button type="button" className="campBackButton" onClick={onBack}>
+          <button
+            type="button"
+            className="campBackButton"
+            onClick={onBack}
+          >
             ← 返回營隊資料夾
           </button>
 
-          <p className="campEyebrow">DAILY REGISTRATION</p>
+          <p className="campEyebrow">
+            DAILY REGISTRATION
+          </p>
+
           <h2>每日報名</h2>
+
           <p>{camp.name}</p>
         </div>
 
-        <div className="campDailySaveStatus" aria-live="polite">
+        <div
+          className="campDailySaveStatus"
+          aria-live="polite"
+        >
           {isSaving
             ? "儲存中…"
             : hasUnsavedChanges
             ? "切換學生時自動儲存"
-            : savedMessage || "✓ 已儲存"}
+            : savedMessage ||
+              "✓ 已儲存"}
         </div>
       </div>
 
       <section className="campDailySelectors">
         <label>
-          <span>1. 選擇活動梯次</span>
+          <span>
+            1. 選擇活動梯次
+          </span>
+
           <select
-            value={selectedPeriodId}
-            onChange={(event) => handlePeriodChange(event.target.value)}
-            disabled={isSaving}
+            value={
+              selectedPeriodId
+            }
+            onChange={(
+              event
+            ) =>
+              handlePeriodChange(
+                event.target
+                  .value
+              )
+            }
+            disabled={
+              isSaving
+            }
           >
-            {periods.map((period) => (
-              <option key={period.id} value={period.id}>
-                {period.name}
-              </option>
-            ))}
+            {periods.map(
+              (period) => (
+                <option
+                  key={
+                    period.id
+                  }
+                  value={
+                    period.id
+                  }
+                >
+                  {
+                    period.name
+                  }
+                </option>
+              )
+            )}
           </select>
         </label>
 
         <label>
-          <span>2. 選擇學生</span>
+          <span>
+            2. 選擇學生
+          </span>
+
           <select
-            value={selectedStudentId}
-            onChange={(event) => handleStudentChange(event.target.value)}
-            disabled={isSaving || isLoadingStudent || students.length === 0}
+            value={
+              selectedStudentId
+            }
+            onChange={(
+              event
+            ) =>
+              handleStudentChange(
+                event.target
+                  .value
+              )
+            }
+            disabled={
+              isSaving ||
+              isLoadingStudent ||
+              students.length ===
+                0
+            }
           >
-            {students.length === 0 ? (
-              <option value="">營隊學生總名單目前沒有學生</option>
+            {students.length ===
+            0 ? (
+              <option value="">
+                營隊學生總名單目前沒有學生
+              </option>
             ) : (
-              students.map((student) => (
-                <option key={student.id} value={student.id}>
-                  [{getGradeLabel(student.grade)}] {student.chinese_name}
-                </option>
-              ))
+              students.map(
+                (student) => (
+                  <option
+                    key={
+                      student.id
+                    }
+                    value={
+                      student.id
+                    }
+                  >
+                    [
+                    {getGradeLabel(
+                      student.grade
+                    )}
+                    ]{" "}
+                    {
+                      student.chinese_name
+                    }
+                  </option>
+                )
+              )
             )}
           </select>
         </label>
       </section>
 
       {errorMessage && (
-        <div className="campMessage campMessage--error">{errorMessage}</div>
+        <div className="campMessage campMessage--error">
+          {errorMessage}
+        </div>
       )}
 
       {savedMessage && (
-        <div className="campMessage campMessage--success">{savedMessage}</div>
+        <div className="campMessage campMessage--success">
+          {savedMessage}
+        </div>
       )}
 
       {!selectedPeriod ? (
-        <div className="campEmptyState">尚未建立活動梯次。</div>
-      ) : students.length === 0 ? (
         <div className="campEmptyState">
-          <strong>營隊學生總名單目前沒有學生</strong>
-          <p>請先回到「學生總名單」加入這次營隊的學生。</p>
+          尚未建立活動梯次。
+        </div>
+      ) : students.length ===
+        0 ? (
+        <div className="campEmptyState">
+          <strong>
+            營隊學生總名單目前沒有學生
+          </strong>
+
+          <p>
+            請先回到「學生總名單」加入這次營隊的學生。
+          </p>
         </div>
       ) : !selectedStudentId ? (
-        <div className="campEmptyState">請選擇學生。</div>
+        <div className="campEmptyState">
+          請選擇學生。
+        </div>
       ) : (
         <section className="campDailyGrid">
-          {activeDates.map((dateKey) => {
-            const date = parseDateKey(dateKey);
-            const record = recordsByDate[dateKey] || createEmptyRecord();
+          {activeDates.map(
+            (dateKey) => {
+              const date =
+                parseDateKey(
+                  dateKey
+                );
 
-            return (
-              <article key={dateKey} className="campDailyCard">
-                <div className="campDailyCard__top">
-                  <strong>{dateKey}</strong>
-                  <span>{WEEKDAY_LABELS[date.getDay()]}</span>
+              const record =
+                recordsByDate[
+                  dateKey
+                ] ||
+                createEmptyRecord();
 
-                  <select
-                    value={record.registered ? record.status : "ABSENT"}
-                    onChange={(event) => {
-                      const value = event.target.value;
+              const dayMeta =
+                dayMetaByDate.get(
+                  dateKey
+                );
 
-                      if (value === "ABSENT") {
-                        updateRecord(dateKey, {
-                          registered: false,
-                          status: "NORMAL",
-                        });
-                      } else {
-                        updateRecord(dateKey, {
-                          registered: true,
-                          status: value,
-                        });
-                      }
-                    }}
-                  >
-                    <option value="ABSENT">未報名</option>
-                    <option value="NORMAL">正常出席</option>
-                    <option value="LEAVE">請假</option>
-                  </select>
-                </div>
+              const overnightDay =
+                isOvernightDay(
+                  dayMeta
+                );
 
-                <label className="campDailyRegistered">
-                  <input
-                    type="checkbox"
-                    checked={record.registered}
-                    onChange={(event) =>
-                      updateRecord(dateKey, {
-                        registered: event.target.checked,
-                        status: event.target.checked ? record.status : "NORMAL",
-                      })
-                    }
-                  />
-                  <span>報名此日</span>
-                </label>
+              const outdoorDay =
+                isOutdoorDay(
+                  dayMeta
+                );
 
-                {record.registered && record.status === "NORMAL" && (
-                  <div className="campDailyOptions">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={record.morning}
-                        onChange={(event) =>
-                          updateRecord(dateKey, { morning: event.target.checked })
-                        }
-                      />
-                      上午上課
-                    </label>
+              const normalOptionsDisabled =
+                !record.registered ||
+                record.status !==
+                  "NORMAL" ||
+                outdoorDay;
 
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={record.afternoon}
-                        onChange={(event) =>
-                          updateRecord(dateKey, { afternoon: event.target.checked })
-                        }
-                      />
-                      下午上課
-                    </label>
-
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={record.meal}
-                        onChange={(event) =>
-                          updateRecord(dateKey, { meal: event.target.checked })
-                        }
-                      />
-                      含午餐
-                    </label>
-
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={record.talent}
-                        onChange={(event) =>
-                          updateRecord(dateKey, { talent: event.target.checked })
-                        }
-                      />
-                      加選才藝課
-                    </label>
-                  </div>
-                )}
-
-                {record.registered && record.status === "LEAVE" && (
-                  <input
-                    className="campDailyCard__leave"
-                    type="text"
-                    value={record.leave_type}
-                    onChange={(event) =>
-                      updateRecord(dateKey, { leave_type: event.target.value })
-                    }
-                    placeholder="例如：事假、病假"
-                  />
-                )}
-
-                <input
-                  className="campDailyCard__note"
-                  type="text"
-                  value={record.note}
-                  onChange={(event) =>
-                    updateRecord(dateKey, { note: event.target.value })
+              return (
+                <article
+                  key={
+                    dateKey
                   }
-                  placeholder="單日課堂備註（如：吃全素、早退等）"
-                />
-              </article>
-            );
-          })}
+                  className="campDailyCard"
+                >
+                  <div className="campDailyCard__top">
+                    <div>
+                      <strong>
+                        {
+                          dateKey
+                        }
+                      </strong>
+
+                      <span>
+                        {
+                          WEEKDAY_LABELS[
+                            date.getDay()
+                          ]
+                        }
+                      </span>
+                    </div>
+
+                    {dayMeta?.title && (
+                      <span
+                        style={{
+                          marginLeft:
+                            "auto",
+                          marginRight:
+                            "10px",
+                          padding:
+                            "5px 10px",
+                          borderRadius:
+                            "999px",
+                          background:
+                            overnightDay
+                              ? "#eef0ff"
+                              : outdoorDay
+                              ? "#edf5ed"
+                              : "#f3f0ea",
+                          fontSize:
+                            "13px",
+                          fontWeight:
+                            700,
+                        }}
+                      >
+                        {
+                          dayMeta.title
+                        }
+                      </span>
+                    )}
+
+                    <select
+                      value={
+                        record.registered
+                          ? record.status
+                          : "ABSENT"
+                      }
+                      onChange={(
+                        event
+                      ) => {
+                        const value =
+                          event.target
+                            .value;
+
+                        if (
+                          value ===
+                          "ABSENT"
+                        ) {
+                          updateRecord(
+                            dateKey,
+                            {
+                              registered:
+                                false,
+
+                              status:
+                                "NORMAL",
+
+                              outdoor_joined:
+                                false,
+
+                              overnight_mode:
+                                "",
+                            }
+                          );
+                        } else {
+                          updateRecord(
+                            dateKey,
+                            {
+                              registered:
+                                true,
+
+                              status:
+                                value,
+                            }
+                          );
+                        }
+                      }}
+                    >
+                      <option value="ABSENT">
+                        未報名
+                      </option>
+
+                      <option value="NORMAL">
+                        正常出席
+                      </option>
+
+                      <option value="LEAVE">
+                        請假
+                      </option>
+                    </select>
+                  </div>
+
+                  <label className="campDailyRegistered">
+                    <input
+                      type="checkbox"
+                      checked={
+                        record.registered
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateRecord(
+                          dateKey,
+                          {
+                            registered:
+                              event
+                                .target
+                                .checked,
+
+                            status:
+                              event
+                                .target
+                                .checked
+                                ? record.status
+                                : "NORMAL",
+
+                            outdoor_joined:
+                              event
+                                .target
+                                .checked
+                                ? record.outdoor_joined
+                                : false,
+
+                            overnight_mode:
+                              event
+                                .target
+                                .checked
+                                ? record.overnight_mode
+                                : "",
+                          }
+                        )
+                      }
+                    />
+
+                    <span>
+                      報名此日
+                    </span>
+                  </label>
+
+                  {overnightDay &&
+                    record.registered &&
+                    record.status ===
+                      "NORMAL" && (
+                      <div
+                        style={{
+                          marginTop:
+                            "12px",
+                          padding:
+                            "14px 16px",
+                          border:
+                            "1px solid #d7ddff",
+                          borderRadius:
+                            "14px",
+                          background:
+                            "#f5f6ff",
+                        }}
+                      >
+                        <label
+                          style={{
+                            display:
+                              "flex",
+                            alignItems:
+                              "center",
+                            justifyContent:
+                              "space-between",
+                            gap:
+                              "16px",
+                            cursor:
+                              "pointer",
+                          }}
+                        >
+                          <strong>
+                            兩天一夜過夜營
+                          </strong>
+
+                          <span
+                            style={{
+                              display:
+                                "flex",
+                              alignItems:
+                                "center",
+                              gap:
+                                "8px",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={
+                                record.overnight_mode ===
+                                "OVERNIGHT"
+                              }
+                              onChange={(
+                                event
+                              ) =>
+                                updateRecord(
+                                  dateKey,
+                                  {
+                                    overnight_mode:
+                                      event
+                                        .target
+                                        .checked
+                                        ? "OVERNIGHT"
+                                        : "",
+                                  }
+                                )
+                              }
+                            />
+
+                            參加兩天一夜
+                          </span>
+                        </label>
+                      </div>
+                    )}
+
+                  {outdoorDay &&
+                    record.registered &&
+                    record.status ===
+                      "NORMAL" && (
+                      <div
+                        style={{
+                          marginTop:
+                            "12px",
+                          padding:
+                            "14px 16px",
+                          border:
+                            "1px solid #d9e6d9",
+                          borderRadius:
+                            "14px",
+                          background:
+                            "#f4f8f3",
+                        }}
+                      >
+                        <label
+                          style={{
+                            display:
+                              "flex",
+                            alignItems:
+                              "center",
+                            justifyContent:
+                              "space-between",
+                            gap:
+                              "16px",
+                            cursor:
+                              "pointer",
+                          }}
+                        >
+                          <strong>
+                            戶外教學
+                          </strong>
+
+                          <span
+                            style={{
+                              display:
+                                "flex",
+                              alignItems:
+                                "center",
+                              gap:
+                                "8px",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={
+                                record.outdoor_joined
+                              }
+                              onChange={(
+                                event
+                              ) =>
+                                updateRecord(
+                                  dateKey,
+                                  {
+                                    outdoor_joined:
+                                      event
+                                        .target
+                                        .checked,
+
+                                    registered:
+                                      event
+                                        .target
+                                        .checked,
+                                  }
+                                )
+                              }
+                            />
+
+                            參加戶外教學
+                          </span>
+                        </label>
+                      </div>
+                    )}
+
+                  {record.registered &&
+                    record.status ===
+                      "NORMAL" && (
+                      <div
+                        className="campDailyOptions"
+                        style={
+                          outdoorDay
+                            ? {
+                                opacity:
+                                  0.45,
+                              }
+                            : undefined
+                        }
+                      >
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={
+                              record.morning
+                            }
+                            disabled={
+                              normalOptionsDisabled
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateRecord(
+                                dateKey,
+                                {
+                                  morning:
+                                    event
+                                      .target
+                                      .checked,
+                                }
+                              )
+                            }
+                          />
+                          上午上課
+                        </label>
+
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={
+                              record.afternoon
+                            }
+                            disabled={
+                              normalOptionsDisabled
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateRecord(
+                                dateKey,
+                                {
+                                  afternoon:
+                                    event
+                                      .target
+                                      .checked,
+                                }
+                              )
+                            }
+                          />
+                          下午上課
+                        </label>
+
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={
+                              record.meal
+                            }
+                            disabled={
+                              normalOptionsDisabled
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateRecord(
+                                dateKey,
+                                {
+                                  meal:
+                                    event
+                                      .target
+                                      .checked,
+                                }
+                              )
+                            }
+                          />
+                          含午餐
+                        </label>
+
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={
+                              record.talent
+                            }
+                            disabled={
+                              normalOptionsDisabled
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateRecord(
+                                dateKey,
+                                {
+                                  talent:
+                                    event
+                                      .target
+                                      .checked,
+                                }
+                              )
+                            }
+                          />
+                          加選才藝課
+                        </label>
+                      </div>
+                    )}
+
+                  {outdoorDay &&
+                    record.registered &&
+                    record.status ===
+                      "NORMAL" && (
+                      <p
+                        style={{
+                          margin:
+                            "10px 2px 0",
+                          fontSize:
+                            "13px",
+                          color:
+                            "#8a8e87",
+                        }}
+                      >
+                        戶外教學日不開放室內課程，因此上午、下午、午餐與才藝選項固定關閉。
+                      </p>
+                    )}
+
+                  {record.registered &&
+                    record.status ===
+                      "LEAVE" && (
+                      <input
+                        className="campDailyCard__leave"
+                        type="text"
+                        value={
+                          record.leave_type
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          updateRecord(
+                            dateKey,
+                            {
+                              leave_type:
+                                event
+                                  .target
+                                  .value,
+                            }
+                          )
+                        }
+                        placeholder="例如：事假、病假"
+                      />
+                    )}
+
+                  <input
+                    className="campDailyCard__note"
+                    type="text"
+                    value={
+                      record.note
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateRecord(
+                        dateKey,
+                        {
+                          note:
+                            event.target
+                              .value,
+                        }
+                      )
+                    }
+                    placeholder="單日課堂備註（如：吃全素、早退等）"
+                  />
+                </article>
+              );
+            }
+          )}
         </section>
       )}
     </div>
