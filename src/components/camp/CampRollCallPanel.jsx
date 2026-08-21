@@ -143,6 +143,16 @@ function safeFileName(value) {
     .replace(/\s+/g, "_");
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+
 function CampRollCallPanel({ camp, onBack }) {
   const previewRef = useRef(null);
   const previewViewportRef = useRef(null);
@@ -450,7 +460,6 @@ function CampRollCallPanel({ camp, onBack }) {
 
   function printRollCall() {
     if (
-      !previewRef.current ||
       !selectedPeriod ||
       !selectedClass ||
       classStudents.length === 0 ||
@@ -470,31 +479,143 @@ function CampRollCallPanel({ camp, onBack }) {
       return;
     }
 
-    const previewHtml = previewRef.current.outerHTML;
+    const dateCount = Math.max(periodDates.length, 1);
 
-    const fontFaces = Array.from(
-      document.querySelectorAll("style")
+    const fixed = {
+      number: 10,
+      grade: 14,
+      chineseName: 23,
+      englishName: 22,
+      phone: 30,
+    };
+
+    const contentWidth = 283;
+    const fixedWidth =
+      fixed.number +
+      fixed.grade +
+      fixed.chineseName +
+      fixed.englishName +
+      fixed.phone;
+
+    const dateWidth =
+      (contentWidth - fixedWidth) /
+      dateCount;
+
+    const rowHeight =
+      classStudents.length >= 24
+        ? 5.1
+        : classStudents.length >= 20
+        ? 5.6
+        : 6.2;
+
+    const bodyFont =
+      periodDates.length >= 14
+        ? 7.2
+        : periodDates.length >= 10
+        ? 7.8
+        : 8.4;
+
+    const dateFont =
+      periodDates.length >= 14
+        ? 6.6
+        : periodDates.length >= 10
+        ? 7.1
+        : 7.7;
+
+    const inheritedHead = Array.from(
+      document.querySelectorAll(
+        'style, link[rel="stylesheet"]'
+      )
     )
-      .map((node) => node.textContent || "")
-      .filter((css) => css.includes("@font-face"))
+      .map((node) => node.outerHTML)
       .join("\n");
 
-    const printScale =
-      ((297 / 25.4) * 96) / A4_WIDTH;
+    const colgroup = `
+      <col style="width:${fixed.number}mm">
+      <col style="width:${fixed.grade}mm">
+      <col style="width:${fixed.chineseName}mm">
+      <col style="width:${fixed.englishName}mm">
+      <col style="width:${fixed.phone}mm">
+      ${periodDates
+        .map(
+          () =>
+            `<col style="width:${dateWidth}mm">`
+        )
+        .join("")}
+    `;
+
+    const dateHeaders = periodDates
+      .map(
+        (dateKey) => `
+          <th class="dateHeader">
+            <div>${escapeHtml(formatShortDate(dateKey))}</div>
+            <small>（${escapeHtml(getWeekday(dateKey))}）</small>
+          </th>
+        `
+      )
+      .join("");
+
+    const rows = classStudents
+      .map((student, index) => {
+        const cells = periodDates
+          .map((dateKey) => {
+            const record =
+              recordByStudentDate.get(
+                `${student.id}__${dateKey}`
+              );
+
+            const dayMeta =
+              dayMetaByDate.get(dateKey);
+
+            const mark =
+              getAttendanceMark(
+                record,
+                dayMeta
+              );
+
+            const className =
+              mark === "/"
+                ? "muted"
+                : mark === "兩天一夜"
+                ? "overnight"
+                : "";
+
+            return `
+              <td class="${className}">
+                ${escapeHtml(mark)}
+              </td>
+            `;
+          })
+          .join("");
+
+        return `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(getGradeLabel(student.grade))}</td>
+            <td class="studentName">${escapeHtml(student.chinese_name)}</td>
+            <td>${escapeHtml(student.english_name || "")}</td>
+            <td class="phone">${escapeHtml(student.parent_phone || "")}</td>
+            ${cells}
+          </tr>
+        `;
+      })
+      .join("");
 
     printWindow.document.open();
     printWindow.document.write(`
       <!doctype html>
       <html lang="zh-Hant">
         <head>
-          <meta charset="utf-8" />
-          <title>${safeFileName(
-            `${camp.name}_${selectedPeriod.name}_${selectedClass.name}_點名表`
+          <meta charset="utf-8">
+          <title>${escapeHtml(
+            safeFileName(
+              `${camp.name}_${selectedPeriod.name}_${selectedClass.name}_點名表`
+            )
           )}</title>
 
-          <style>
-            ${fontFaces}
+          ${inheritedHead}
 
+          <style>
             @page {
               size: A4 landscape;
               margin: 0;
@@ -510,50 +631,215 @@ function CampRollCallPanel({ camp, onBack }) {
               padding: 0;
               width: 297mm;
               height: 210mm;
+              overflow: hidden;
               background: #fffdf8;
             }
 
             body {
-              overflow: hidden;
+              font-family: "Iansui", "芫荽", sans-serif;
+              color: #4b463f;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
             }
 
-            #rollCallPrintPage {
-              position: relative;
+            .sheet {
               width: 297mm;
               height: 210mm;
+              padding: 7mm;
               overflow: hidden;
               background: #fffdf8;
+              page-break-inside: avoid;
+              break-inside: avoid-page;
             }
 
-            #rollCallPrintCanvas {
-              position: absolute;
-              left: 0;
-              top: 0;
-              width: ${A4_WIDTH}px;
-              height: ${A4_HEIGHT}px;
-              transform: scale(${printScale});
-              transform-origin: top left;
+            .top {
+              height: 18mm;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+              gap: 8mm;
             }
 
-            #rollCallPrintCanvas > div {
-              border: 0 !important;
+            .brandZh {
+              font-size: 18pt;
+              font-weight: 700;
+              letter-spacing: 0.08em;
+              line-height: 1;
+            }
+
+            .brandEn {
+              margin-top: 1.5mm;
+              font-size: 7.5pt;
+              letter-spacing: 0.24em;
+              opacity: 0.58;
+            }
+
+            .title {
+              text-align: right;
+              white-space: nowrap;
+            }
+
+            .titleMain {
+              font-size: 15pt;
+              font-weight: 700;
+              line-height: 1;
+            }
+
+            .titleMeta {
+              margin-top: 1.5mm;
+              font-size: 8pt;
+              opacity: 0.68;
+            }
+
+            .rule {
+              height: 0.8mm;
+              margin: 2.2mm 0 2.5mm;
+              background: #a5ae9a;
+              border-radius: 99mm;
+              opacity: 0.78;
+            }
+
+            table {
+              width: 283mm;
+              border-collapse: collapse;
+              table-layout: fixed;
+              background: #fff;
+              font-size: ${bodyFont}pt;
+            }
+
+            th,
+            td {
+              border: 0.24mm solid #aaa59d;
+              text-align: center;
+              vertical-align: middle;
+              padding: 0 0.5mm;
+              line-height: 1.05;
+              white-space: nowrap;
+              overflow: hidden;
+            }
+
+            th {
+              height: 9.5mm;
+              background: #f1efe9;
+              font-weight: 700;
+            }
+
+            tbody tr,
+            tbody td {
+              height: ${rowHeight}mm;
+              max-height: ${rowHeight}mm;
+            }
+
+            .dateHeader {
+              font-size: ${dateFont}pt;
+            }
+
+            .dateHeader small {
+              display: block;
+              margin-top: 0.7mm;
+              font-size: ${Math.max(5.8, dateFont - 0.8)}pt;
+              opacity: 0.64;
+            }
+
+            .studentName {
+              font-weight: 700;
+            }
+
+            .phone {
+              font-size: ${Math.max(6.8, bodyFont - 0.5)}pt;
+            }
+
+            .muted {
+              color: #aaa39a;
+              font-weight: 400;
+            }
+
+            .overnight {
+              font-size: ${Math.max(6.0, bodyFont - 1.1)}pt;
+              font-weight: 700;
+            }
+
+            .footer {
+              display: flex;
+              justify-content: space-between;
+              gap: 6mm;
+              margin-top: 2.3mm;
+              font-size: 7pt;
+              opacity: 0.68;
+              white-space: nowrap;
+            }
+
+            @media print {
+              html,
+              body,
+              .sheet {
+                width: 297mm !important;
+                height: 210mm !important;
+              }
             }
           </style>
         </head>
 
         <body>
-          <div id="rollCallPrintPage">
-            <div id="rollCallPrintCanvas">
-              ${previewHtml}
+          <section class="sheet">
+            <div class="top">
+              <div>
+                <div class="brandZh">倍思學院</div>
+                <div class="brandEn">BEAST ACADEMY</div>
+              </div>
+
+              <div class="title">
+                <div class="titleMain">
+                  ${escapeHtml(camp.name)} 點名表
+                </div>
+                <div class="titleMeta">
+                  ${escapeHtml(selectedPeriod.name)}
+                 　｜　
+                  ${escapeHtml(selectedClass.name)}
+                 　｜　
+                  ${classStudents.length} 人
+                </div>
+              </div>
             </div>
-          </div>
+
+            <div class="rule"></div>
+
+            <table>
+              <colgroup>${colgroup}</colgroup>
+              <thead>
+                <tr>
+                  <th>編號</th>
+                  <th>年級</th>
+                  <th>中文姓名</th>
+                  <th>英文姓名</th>
+                  <th>聯絡電話</th>
+                  ${dateHeaders}
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+
+            <div class="footer">
+              <div>
+                空白＝一般整日　／＝未報名　假＝請假　出＝戶外教學　其餘顯示實際報名內容
+              </div>
+              <div>
+                ${escapeHtml(formatDate(selectedPeriod.start_date))}
+                —
+                ${escapeHtml(formatDate(selectedPeriod.end_date))}
+              </div>
+            </div>
+          </section>
 
           <script>
             (async function () {
               try {
-                if (document.fonts && document.fonts.ready) {
+                if (
+                  document.fonts &&
+                  document.fonts.ready
+                ) {
                   await document.fonts.ready;
                 }
               } catch (error) {}
@@ -561,7 +847,7 @@ function CampRollCallPanel({ camp, onBack }) {
               setTimeout(function () {
                 window.focus();
                 window.print();
-              }, 300);
+              }, 250);
             })();
           <\/script>
         </body>
@@ -570,6 +856,7 @@ function CampRollCallPanel({ camp, onBack }) {
 
     printWindow.document.close();
   }
+
 
   async function exportPng() {
     if (!previewRef.current || !selectedPeriod || !selectedClass) return;
