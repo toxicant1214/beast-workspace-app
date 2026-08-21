@@ -18,6 +18,30 @@ const GRADE_ORDER = GRADE_OPTIONS.reduce(
   {}
 );
 
+
+const A4_WIDTH = 1684;
+const A4_HEIGHT = 1191;
+const A4_HORIZONTAL_PADDING = 52;
+const A4_TABLE_WIDTH =
+  A4_WIDTH - A4_HORIZONTAL_PADDING * 2;
+
+const MAX_A4_STUDENTS = 26;
+
+const FIXED_COLUMN_WIDTHS = {
+  number: 48,
+  grade: 68,
+  chineseName: 104,
+  englishName: 98,
+  phone: 138,
+};
+
+const FIXED_COLUMNS_TOTAL =
+  FIXED_COLUMN_WIDTHS.number +
+  FIXED_COLUMN_WIDTHS.grade +
+  FIXED_COLUMN_WIDTHS.chineseName +
+  FIXED_COLUMN_WIDTHS.englishName +
+  FIXED_COLUMN_WIDTHS.phone;
+
 function getGradeLabel(value) {
   return GRADE_OPTIONS.find((item) => item.value === value)?.label || value || "—";
 }
@@ -54,40 +78,31 @@ function normalizeType(value) {
 function getAttendanceMark(record, dayMeta) {
   if (!record) return "/";
 
-  const status = normalizeType(record.attendance_status);
+  const status = normalizeType(
+    record.attendance_status
+  );
 
   if (status === "ABSENT") return "/";
   if (status === "LEAVE") return "假";
 
-  const dayType = normalizeType(dayMeta?.day_type);
-  const overnightMode = normalizeType(record.overnight_mode);
-
-  // 兩天一夜：有參加才顯示文字；留在室內維持空白格。
   if (
-    overnightMode.includes("OVERNIGHT") ||
-    overnightMode.includes("JOIN") ||
-    overnightMode.includes("STAY") ||
-    dayType.includes("兩天一夜")
-  ) {
-    return "兩天一夜";
-  }
-
-  if (
-    overnightMode.includes("INDOOR") ||
-    overnightMode.includes("CLASSROOM") ||
-    overnightMode.includes("ROOM")
-  ) {
-    return "";
-  }
-
-  // 戶外教學：有參加顯示「出」。
-  if (
-    dayType.includes("OUTDOOR") ||
-    dayType.includes("FIELD") ||
-    dayType.includes("戶外教學") ||
-    dayType.includes("戶外")
+    status === "OUTDOOR" ||
+    status === "FIELD_TRIP"
   ) {
     return "出";
+  }
+
+  const overnightMode =
+    normalizeType(
+      record.overnight_mode
+    );
+
+  if (
+    overnightMode === "JOIN" ||
+    overnightMode.includes("OVERNIGHT") ||
+    overnightMode.includes("STAY")
+  ) {
+    return "兩天一夜";
   }
 
   const parts = [];
@@ -97,7 +112,6 @@ function getAttendanceMark(record, dayMeta) {
   if (record.meal) parts.push("餐");
   if (record.talent) parts.push("才");
 
-  // 一般營隊日若上午、下午、午餐都參加，視為正常整日，保持空白格。
   const isRegularFullDay =
     record.morning &&
     record.afternoon &&
@@ -106,12 +120,10 @@ function getAttendanceMark(record, dayMeta) {
 
   if (isRegularFullDay) return "";
 
-  // 有才藝但其餘為完整一般營隊，顯示簡碼。
   if (parts.length > 0) {
     return parts.join("+");
   }
 
-  // 有建立每日報名紀錄但沒有特殊文字時，保持空白。
   return "";
 }
 
@@ -123,6 +135,9 @@ function safeFileName(value) {
 
 function CampRollCallPanel({ camp, onBack }) {
   const previewRef = useRef(null);
+  const previewViewportRef = useRef(null);
+
+  const [previewScale, setPreviewScale] = useState(1);
 
   const [periods, setPeriods] = useState([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState("");
@@ -164,6 +179,48 @@ function CampRollCallPanel({ camp, onBack }) {
 
     loadPeriodData(selectedPeriodId);
   }, [selectedPeriodId]);
+
+
+  useEffect(() => {
+    const element =
+      previewViewportRef.current;
+
+    if (!element) return undefined;
+
+    function updateScale() {
+      const availableWidth =
+        element.clientWidth;
+
+      if (!availableWidth) return;
+
+      setPreviewScale(
+        Math.min(
+          1,
+          availableWidth /
+            A4_WIDTH
+        )
+      );
+    }
+
+    updateScale();
+
+    const observer =
+      new ResizeObserver(
+        updateScale
+      );
+
+    observer.observe(
+      element
+    );
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    selectedPeriodId,
+    selectedClassId,
+    periodDates.length,
+  ]);
 
   async function loadInitialData() {
     try {
@@ -337,6 +394,50 @@ function CampRollCallPanel({ camp, onBack }) {
       });
   }, [students, classAssignments, selectedClassId]);
 
+  const dateColumnWidth =
+    useMemo(() => {
+      const dateCount =
+        Math.max(
+          periodDates.length,
+          1
+        );
+
+      return Math.floor(
+        (
+          A4_TABLE_WIDTH -
+          FIXED_COLUMNS_TOTAL
+        ) /
+          dateCount
+      );
+    }, [
+      periodDates.length,
+    ]);
+
+  const studentRowHeight =
+    useMemo(() => {
+      if (
+        classStudents.length >=
+        24
+      ) {
+        return 27;
+      }
+
+      if (
+        classStudents.length >=
+        20
+      ) {
+        return 29;
+      }
+
+      return 32;
+    }, [
+      classStudents.length,
+    ]);
+
+  const hasTooManyStudents =
+    classStudents.length >
+    MAX_A4_STUDENTS;
+
   async function exportPng() {
     if (!previewRef.current || !selectedPeriod || !selectedClass) return;
 
@@ -348,7 +449,9 @@ function CampRollCallPanel({ camp, onBack }) {
       const dataUrl = await toPng(previewRef.current, {
         cacheBust: true,
         pixelRatio: 2,
-        backgroundColor: "#fbf8f1",
+        width: A4_WIDTH,
+        height: A4_HEIGHT,
+        backgroundColor: "#fffdf8",
       });
 
       const link = document.createElement("a");
@@ -390,7 +493,13 @@ function CampRollCallPanel({ camp, onBack }) {
           type="button"
           className="campPrimaryButton"
           onClick={exportPng}
-          disabled={isExporting || !selectedPeriod || !selectedClass || classStudents.length === 0}
+          disabled={
+            isExporting ||
+            !selectedPeriod ||
+            !selectedClass ||
+            classStudents.length === 0 ||
+            hasTooManyStudents
+          }
         >
           {isExporting ? "產生圖檔中…" : "下載 PNG"}
         </button>
@@ -426,7 +535,17 @@ function CampRollCallPanel({ camp, onBack }) {
         </label>
       </section>
 
-      {errorMessage && <div className="campMessage campMessage--error">{errorMessage}</div>}
+      {errorMessage && (
+        <div className="campMessage campMessage--error">
+          {errorMessage}
+        </div>
+      )}
+
+      {hasTooManyStudents && (
+        <div className="campMessage campMessage--error">
+          此班共有 {classStudents.length} 人；A4 單張點名表目前鎖定最多 26 人，請先分班後再匯出。
+        </div>
+      )}
 
       {!selectedClass ? (
         <div className="campEmptyState">
@@ -436,107 +555,314 @@ function CampRollCallPanel({ camp, onBack }) {
       ) : classStudents.length === 0 ? (
         <div className="campEmptyState"><strong>這個班級目前沒有學生</strong></div>
       ) : (
-        <div style={{ width: "100%", overflow: "hidden", paddingBottom: "12px" }}>
+        <div
+          ref={previewViewportRef}
+          style={{
+            width: "100%",
+            height: `${A4_HEIGHT * previewScale}px`,
+            overflow: "hidden",
+            paddingBottom: "12px",
+            boxSizing: "content-box",
+          }}
+        >
           <div
-            ref={previewRef}
             style={{
-              width: "100%",
-              minHeight: "auto",
-              boxSizing: "border-box",
-              padding: "24px 22px 20px",
-              background: "#fffdf8",
-              color: "#4b463f",
-              fontFamily: '"Iansui", "芫荽", cursive',
-              border: "1px solid #e0d8cc",
+              width: `${A4_WIDTH}px`,
+              height: `${A4_HEIGHT}px`,
+              transform: `scale(${previewScale})`,
+              transformOrigin: "top left",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "32px", alignItems: "flex-end", marginBottom: "28px" }}>
-              <div>
-                <div style={{ fontSize: "26px", fontWeight: 700, letterSpacing: "0.06em", marginBottom: "3px" }}>倍思學院</div>
-                <div style={{ fontSize: "11px", letterSpacing: "0.20em", opacity: 0.58 }}>BEAST ACADEMY</div>
-              </div>
-
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "20px", fontWeight: 700, marginBottom: "4px" }}>{camp.name} 點名表</div>
-                <div style={{ fontSize: "10px", opacity: 0.72 }}>
-                  {selectedPeriod.name}　｜　{selectedClass.name}　｜　{classStudents.length} 人
-                </div>
-              </div>
-            </div>
-
-            <div style={{ height: "5px", borderRadius: "999px", background: "#9aa58f", opacity: 0.75, marginBottom: "22px" }} />
-
-            <table
+            <div
+              ref={previewRef}
               style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                tableLayout: "fixed",
-                background: "#fff",
-                fontSize: "12px",
+                width: `${A4_WIDTH}px`,
+                height: `${A4_HEIGHT}px`,
+                boxSizing: "border-box",
+                padding: `38px ${A4_HORIZONTAL_PADDING}px 30px`,
+                background: "#fffdf8",
+                color: "#4b463f",
+                fontFamily: '"Iansui", "芫荽", cursive',
+                border: "1px solid #d8d1c6",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
               }}
             >
-              <thead>
-                <tr>
-                  <th style={headerCellStyle(42)}>編號</th>
-                  <th style={headerCellStyle(60)}>年級</th>
-                  <th style={headerCellStyle(82)}>中文姓名</th>
-                  <th style={headerCellStyle(82)}>英文姓名</th>
-                  <th style={headerCellStyle(104)}>聯絡電話</th>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "32px",
+                  alignItems: "flex-end",
+                  marginBottom: "14px",
+                  flexShrink: 0,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: "31px",
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      marginBottom: "2px",
+                    }}
+                  >
+                    倍思學院
+                  </div>
 
-                  {periodDates.map((dateKey) => {
-                    const dayMeta = dayMetaByDate.get(dateKey);
-                    return (
-                      <th key={dateKey} style={headerCellStyle(62)}>
-                        <div>{formatShortDate(dateKey)}</div>
-                        <div style={{ fontSize: "14px", opacity: 0.66, marginTop: "3px" }}>
-                          （{getWeekday(dateKey)}）{dayMeta?.title ? ` ${dayMeta.title}` : ""}
-                        </div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      letterSpacing: "0.22em",
+                      opacity: 0.58,
+                    }}
+                  >
+                    BEAST ACADEMY
+                  </div>
+                </div>
 
-              <tbody>
-                {classStudents.map((student, index) => (
-                  <tr key={student.id}>
-                    <td style={bodyCellStyle}>{index + 1}</td>
-                    <td style={bodyCellStyle}>{getGradeLabel(student.grade)}</td>
-                    <td style={{ ...bodyCellStyle, fontWeight: 700 }}>{student.chinese_name}</td>
-                    <td style={bodyCellStyle}>{student.english_name || ""}</td>
-                    <td style={bodyCellStyle}>{student.parent_phone || ""}</td>
+                <div
+                  style={{
+                    textAlign: "right",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "25px",
+                      fontWeight: 700,
+                      marginBottom: "3px",
+                    }}
+                  >
+                    {camp.name} 點名表
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      opacity: 0.68,
+                    }}
+                  >
+                    {selectedPeriod.name}
+                    {"　｜　"}
+                    {selectedClass.name}
+                    {"　｜　"}
+                    {classStudents.length} 人
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  height: "4px",
+                  borderRadius: "999px",
+                  background: "#a5ae9a",
+                  opacity: 0.78,
+                  marginBottom: "14px",
+                  flexShrink: 0,
+                }}
+              />
+
+              <table
+                style={{
+                  width: `${A4_TABLE_WIDTH}px`,
+                  borderCollapse: "collapse",
+                  tableLayout: "fixed",
+                  background: "#fff",
+                  fontSize: "13px",
+                  flexShrink: 0,
+                }}
+              >
+                <colgroup>
+                  <col style={{ width: `${FIXED_COLUMN_WIDTHS.number}px` }} />
+                  <col style={{ width: `${FIXED_COLUMN_WIDTHS.grade}px` }} />
+                  <col style={{ width: `${FIXED_COLUMN_WIDTHS.chineseName}px` }} />
+                  <col style={{ width: `${FIXED_COLUMN_WIDTHS.englishName}px` }} />
+                  <col style={{ width: `${FIXED_COLUMN_WIDTHS.phone}px` }} />
+
+                  {periodDates.map((dateKey) => (
+                    <col
+                      key={`col-${dateKey}`}
+                      style={{
+                        width: `${dateColumnWidth}px`,
+                      }}
+                    />
+                  ))}
+                </colgroup>
+
+                <thead>
+                  <tr>
+                    <th style={headerCellStyle()}>編號</th>
+                    <th style={headerCellStyle()}>年級</th>
+                    <th style={headerCellStyle()}>中文姓名</th>
+                    <th style={headerCellStyle()}>英文姓名</th>
+                    <th style={headerCellStyle()}>聯絡電話</th>
 
                     {periodDates.map((dateKey) => {
-                      const record = recordByStudentDate.get(`${student.id}__${dateKey}`);
-                      const dayMeta = dayMetaByDate.get(dateKey);
-                      const mark = getAttendanceMark(record, dayMeta);
+                      const dayMeta =
+                        dayMetaByDate.get(dateKey);
 
                       return (
-                        <td
+                        <th
                           key={dateKey}
-                          style={{
-                            ...bodyCellStyle,
-                            fontWeight: mark === "/" ? 400 : 700,
-                            color: mark === "/" ? "#aaa39a" : "#4b463f",
-                            whiteSpace: "nowrap",
-                            fontSize:
-                              mark.length >= 5
-                                ? "10px"
-                                : "12px",
-                          }}
+                          style={headerCellStyle()}
                         >
-                          {mark}
-                        </td>
+                          <div
+                            style={{
+                              fontSize:
+                                periodDates.length >= 14
+                                  ? "11px"
+                                  : "12px",
+                              letterSpacing: "0.04em",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {formatShortDate(dateKey)}
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize:
+                                periodDates.length >= 14
+                                  ? "9px"
+                                  : "10px",
+                              opacity: 0.62,
+                              marginTop: "2px",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            （{getWeekday(dateKey)}）
+                            {dayMeta?.title
+                              ? ` ${dayMeta.title}`
+                              : ""}
+                          </div>
+                        </th>
                       );
                     })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
 
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "18px", marginTop: "16px", fontSize: "11px", opacity: 0.66 }}>
-              <div>空白＝一般整日　／＝未報名　假＝請假　出＝戶外教學　其餘顯示實際報名內容</div>
-              <div>{formatDate(selectedPeriod.start_date)} — {formatDate(selectedPeriod.end_date)}</div>
+                <tbody>
+                  {classStudents.map((student, index) => (
+                    <tr key={student.id}>
+                      <td
+                        style={{
+                          ...bodyCellStyle,
+                          height: `${studentRowHeight}px`,
+                        }}
+                      >
+                        {index + 1}
+                      </td>
+
+                      <td
+                        style={{
+                          ...bodyCellStyle,
+                          height: `${studentRowHeight}px`,
+                        }}
+                      >
+                        {getGradeLabel(student.grade)}
+                      </td>
+
+                      <td
+                        style={{
+                          ...bodyCellStyle,
+                          height: `${studentRowHeight}px`,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {student.chinese_name}
+                      </td>
+
+                      <td
+                        style={{
+                          ...bodyCellStyle,
+                          height: `${studentRowHeight}px`,
+                        }}
+                      >
+                        {student.english_name || ""}
+                      </td>
+
+                      <td
+                        style={{
+                          ...bodyCellStyle,
+                          height: `${studentRowHeight}px`,
+                          fontSize: "12px",
+                        }}
+                      >
+                        {student.parent_phone || ""}
+                      </td>
+
+                      {periodDates.map((dateKey) => {
+                        const record =
+                          recordByStudentDate.get(
+                            `${student.id}__${dateKey}`
+                          );
+
+                        const dayMeta =
+                          dayMetaByDate.get(dateKey);
+
+                        const mark =
+                          getAttendanceMark(
+                            record,
+                            dayMeta
+                          );
+
+                        return (
+                          <td
+                            key={dateKey}
+                            style={{
+                              ...bodyCellStyle,
+                              height: `${studentRowHeight}px`,
+                              fontWeight:
+                                mark === "/"
+                                  ? 400
+                                  : 700,
+                              color:
+                                mark === "/"
+                                  ? "#aaa39a"
+                                  : "#4b463f",
+                              whiteSpace: "nowrap",
+                              fontSize:
+                                mark === "兩天一夜"
+                                  ? "10px"
+                                  : mark.length >= 5
+                                  ? "10px"
+                                  : "12px",
+                            }}
+                          >
+                            {mark}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "18px",
+                  marginTop: "auto",
+                  paddingTop: "12px",
+                  fontSize: "11px",
+                  opacity: 0.68,
+                  flexShrink: 0,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <div>
+                  空白＝一般整日　／＝未報名　假＝請假　出＝戶外教學　其餘顯示實際報名內容
+                </div>
+
+                <div>
+                  {formatDate(selectedPeriod.start_date)}
+                  {" — "}
+                  {formatDate(selectedPeriod.end_date)}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -545,28 +871,28 @@ function CampRollCallPanel({ camp, onBack }) {
   );
 }
 
-function headerCellStyle(width) {
+function headerCellStyle() {
   return {
-    ...(width ? { width } : {}),
     border: "1px solid #aaa59d",
     padding: "7px 3px",
     textAlign: "center",
     verticalAlign: "middle",
     background: "#f1efe9",
     fontWeight: 700,
-    lineHeight: 1.25,
+    lineHeight: 1.2,
     whiteSpace: "nowrap",
+    overflow: "hidden",
   };
 }
 
 const bodyCellStyle = {
   border: "1px solid #b8b3aa",
-  padding: "7px 3px",
+  padding: "4px 3px",
   textAlign: "center",
   verticalAlign: "middle",
-  height: "36px",
-  lineHeight: 1.2,
+  lineHeight: 1.15,
   whiteSpace: "nowrap",
+  overflow: "hidden",
 };
 
 export default CampRollCallPanel;
