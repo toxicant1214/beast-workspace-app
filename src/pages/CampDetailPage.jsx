@@ -12,189 +12,235 @@ const STATUS_LABELS = {
   ARCHIVED: "已封存",
 };
 
+const STUDENT_ITEMS = [
+  ["students", "學生總名單", true],
+  ["periods", "活動梯次", true],
+  ["daily", "每日報名", true],
+  ["classes", "營隊編班", true],
+  ["rollcall", "點名表", false],
+];
+
+const TEACHER_ITEMS = [
+  ["staff", "工作人員", false],
+  ["schedule", "人員排班", false],
+  ["leave", "請假登記", false],
+  ["special", "特殊任務", false],
+  ["cleaning", "清潔安排", false],
+  ["teacherExport", "教師班表", false],
+];
+
 function formatDate(dateString) {
   if (!dateString) return "—";
-
   const [year, month, day] = String(dateString).split("-");
   return `${year}/${month}/${day}`;
 }
 
-function CampDetailPage({
-  camp,
-  onBack,
-  onUpdateCamp,
-}) {
-  const [activeSection, setActiveSection] = useState("folder");
+function CampDetailPage({ camp, onBack, onUpdateCamp }) {
+  const [workspace, setWorkspace] = useState("student");
+  const [activeSection, setActiveSection] = useState("students");
   const [isEditCampOpen, setIsEditCampOpen] = useState(false);
 
-  if (activeSection === "students") {
-    return (
-      <CampStudentsPanel
-        camp={camp}
-        onBack={() => setActiveSection("folder")}
-      />
-    );
+  const items = workspace === "student" ? STUDENT_ITEMS : TEACHER_ITEMS;
+
+  function switchWorkspace(next) {
+    setWorkspace(next);
+    setActiveSection(next === "student" ? "students" : "staff");
   }
 
-  if (activeSection === "periods") {
+  function renderContent() {
+    if (workspace === "student") {
+      if (activeSection === "students") {
+        return <CampStudentsPanel camp={camp} onBack={() => {}} />;
+      }
+
+      if (activeSection === "periods") {
+        return <CampPeriodsPanel camp={camp} onBack={() => {}} />;
+      }
+
+      if (activeSection === "daily") {
+        return <CampDailyRegistrationPanel camp={camp} onBack={() => {}} />;
+      }
+
+      if (activeSection === "classes") {
+        return <CampClassesPanel camp={camp} onBack={() => {}} />;
+      }
+    }
+
+    const current = items.find(([key]) => key === activeSection);
+
     return (
-      <CampPeriodsPanel
-        camp={camp}
-        onBack={() => setActiveSection("folder")}
-      />
-    );
-  }
-
-  if (activeSection === "daily") {
-    return (
-      <CampDailyRegistrationPanel
-        camp={camp}
-        onBack={() => setActiveSection("folder")}
-      />
-    );
-  }
-
-  if (activeSection === "classes") {
-    return (
-      <CampClassesPanel
-        camp={camp}
-        onBack={() => setActiveSection("folder")}
-      />
-    );
-  }
-
-  const sections = [
-    {
-      key: "students",
-      title: "學生總名單",
-      description: "管理這次營隊會使用的學生基本資料。",
-      ready: true,
-    },
-    {
-      key: "periods",
-      title: "活動梯次",
-      description: "建立梯次、起迄日期，並設定每天的課程類型。",
-      ready: true,
-    },
-    {
-      key: "daily",
-      title: "每日報名",
-      description: "選梯次與學生，再安排每天上午、下午、午餐、才藝與請假。",
-      ready: true,
-    },
-    {
-      key: "classes",
-      title: "營隊編班",
-      description: "建立獨立編班區間，再依各區間安排班級與學生。",
-      ready: true,
-    },
-    {
-      key: "staff",
-      title: "工作人員",
-      description: "建立這次營隊自己的工作人員與請假資料。",
-      ready: false,
-    },
-    {
-      key: "schedule",
-      title: "人員排班",
-      description: "安排主帶、助教、特殊任務與每日班別。",
-      ready: false,
-    },
-    {
-      key: "cleaning",
-      title: "清潔與工作安排",
-      description: "設定這次營隊的清潔項目與每日輪值。",
-      ready: false,
-    },
-    {
-      key: "export",
-      title: "輸出",
-      description: "產出點名表、工作人員班表與營隊總表。",
-      ready: false,
-    },
-  ];
-
-  return (
-    <div className="campPage">
-      <button
-        type="button"
-        className="campBackButton"
-        onClick={onBack}
+      <div
+        style={{
+          minHeight: 420,
+          border: "1px dashed #ddd1c3",
+          borderRadius: 18,
+          background: "#fffdfa",
+          display: "grid",
+          placeItems: "center",
+          textAlign: "center",
+          padding: 32,
+        }}
       >
-        ← 返回營隊列表
-      </button>
-
-      <header className="campDetailHeader">
         <div>
-          <p className="campEyebrow">CAMP FOLDER</p>
-
-          <h1>{camp.name}</h1>
-
-          <p>
-            {formatDate(camp.start_date)}
-            {" — "}
-            {formatDate(camp.end_date)}
+          <strong style={{ fontSize: 24 }}>
+            {current?.[1] || "功能"}
+          </strong>
+          <p style={{ opacity: 0.62, marginTop: 10 }}>
+            這個功能下一步建立。
           </p>
         </div>
+      </div>
+    );
+  }
 
-        <div>
-          <span className="campDetailHeader__status">
-            {STATUS_LABELS[camp.status] || camp.status}
-          </span>
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#fbf8f3",
+        display: "grid",
+        gridTemplateColumns: "250px minmax(0, 1fr)",
+      }}
+    >
+      <aside
+        style={{
+          background: "#fffdfa",
+          borderRight: "1px solid #e7dfd4",
+          padding: "24px 18px",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          overflowY: "auto",
+        }}
+      >
+        <button
+          type="button"
+          className="campBackButton"
+          onClick={onBack}
+          style={{ width: "100%", marginBottom: 22 }}
+        >
+          ← 返回營隊列表
+        </button>
 
-          <button
-            type="button"
-            className="campSecondaryButton"
-            onClick={() => setIsEditCampOpen(true)}
-            style={{ marginLeft: "12px" }}
-          >
-            編輯營隊資料
-          </button>
+        <div style={{ padding: "0 8px 20px", borderBottom: "1px solid #eee7dd" }}>
+          <p className="campEyebrow" style={{ marginBottom: 6 }}>
+            CAMP FOLDER
+          </p>
+
+          <strong style={{ display: "block", fontSize: 22 }}>
+            {camp.name}
+          </strong>
+
+          <small style={{ opacity: 0.6 }}>
+            {formatDate(camp.start_date)} — {formatDate(camp.end_date)}
+          </small>
         </div>
-      </header>
 
-      <section className="campDetailIntro">
-        <strong>這是一個獨立營隊資料夾</strong>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+            margin: "18px 0",
+          }}
+        >
+          {[
+            ["student", "學生作業"],
+            ["teacher", "教師作業"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => switchWorkspace(key)}
+              style={{
+                border: "1px solid #dfd6ca",
+                borderRadius: 12,
+                padding: "10px 8px",
+                cursor: "pointer",
+                fontWeight: 700,
+                background: workspace === key ? "#5b5147" : "#fffdfa",
+                color: workspace === key ? "#fff" : "#5b5147",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-        <p>
-          學生、活動梯次、每日報名、編班、工作人員、
-          排班與清潔資料都只屬於這次營隊。
-        </p>
-      </section>
+        <nav style={{ display: "grid", gap: 5 }}>
+          {items.map(([key, label, ready], index) => {
+            const active = activeSection === key;
 
-      <section className="campSectionGrid">
-        {sections.map((section) => (
-          <article
-            key={section.key}
-            className={[
-              "campSectionCard",
-              section.ready ? "campSectionCard--ready" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            <span className="campSectionCard__dot" />
-
-            <h2>{section.title}</h2>
-
-            <p>{section.description}</p>
-
-            {section.ready ? (
+            return (
               <button
+                key={key}
                 type="button"
-                className="campSectionCard__open"
-                onClick={() => setActiveSection(section.key)}
+                disabled={!ready}
+                onClick={() => ready && setActiveSection(key)}
+                style={{
+                  border: 0,
+                  borderRadius: 12,
+                  padding: "13px 14px",
+                  textAlign: "left",
+                  background: active ? "#f0ebe4" : "transparent",
+                  color: ready ? "#4f473f" : "#aaa098",
+                  cursor: ready ? "pointer" : "default",
+                  opacity: ready ? 1 : 0.72,
+                }}
               >
-                進入管理 →
+                <strong>
+                  {index + 1}. {label}
+                </strong>
+                {!ready && (
+                  <small style={{ display: "block", marginTop: 4 }}>
+                    即將建立
+                  </small>
+                )}
               </button>
-            ) : (
-              <button type="button" disabled>
-                即將建立
-              </button>
-            )}
-          </article>
-        ))}
-      </section>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <main style={{ minWidth: 0, padding: "28px 34px 48px" }}>
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 20,
+            alignItems: "flex-start",
+            paddingBottom: 18,
+            borderBottom: "1px solid #e7dfd4",
+            marginBottom: 22,
+          }}
+        >
+          <div>
+            <p className="campEyebrow" style={{ marginBottom: 6 }}>
+              {workspace === "student" ? "STUDENT WORKSPACE" : "TEACHER WORKSPACE"}
+            </p>
+
+            <h1 style={{ margin: 0 }}>
+              {workspace === "student" ? "學生作業" : "教師作業"}
+            </h1>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span className="campDetailHeader__status">
+              {STATUS_LABELS[camp.status] || camp.status}
+            </span>
+
+            <button
+              type="button"
+              className="campSecondaryButton"
+              onClick={() => setIsEditCampOpen(true)}
+            >
+              編輯營隊資料
+            </button>
+          </div>
+        </header>
+
+        {renderContent()}
+      </main>
 
       <CampFormModal
         isOpen={isEditCampOpen}
