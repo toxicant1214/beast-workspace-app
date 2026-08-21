@@ -4,6 +4,7 @@ import CampStudentsPanel from "../components/camp/CampStudentsPanel";
 import CampPeriodsPanel from "../components/camp/CampPeriodsPanel";
 import CampDailyRegistrationPanel from "../components/camp/CampDailyRegistrationPanel";
 import CampClassesPanel from "../components/camp/CampClassesPanel";
+import CampRollCallPanel from "../components/camp/CampRollCallPanel";
 import CampFormModal from "../components/camp/CampFormModal";
 
 const STATUS_LABELS = {
@@ -17,7 +18,7 @@ const STUDENT_ITEMS = [
   ["periods", "活動梯次", true],
   ["daily", "每日報名", true],
   ["classes", "營隊編班", true],
-  ["rollcall", "點名表", false],
+  ["rollcall", "點名表", true],
 ];
 
 const TEACHER_ITEMS = [
@@ -63,6 +64,10 @@ function CampDetailPage({ camp, onBack, onUpdateCamp }) {
 
       if (activeSection === "classes") {
         return <CampClassesPanel camp={camp} onBack={() => {}} />;
+      }
+
+      if (activeSection === "rollcall") {
+        return <CampRollCallPanel camp={camp} onBack={() => {}} />;
       }
     }
 
