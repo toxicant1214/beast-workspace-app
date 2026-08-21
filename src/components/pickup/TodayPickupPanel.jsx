@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { getStudentPickupDecision } from "./pickupStudentSchedule";
 
 const WEEKDAYS = [
   { value: 1, label: "星期一", column: "monday_time" },
@@ -99,6 +100,8 @@ function TodayPickupPanel({
   const [staffRules, setStaffRules] = useState([]);
   const [closures, setClosures] = useState([]);
   const [dayOverrides, setDayOverrides] = useState([]);
+  const [studentWeeklyRules, setStudentWeeklyRules] = useState([]);
+  const [studentDateExceptions, setStudentDateExceptions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -135,6 +138,8 @@ function TodayPickupPanel({
       staffResult,
       closuresResult,
       overridesResult,
+      studentWeeklyResult,
+      studentExceptionsResult,
     ] = await Promise.all([
       supabase
         .from("students")
@@ -157,6 +162,14 @@ function TodayPickupPanel({
         .select(
           "id, semester_id, override_date, override_type, title, notes"
         ),
+      supabase
+        .from("pickup_student_weekly_rules")
+        .select("*")
+        .eq("is_active", true),
+      supabase
+        .from("pickup_student_date_exceptions")
+        .select("*")
+        .eq("is_active", true),
     ]);
 
     if (studentsResult.error) {
@@ -199,11 +212,29 @@ function TodayPickupPanel({
       return;
     }
 
+    if (studentWeeklyResult.error) {
+      setErrorMessage(
+        `讀取學生固定接送設定失敗：${studentWeeklyResult.error.message}`
+      );
+      setIsLoading(false);
+      return;
+    }
+
+    if (studentExceptionsResult.error) {
+      setErrorMessage(
+        `讀取學生單日接送例外失敗：${studentExceptionsResult.error.message}`
+      );
+      setIsLoading(false);
+      return;
+    }
+
     setStudents(studentsResult.data ?? []);
     setRules(rulesResult.data ?? []);
     setStaffRules(staffResult.data ?? []);
     setClosures(closuresResult.data ?? []);
     setDayOverrides(overridesResult.data ?? []);
+    setStudentWeeklyRules(studentWeeklyResult.data ?? []);
+    setStudentDateExceptions(studentExceptionsResult.data ?? []);
     setIsLoading(false);
   }
 
@@ -245,6 +276,15 @@ function TodayPickupPanel({
 
       if (!school || !gradeGroup) return;
       if (getSchoolClosure(school)) return;
+
+      const pickupDecision = getStudentPickupDecision({
+        studentId: student.id,
+        dateKey: effectiveSelectedDate,
+        weeklyRules: studentWeeklyRules,
+        dateExceptions: studentDateExceptions,
+      });
+
+      if (!pickupDecision.shouldPickup) return;
 
       const matchingRule = rules.find(
         (rule) =>
@@ -319,6 +359,9 @@ function TodayPickupPanel({
     dayOverrides,
     sharedDayOff,
     allClosure,
+    studentWeeklyRules,
+    studentDateExceptions,
+    effectiveSelectedDate,
   ]);
 
   const totalStudents = useMemo(

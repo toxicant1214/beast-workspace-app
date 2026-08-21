@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { supabase } from "../../lib/supabase";
+import { getStudentPickupDecision } from "./pickupStudentSchedule";
 
 const WEEKDAYS = [
   { value: 1, label: "一", column: "monday_time" },
@@ -132,6 +133,8 @@ function MonthlyPickupPanel() {
   const [rules, setRules] = useState([]);
   const [closures, setClosures] = useState([]);
   const [dayOverrides, setDayOverrides] = useState([]);
+  const [studentWeeklyRules, setStudentWeeklyRules] = useState([]);
+  const [studentDateExceptions, setStudentDateExceptions] = useState([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -150,6 +153,8 @@ function MonthlyPickupPanel() {
       rulesResult,
       closuresResult,
       overridesResult,
+      studentWeeklyResult,
+      studentExceptionsResult,
     ] = await Promise.all([
       supabase
         .from("students")
@@ -212,6 +217,14 @@ function MonthlyPickupPanel() {
             notes
           `
         ),
+      supabase
+        .from("pickup_student_weekly_rules")
+        .select("*")
+        .eq("is_active", true),
+      supabase
+        .from("pickup_student_date_exceptions")
+        .select("*")
+        .eq("is_active", true),
     ]);
 
     if (studentsResult.error) {
@@ -242,10 +255,28 @@ function MonthlyPickupPanel() {
       return;
     }
 
+    if (studentWeeklyResult.error) {
+      setErrorMessage(
+        `讀取學生固定接送設定失敗：${studentWeeklyResult.error.message}`
+      );
+      setIsLoading(false);
+      return;
+    }
+
+    if (studentExceptionsResult.error) {
+      setErrorMessage(
+        `讀取學生單日接送例外失敗：${studentExceptionsResult.error.message}`
+      );
+      setIsLoading(false);
+      return;
+    }
+
     setStudents(studentsResult.data ?? []);
     setRules(rulesResult.data ?? []);
     setClosures(closuresResult.data ?? []);
     setDayOverrides(overridesResult.data ?? []);
+    setStudentWeeklyRules(studentWeeklyResult.data ?? []);
+    setStudentDateExceptions(studentExceptionsResult.data ?? []);
     setIsLoading(false);
   }
 
@@ -298,6 +329,28 @@ function MonthlyPickupPanel() {
       ]
     );
   }, [visibleStudents]);
+
+  const actualPickupStudents = useMemo(() => {
+    return visibleStudents.filter((student) =>
+      monthDays.some((day) => {
+        const cell = getCell(student, day);
+
+        return !(
+          cell.className.includes("is-none") ||
+          cell.className.includes("is-missing") ||
+          cell.className.includes("is-closed")
+        );
+      })
+    );
+  }, [
+    visibleStudents,
+    monthDays,
+    rules,
+    closures,
+    dayOverrides,
+    studentWeeklyRules,
+    studentDateExceptions,
+  ]);
 
   const pdfPages = useMemo(() => {
     const pages = [];
@@ -375,6 +428,24 @@ function MonthlyPickupPanel() {
         text: "休",
         className: "monthlyPickupCell is-closed",
         title: closure.reason || "停接",
+      };
+    }
+
+    const pickupDecision = getStudentPickupDecision({
+      studentId: student.id,
+      dateKey: day.dateString,
+      weeklyRules: studentWeeklyRules,
+      dateExceptions: studentDateExceptions,
+    });
+
+    if (!pickupDecision.shouldPickup) {
+      return {
+        text: "—",
+        className: "monthlyPickupCell is-none",
+        title:
+          pickupDecision.source === "DATE_EXCEPTION"
+            ? `單日例外：不接${pickupDecision.note ? `（${pickupDecision.note}）` : ""}`
+            : `學生固定設定：當日不接${pickupDecision.note ? `（${pickupDecision.note}）` : ""}`,
       };
     }
 
@@ -609,8 +680,8 @@ function MonthlyPickupPanel() {
     <div className="summaryCardIcon">👧🏻</div>
 
     <div>
-      <h3>{visibleStudents.length}</h3>
-      <p>位在學學生</p>
+      <h3>{actualPickupStudents.length}</h3>
+      <p>位本月有接送學生</p>
     </div>
   </div>
 
