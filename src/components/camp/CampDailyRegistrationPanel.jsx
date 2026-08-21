@@ -550,10 +550,13 @@ function CampDailyRegistrationPanel({
               : "",
 
           outdoor_joined:
+            isOutdoorDay(
+              dayMetaByDate.get(
+                dateKey
+              )
+            ) &&
             attendanceStatus ===
-              "OUTDOOR" ||
-            attendanceStatus ===
-              "FIELD_TRIP",
+              "NORMAL",
 
           leave_type:
             row.leave_type ||
@@ -782,13 +785,10 @@ function CampDailyRegistrationPanel({
               ) {
                 attendanceStatus =
                   "LEAVE";
-              } else if (
-                outdoorDay &&
-                record.outdoor_joined
-              ) {
-                attendanceStatus =
-                  "OUTDOOR";
               } else {
+                // 資料庫 attendance_status 只允許
+                // NORMAL / LEAVE / ABSENT。
+                // 戶外教學是否參加由「當日類型 + 是否報名」判斷。
                 attendanceStatus =
                   "NORMAL";
               }

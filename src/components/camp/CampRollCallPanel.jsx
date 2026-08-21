@@ -85,9 +85,19 @@ function getAttendanceMark(record, dayMeta) {
   if (status === "ABSENT") return "/";
   if (status === "LEAVE") return "假";
 
+  const dayType =
+    normalizeType(
+      dayMeta?.day_type
+    );
+
   if (
-    status === "OUTDOOR" ||
-    status === "FIELD_TRIP"
+    status === "NORMAL" &&
+    (
+      dayType.includes("戶外教學") ||
+      dayType.includes("戶外") ||
+      dayType.includes("OUTDOOR") ||
+      dayType.includes("FIELD")
+    )
   ) {
     return "出";
   }
