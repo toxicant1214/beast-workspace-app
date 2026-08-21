@@ -70,24 +70,52 @@ function normalizeType(value) {
 }
 
 function isOvernightDay(dayMeta) {
-  const dayType = normalizeType(dayMeta?.day_type);
-  const title = normalizeType(dayMeta?.title);
+  const dayType = String(
+    dayMeta?.day_type || ""
+  ).trim();
+
+  const title = String(
+    dayMeta?.title || ""
+  ).trim();
+
+  const normalizedDayType =
+    dayType.toUpperCase();
+
+  const normalizedTitle =
+    title.toUpperCase();
 
   return (
-    dayType.includes("OVERNIGHT") ||
-    dayType.includes("CAMP") ||
-    title.includes("兩天一夜")
+    dayType.includes("兩天一夜") ||
+    title.includes("兩天一夜") ||
+    normalizedDayType.includes("OVERNIGHT") ||
+    normalizedDayType.includes("CAMP") ||
+    normalizedTitle.includes("OVERNIGHT")
   );
 }
 
 function isOutdoorDay(dayMeta) {
-  const dayType = normalizeType(dayMeta?.day_type);
-  const title = normalizeType(dayMeta?.title);
+  const dayType = String(
+    dayMeta?.day_type || ""
+  ).trim();
+
+  const title = String(
+    dayMeta?.title || ""
+  ).trim();
+
+  const normalizedDayType =
+    dayType.toUpperCase();
+
+  const normalizedTitle =
+    title.toUpperCase();
 
   return (
-    dayType.includes("OUTDOOR") ||
-    dayType.includes("FIELD") ||
-    title.includes("戶外")
+    dayType.includes("戶外教學") ||
+    title.includes("戶外教學") ||
+    dayType.includes("戶外") ||
+    title.includes("戶外") ||
+    normalizedDayType.includes("OUTDOOR") ||
+    normalizedDayType.includes("FIELD") ||
+    normalizedTitle.includes("OUTDOOR")
   );
 }
 
