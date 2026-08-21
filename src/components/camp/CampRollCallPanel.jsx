@@ -40,6 +40,13 @@ function getWeekday(dateString) {
   return ["日", "一", "二", "三", "四", "五", "六"][date.getDay()] || "";
 }
 
+function isWeekday(dateString) {
+  if (!dateString) return false;
+  const date = new Date(`${dateString}T00:00:00`);
+  const weekday = date.getDay();
+  return weekday >= 1 && weekday <= 5;
+}
+
 function normalizeType(value) {
   return String(value || "").trim().toUpperCase();
 }
@@ -48,12 +55,14 @@ function getAttendanceMark(record, dayMeta) {
   if (!record) return "/";
 
   const status = normalizeType(record.attendance_status);
+
   if (status === "ABSENT") return "/";
   if (status === "LEAVE") return "假";
 
   const dayType = normalizeType(dayMeta?.day_type);
   const overnightMode = normalizeType(record.overnight_mode);
 
+  // 兩天一夜：有參加才顯示文字；留在室內維持空白格。
   if (
     overnightMode.includes("OVERNIGHT") ||
     overnightMode.includes("JOIN") ||
@@ -70,11 +79,37 @@ function getAttendanceMark(record, dayMeta) {
     return "";
   }
 
-  if (dayType.includes("OUTDOOR") || dayType.includes("FIELD")) {
+  // 戶外教學：有參加顯示「出」。
+  if (
+    dayType.includes("OUTDOOR") ||
+    dayType.includes("FIELD")
+  ) {
     return "出";
   }
 
-  return "✓";
+  const parts = [];
+
+  if (record.morning) parts.push("上");
+  if (record.afternoon) parts.push("下");
+  if (record.meal) parts.push("餐");
+  if (record.talent) parts.push("才");
+
+  // 一般營隊日若上午、下午、午餐都參加，視為正常整日，保持空白格。
+  const isRegularFullDay =
+    record.morning &&
+    record.afternoon &&
+    record.meal &&
+    !record.talent;
+
+  if (isRegularFullDay) return "";
+
+  // 有才藝但其餘為完整一般營隊，顯示簡碼。
+  if (parts.length > 0) {
+    return parts.join("+");
+  }
+
+  // 有建立每日報名紀錄但沒有特殊文字時，保持空白。
+  return "";
 }
 
 function safeFileName(value) {
@@ -230,7 +265,8 @@ function CampRollCallPanel({ camp, onBack }) {
       const nextClasses = classResult.data ?? [];
       const nextPeriodDates = (periodDateResult.data ?? [])
         .map((row) => row.camp_date)
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter(isWeekday);
       const dateSet = new Set(nextPeriodDates);
 
       setClasses(nextClasses);
@@ -393,14 +429,14 @@ function CampRollCallPanel({ camp, onBack }) {
       ) : classStudents.length === 0 ? (
         <div className="campEmptyState"><strong>這個班級目前沒有學生</strong></div>
       ) : (
-        <div style={{ overflowX: "auto", paddingBottom: "12px" }}>
+        <div style={{ width: "100%", overflow: "hidden", paddingBottom: "12px" }}>
           <div
             ref={previewRef}
             style={{
-              width: `${Math.max(1600, 740 + periodDates.length * 110)}px`,
-              minHeight: "900px",
+              width: "100%",
+              minHeight: "auto",
               boxSizing: "border-box",
-              padding: "58px 54px 48px",
+              padding: "34px 30px 30px",
               background: "#fbf8f1",
               color: "#4b463f",
               fontFamily: '"Iansui", "芫荽", cursive',
@@ -409,13 +445,13 @@ function CampRollCallPanel({ camp, onBack }) {
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: "32px", alignItems: "flex-end", marginBottom: "28px" }}>
               <div>
-                <div style={{ fontSize: "40px", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "7px" }}>倍思學院</div>
-                <div style={{ fontSize: "18px", letterSpacing: "0.25em", opacity: 0.62 }}>BEAST ACADEMY</div>
+                <div style={{ fontSize: "30px", fontWeight: 700, letterSpacing: "0.08em", marginBottom: "5px" }}>倍思學院</div>
+                <div style={{ fontSize: "13px", letterSpacing: "0.22em", opacity: 0.62 }}>BEAST ACADEMY</div>
               </div>
 
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "34px", fontWeight: 700, marginBottom: "9px" }}>{camp.name} 點名表</div>
-                <div style={{ fontSize: "19px", opacity: 0.72 }}>
+                <div style={{ fontSize: "24px", fontWeight: 700, marginBottom: "6px" }}>{camp.name} 點名表</div>
+                <div style={{ fontSize: "10px", opacity: 0.72 }}>
                   {selectedPeriod.name}　｜　{selectedClass.name}　｜　{classStudents.length} 人
                 </div>
               </div>
@@ -423,19 +459,19 @@ function CampRollCallPanel({ camp, onBack }) {
 
             <div style={{ height: "5px", borderRadius: "999px", background: "#9aa58f", opacity: 0.75, marginBottom: "22px" }} />
 
-            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", background: "rgba(255,255,255,0.42)", fontSize: "18px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", background: "rgba(255,255,255,0.42)", fontSize: "13px" }}>
               <thead>
                 <tr>
-                  <th style={headerCellStyle(66)}>編號</th>
-                  <th style={headerCellStyle(94)}>年級</th>
-                  <th style={headerCellStyle(128)}>中文姓名</th>
-                  <th style={headerCellStyle(120)}>英文姓名</th>
-                  <th style={headerCellStyle(148)}>聯絡電話</th>
+                  <th style={headerCellStyle(46)}>編號</th>
+                  <th style={headerCellStyle(68)}>年級</th>
+                  <th style={headerCellStyle(92)}>中文姓名</th>
+                  <th style={headerCellStyle(88)}>英文姓名</th>
+                  <th style={headerCellStyle(112)}>聯絡電話</th>
 
                   {periodDates.map((dateKey) => {
                     const dayMeta = dayMetaByDate.get(dateKey);
                     return (
-                      <th key={dateKey} style={headerCellStyle(108)}>
+                      <th key={dateKey} style={headerCellStyle(undefined)}>
                         <div>{formatShortDate(dateKey)}</div>
                         <div style={{ fontSize: "14px", opacity: 0.66, marginTop: "3px" }}>
                           （{getWeekday(dateKey)}）{dayMeta?.title ? ` ${dayMeta.title}` : ""}
@@ -479,7 +515,7 @@ function CampRollCallPanel({ camp, onBack }) {
             </table>
 
             <div style={{ display: "flex", justifyContent: "space-between", gap: "28px", marginTop: "26px", fontSize: "15px", opacity: 0.72 }}>
-              <div>✓ 有報名　／ 未報名　假 請假　出 戶外教學</div>
+              <div>空白＝一般整日　／＝未報名　假＝請假　出＝戶外教學　其餘顯示實際報名內容</div>
               <div>{formatDate(selectedPeriod.start_date)} — {formatDate(selectedPeriod.end_date)}</div>
             </div>
           </div>
@@ -491,9 +527,9 @@ function CampRollCallPanel({ camp, onBack }) {
 
 function headerCellStyle(width) {
   return {
-    width,
+    ...(width ? { width } : {}),
     border: "1px solid #bdb7ae",
-    padding: "13px 8px",
+    padding: "8px 4px",
     textAlign: "center",
     verticalAlign: "middle",
     background: "#e9e6dc",
@@ -504,10 +540,10 @@ function headerCellStyle(width) {
 
 const bodyCellStyle = {
   border: "1px solid #c9c3ba",
-  padding: "13px 8px",
+  padding: "8px 4px",
   textAlign: "center",
   verticalAlign: "middle",
-  height: "48px",
+  height: "34px",
   lineHeight: 1.35,
 };
 
