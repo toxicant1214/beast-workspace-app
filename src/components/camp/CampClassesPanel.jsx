@@ -466,10 +466,13 @@ function CampClassesPanel({
     const name =
       newClassName.trim();
 
-    if (
-      !name ||
-      !selectedPeriodId
-    ) {
+    if (!selectedPeriodId) {
+      setErrorMessage("請先選擇活動梯次。");
+      return;
+    }
+
+    if (!name) {
+      setErrorMessage("請先輸入班級名稱。");
       return;
     }
 
@@ -1443,10 +1446,15 @@ function CampClassesPanel({
                     value={newClassName}
                     onChange={(event) =>
                       setNewClassName(
-                        event.target
-                          .value
+                        event.target.value
                       )
                     }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleAddClass();
+                      }
+                    }}
                     placeholder="輸入班級名稱，例如：第二梯A"
                     style={{
                       flex: 1,
@@ -1456,13 +1464,8 @@ function CampClassesPanel({
                   <button
                     type="button"
                     className="campPrimaryButton"
-                    onClick={
-                      handleAddClass
-                    }
-                    disabled={
-                      isWorking ||
-                      !newClassName.trim()
-                    }
+                    onClick={handleAddClass}
+                    disabled={isWorking}
                   >
                     ＋ 新增班級
                   </button>
