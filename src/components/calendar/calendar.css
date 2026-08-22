@@ -2900,3 +2900,51 @@ background 0.15s ease;
   color: #81766b;
   overflow-wrap: break-word;
 }
+/* ===== 學期總表：單筆事項保持單行 ===== */
+
+.semester-table-event-line {
+  display: flex;
+  align-items: baseline;
+  width: 100%;
+  min-width: 0;
+  gap: 4px;
+
+  font-size: 10px;
+  line-height: 1.45;
+
+  white-space: nowrap;
+}
+
+.semester-table-event-line__date {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.semester-table-event-line__divider {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.semester-table-event-line__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.semester-table-event-line__slash {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.semester-table-event-line__school {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.semester-table__work-cell {
+  height: auto;
+}
+
+.semester-table__work-content {
+  overflow: visible;
+}
