@@ -1072,6 +1072,33 @@ function MonthCalendarView({
                   ) + 1
                 : 0;
 
+            const maxSingleDayEventCount =
+              Math.max(
+                0,
+                ...weekDays.map(
+                  (date) =>
+                    getEventsForDate(
+                      date
+                    ).filter(
+                      (eventItem) => {
+                        const endDate =
+                          eventItem.end_date ||
+                          eventItem.start_date;
+
+                        return (
+                          endDate ===
+                          eventItem.start_date
+                        );
+                      }
+                    ).length
+                )
+              );
+
+            const weekRowMinHeight =
+              82 +
+              maxLaneCount * 36 +
+              maxSingleDayEventCount * 58;
+
             return (
               <div
                 key={`month-week-${weekIndex}`}
@@ -1083,6 +1110,7 @@ function MonthCalendarView({
                   gridTemplateColumns:
                     "repeat(7, minmax(0, 1fr))",
                   position: "relative",
+                  minHeight: `${weekRowMinHeight}px`,
                 }}
               >
                 {weekDays.map(
@@ -1143,10 +1171,8 @@ function MonthCalendarView({
                           )
                           .join(" ")}
                         style={{
-                          minHeight:
-                            maxLaneCount > 0
-                              ? `${146 + maxLaneCount * 34}px`
-                              : undefined,
+                          minHeight: `${weekRowMinHeight}px`,
+                          height: "100%",
                         }}
                       >
                         <div className="month-calendar__date">
@@ -1158,7 +1184,7 @@ function MonthCalendarView({
                           style={{
                             paddingTop:
                               maxLaneCount > 0
-                                ? `${maxLaneCount * 34 + 18}px`
+                                ? `${maxLaneCount * 36 + 16}px`
                                 : undefined,
                           }}
                         >
