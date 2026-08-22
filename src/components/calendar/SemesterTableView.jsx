@@ -1079,12 +1079,15 @@ function SemesterTableView({
                                 eventItem
                               ) => {
                                 const schoolLabel =
-                                  eventItem.applies_to_all_schools
-                                    ? "全部學校"
-                                    : schoolNames[
-                                        eventItem.school_id
-                                      ] ||
-                                      "";
+                                  eventItem.category === "SCHOOL"
+                                    ? (
+                                        eventItem.applies_to_all_schools
+                                          ? "全部學校"
+                                          : schoolNames[
+                                              eventItem.school_id
+                                            ] || ""
+                                      )
+                                    : "";
 
 
                                 return (

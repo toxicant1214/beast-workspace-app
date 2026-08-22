@@ -1144,13 +1144,8 @@ function MonthCalendarView({
                           .join(" ")}
                         style={{
                           minHeight:
-                            maxLaneCount >
-                            0
-                              ? `${
-                                  128 +
-                                  maxLaneCount *
-                                    34
-                                }px`
+                            maxLaneCount > 0
+                              ? `${136 + maxLaneCount * 34}px`
                               : undefined,
                         }}
                       >
@@ -1163,14 +1158,14 @@ function MonthCalendarView({
                           style={{
                             paddingTop:
                               maxLaneCount > 0
-                                ? `${maxLaneCount * 34}px`
+                                ? `${maxLaneCount * 34 + 8}px`
                                 : undefined,
                           }}
                         >
                           {dateEvents.map(
                             (eventItem) => {
                               const schoolLabel =
-                                eventItem.category === "school"
+                                eventItem.category === "SCHOOL"
                                   ? (
                                       eventItem.applies_to_all_schools
                                         ? "全部學校"
@@ -1234,98 +1229,107 @@ function MonthCalendarView({
                   }
                 )}
 
-                {rangeSegments.map(
-                  (segment) => {
-                    const {
-                      eventItem,
-                      startColumn,
-                      span,
-                      laneIndex,
-                      segmentStartsHere,
-                      segmentEndsHere,
-                    } = segment;
+                {rangeSegments.length > 0 && (
+                  <div
+                    className="month-calendar__range-layer"
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      top: "42px",
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(7, minmax(0, 1fr))",
+                      gridAutoRows: "30px",
+                      rowGap: "4px",
+                      pointerEvents: "none",
+                      zIndex: 4,
+                    }}
+                  >
+                    {rangeSegments.map(
+                      (segment) => {
+                        const {
+                          eventItem,
+                          startColumn,
+                          endColumn,
+                          laneIndex,
+                          segmentStartsHere,
+                          segmentEndsHere,
+                        } = segment;
 
-                    const schoolLabel =
-                      eventItem.category === "school"
-                        ? (
-                            eventItem.applies_to_all_schools
-                              ? "全部學校"
-                              : schoolNames[
-                                  eventItem.school_id
-                                ] || ""
-                          )
-                        : "";
+                        const schoolLabel =
+                          eventItem.category === "SCHOOL"
+                            ? (
+                                eventItem.applies_to_all_schools
+                                  ? "全部學校"
+                                  : schoolNames[
+                                      eventItem.school_id
+                                    ] || ""
+                              )
+                            : "";
 
-                    return (
-                      <button
-                        key={`${eventItem.id}-${weekIndex}`}
-                        type="button"
-                        className={[
-                          "month-calendar-range-event",
-                          segmentStartsHere
-                            ? "is-start"
-                            : "is-continued-start",
-                          segmentEndsHere
-                            ? "is-end"
-                            : "is-continued-end",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        onClick={() =>
-                          openEdit(
-                            eventItem
-                          )
-                        }
-                        disabled={
-                          !canEdit
-                        }
-                        style={{
-                          gridColumn: `${startColumn} / span ${span}`,
-                          position:
-                            "absolute",
-                          left: `calc((${
-                            startColumn - 1
-                          }) * (100% / 7) + 8px)`,
-                          width: `calc((${
-                            span
-                          }) * (100% / 7) - 16px)`,
-                          top: `${
-                            42 +
-                            laneIndex *
-                              34
-                          }px`,
-                          minHeight: "28px",
-                          padding: "5px 12px",
-                          border: "1px solid #dfd1bd",
-                          borderRadius: "10px",
-                          background: "#f7f0e6",
-                          color: "#4f493f",
-                          boxSizing: "border-box",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "5px",
-                          overflow: "hidden",
-                          whiteSpace: "nowrap",
-                          textOverflow: "ellipsis",
-                          zIndex: 4,
-                        }}
-                      >
-                        <strong>
-                          {eventItem.title ||
-                            "行事項目"}
-                        </strong>
-
-                        {schoolLabel && (
-                          <span>
-                            {
-                              schoolLabel
+                        return (
+                          <button
+                            key={`${eventItem.id}-${weekIndex}`}
+                            type="button"
+                            className={[
+                              "month-calendar-range-event",
+                              segmentStartsHere
+                                ? "is-start"
+                                : "is-continued-start",
+                              segmentEndsHere
+                                ? "is-end"
+                                : "is-continued-end",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            onClick={() =>
+                              openEdit(
+                                eventItem
+                              )
                             }
-                          </span>
-                        )}
-                      </button>
-                    );
-                  }
+                            disabled={
+                              !canEdit
+                            }
+                            style={{
+                              gridColumn: `${startColumn} / ${endColumn + 1}`,
+                              gridRow: `${laneIndex + 1}`,
+                              minWidth: 0,
+                              minHeight: "30px",
+                              margin: "0 7px",
+                              padding: "5px 12px",
+                              border: "1px solid #dfd1bd",
+                              borderRadius: "10px",
+                              background: "#f7f0e6",
+                              color: "#4f493f",
+                              boxSizing: "border-box",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "5px",
+                              overflow: "hidden",
+                              whiteSpace: "nowrap",
+                              textOverflow: "ellipsis",
+                              pointerEvents: "auto",
+                            }}
+                          >
+                            <strong>
+                              {eventItem.title ||
+                                "行事項目"}
+                            </strong>
+
+                            {schoolLabel && (
+                              <span>
+                                {
+                                  schoolLabel
+                                }
+                              </span>
+                            )}
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
                 )}
               </div>
             );
