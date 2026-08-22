@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toPng } from "html-to-image";
+import { jsPDF } from "jspdf";
 import { supabase } from "../../lib/supabase";
 
 const GRADE_OPTIONS = [
@@ -142,16 +142,6 @@ function safeFileName(value) {
     .replace(/[\\/:*?"<>|]/g, "_")
     .replace(/\s+/g, "_");
 }
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
 
 function CampRollCallPanel({ camp, onBack }) {
   const previewRef = useRef(null);
@@ -458,7 +448,7 @@ function CampRollCallPanel({ camp, onBack }) {
     classStudents.length >
     MAX_A4_STUDENTS;
 
-  function printRollCall() {
+  async function exportVectorPdf() {
     if (
       !selectedPeriod ||
       !selectedClass ||
@@ -468,421 +458,278 @@ function CampRollCallPanel({ camp, onBack }) {
       return;
     }
 
-    setErrorMessage("");
-
-    const printWindow = window.open("", "_blank");
-
-    if (!printWindow) {
-      setErrorMessage(
-        "無法開啟列印視窗，請允許此網站開啟彈出式視窗後再試一次。"
-      );
-      return;
-    }
-
-    const dateCount = Math.max(periodDates.length, 1);
-
-    const fixed = {
-      number: 10,
-      grade: 14,
-      chineseName: 23,
-      englishName: 22,
-      phone: 30,
-    };
-
-    const contentWidth = 283;
-    const fixedWidth =
-      fixed.number +
-      fixed.grade +
-      fixed.chineseName +
-      fixed.englishName +
-      fixed.phone;
-
-    const dateWidth =
-      (contentWidth - fixedWidth) /
-      dateCount;
-
-    const rowHeight =
-      classStudents.length >= 24
-        ? 5.1
-        : classStudents.length >= 20
-        ? 5.6
-        : 6.2;
-
-    const bodyFont =
-      periodDates.length >= 14
-        ? 7.2
-        : periodDates.length >= 10
-        ? 7.8
-        : 8.4;
-
-    const dateFont =
-      periodDates.length >= 14
-        ? 6.6
-        : periodDates.length >= 10
-        ? 7.1
-        : 7.7;
-
-    const inheritedHead = Array.from(
-      document.querySelectorAll(
-        'style, link[rel="stylesheet"]'
-      )
-    )
-      .map((node) => node.outerHTML)
-      .join("\n");
-
-    const colgroup = `
-      <col style="width:${fixed.number}mm">
-      <col style="width:${fixed.grade}mm">
-      <col style="width:${fixed.chineseName}mm">
-      <col style="width:${fixed.englishName}mm">
-      <col style="width:${fixed.phone}mm">
-      ${periodDates
-        .map(
-          () =>
-            `<col style="width:${dateWidth}mm">`
-        )
-        .join("")}
-    `;
-
-    const dateHeaders = periodDates
-      .map(
-        (dateKey) => `
-          <th class="dateHeader">
-            <div>${escapeHtml(formatShortDate(dateKey))}</div>
-            <small>（${escapeHtml(getWeekday(dateKey))}）</small>
-          </th>
-        `
-      )
-      .join("");
-
-    const rows = classStudents
-      .map((student, index) => {
-        const cells = periodDates
-          .map((dateKey) => {
-            const record =
-              recordByStudentDate.get(
-                `${student.id}__${dateKey}`
-              );
-
-            const dayMeta =
-              dayMetaByDate.get(dateKey);
-
-            const mark =
-              getAttendanceMark(
-                record,
-                dayMeta
-              );
-
-            const className =
-              mark === "/"
-                ? "muted"
-                : mark === "兩天一夜"
-                ? "overnight"
-                : "";
-
-            return `
-              <td class="${className}">
-                ${escapeHtml(mark)}
-              </td>
-            `;
-          })
-          .join("");
-
-        return `
-          <tr>
-            <td>${index + 1}</td>
-            <td>${escapeHtml(getGradeLabel(student.grade))}</td>
-            <td class="studentName">${escapeHtml(student.chinese_name)}</td>
-            <td>${escapeHtml(student.english_name || "")}</td>
-            <td class="phone">${escapeHtml(student.parent_phone || "")}</td>
-            ${cells}
-          </tr>
-        `;
-      })
-      .join("");
-
-    printWindow.document.open();
-    printWindow.document.write(`
-      <!doctype html>
-      <html lang="zh-Hant">
-        <head>
-          <meta charset="utf-8">
-          <title>${escapeHtml(
-            safeFileName(
-              `${camp.name}_${selectedPeriod.name}_${selectedClass.name}_點名表`
-            )
-          )}</title>
-
-          ${inheritedHead}
-
-          <style>
-            @page {
-              size: A4 landscape;
-              margin: 0;
-            }
-
-            * {
-              box-sizing: border-box;
-            }
-
-            html,
-            body {
-              margin: 0;
-              padding: 0;
-              width: 297mm;
-              height: 210mm;
-              overflow: hidden;
-              background: #fffdf8;
-            }
-
-            body {
-              font-family: "Iansui", "芫荽", sans-serif;
-              color: #4b463f;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-
-            .sheet {
-              width: 297mm;
-              height: 210mm;
-              padding: 7mm;
-              overflow: hidden;
-              background: #fffdf8;
-              page-break-inside: avoid;
-              break-inside: avoid-page;
-            }
-
-            .top {
-              height: 18mm;
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-end;
-              gap: 8mm;
-            }
-
-            .brandZh {
-              font-size: 18pt;
-              font-weight: 700;
-              letter-spacing: 0.08em;
-              line-height: 1;
-            }
-
-            .brandEn {
-              margin-top: 1.5mm;
-              font-size: 7.5pt;
-              letter-spacing: 0.24em;
-              opacity: 0.58;
-            }
-
-            .title {
-              text-align: right;
-              white-space: nowrap;
-            }
-
-            .titleMain {
-              font-size: 15pt;
-              font-weight: 700;
-              line-height: 1;
-            }
-
-            .titleMeta {
-              margin-top: 1.5mm;
-              font-size: 8pt;
-              opacity: 0.68;
-            }
-
-            .rule {
-              height: 0.8mm;
-              margin: 2.2mm 0 2.5mm;
-              background: #a5ae9a;
-              border-radius: 99mm;
-              opacity: 0.78;
-            }
-
-            table {
-              width: 283mm;
-              border-collapse: collapse;
-              table-layout: fixed;
-              background: #fff;
-              font-size: ${bodyFont}pt;
-            }
-
-            th,
-            td {
-              border: 0.24mm solid #aaa59d;
-              text-align: center;
-              vertical-align: middle;
-              padding: 0 0.5mm;
-              line-height: 1.05;
-              white-space: nowrap;
-              overflow: hidden;
-            }
-
-            th {
-              height: 9.5mm;
-              background: #f1efe9;
-              font-weight: 700;
-            }
-
-            tbody tr,
-            tbody td {
-              height: ${rowHeight}mm;
-              max-height: ${rowHeight}mm;
-            }
-
-            .dateHeader {
-              font-size: ${dateFont}pt;
-            }
-
-            .dateHeader small {
-              display: block;
-              margin-top: 0.7mm;
-              font-size: ${Math.max(5.8, dateFont - 0.8)}pt;
-              opacity: 0.64;
-            }
-
-            .studentName {
-              font-weight: 700;
-            }
-
-            .phone {
-              font-size: ${Math.max(6.8, bodyFont - 0.5)}pt;
-            }
-
-            .muted {
-              color: #aaa39a;
-              font-weight: 400;
-            }
-
-            .overnight {
-              font-size: ${Math.max(6.0, bodyFont - 1.1)}pt;
-              font-weight: 700;
-            }
-
-            .footer {
-              display: flex;
-              justify-content: space-between;
-              gap: 6mm;
-              margin-top: 2.3mm;
-              font-size: 7pt;
-              opacity: 0.68;
-              white-space: nowrap;
-            }
-
-            @media print {
-              html,
-              body,
-              .sheet {
-                width: 297mm !important;
-                height: 210mm !important;
-              }
-            }
-          </style>
-        </head>
-
-        <body>
-          <section class="sheet">
-            <div class="top">
-              <div>
-                <div class="brandZh">倍思學院</div>
-                <div class="brandEn">BEAST ACADEMY</div>
-              </div>
-
-              <div class="title">
-                <div class="titleMain">
-                  ${escapeHtml(camp.name)} 點名表
-                </div>
-                <div class="titleMeta">
-                  ${escapeHtml(selectedPeriod.name)}
-                 　｜　
-                  ${escapeHtml(selectedClass.name)}
-                 　｜　
-                  ${classStudents.length} 人
-                </div>
-              </div>
-            </div>
-
-            <div class="rule"></div>
-
-            <table>
-              <colgroup>${colgroup}</colgroup>
-              <thead>
-                <tr>
-                  <th>編號</th>
-                  <th>年級</th>
-                  <th>中文姓名</th>
-                  <th>英文姓名</th>
-                  <th>聯絡電話</th>
-                  ${dateHeaders}
-                </tr>
-              </thead>
-              <tbody>
-                ${rows}
-              </tbody>
-            </table>
-
-            <div class="footer">
-              <div>
-                空白＝一般整日　／＝未報名　假＝請假　出＝戶外教學　其餘顯示實際報名內容
-              </div>
-              <div>
-                ${escapeHtml(formatDate(selectedPeriod.start_date))}
-                —
-                ${escapeHtml(formatDate(selectedPeriod.end_date))}
-              </div>
-            </div>
-          </section>
-
-          <script>
-            (async function () {
-              try {
-                if (
-                  document.fonts &&
-                  document.fonts.ready
-                ) {
-                  await document.fonts.ready;
-                }
-              } catch (error) {}
-
-              setTimeout(function () {
-                window.focus();
-                window.print();
-              }, 250);
-            })();
-          <\/script>
-        </body>
-      </html>
-    `);
-
-    printWindow.document.close();
-  }
-
-
-  async function exportPng() {
-    if (!previewRef.current || !selectedPeriod || !selectedClass) return;
-
     try {
       setIsExporting(true);
       setErrorMessage("");
-      if (document.fonts?.ready) await document.fonts.ready;
 
-      const dataUrl = await toPng(previewRef.current, {
-        cacheBust: true,
-        pixelRatio: 2,
-        width: A4_WIDTH,
-        height: A4_HEIGHT,
-        backgroundColor: "#fffdf8",
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
       });
 
-      const link = document.createElement("a");
-      link.download = safeFileName(
-        `${camp.name}_${selectedPeriod.name}_${selectedClass.name}_點名表.png`
+      const fontResponse = await fetch(
+        "https://cdn.jsdelivr.net/gh/ButTaiwan/iansui@main/fonts/ttf/Iansui-Regular.ttf"
       );
-      link.href = dataUrl;
-      link.click();
+
+      if (!fontResponse.ok) {
+        throw new Error(`芫荽體載入失敗（${fontResponse.status}）`);
+      }
+
+      const fontBytes = new Uint8Array(await fontResponse.arrayBuffer());
+      let binary = "";
+      const chunkSize = 0x8000;
+
+      for (let offset = 0; offset < fontBytes.length; offset += chunkSize) {
+        binary += String.fromCharCode(
+          ...fontBytes.subarray(
+            offset,
+            Math.min(offset + chunkSize, fontBytes.length)
+          )
+        );
+      }
+
+      pdf.addFileToVFS("Iansui-Regular.ttf", btoa(binary));
+      pdf.addFont("Iansui-Regular.ttf", "Iansui", "normal");
+      pdf.setFont("Iansui", "normal");
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const marginX = 8;
+      const topY = 8;
+      const contentWidth = pageWidth - marginX * 2;
+
+      const fixedWidths = {
+        number: 10,
+        grade: 15,
+        chineseName: 24,
+        englishName: 23,
+        phone: 31,
+      };
+
+      const fixedTotal =
+        fixedWidths.number +
+        fixedWidths.grade +
+        fixedWidths.chineseName +
+        fixedWidths.englishName +
+        fixedWidths.phone;
+
+      const dateWidth =
+        (contentWidth - fixedTotal) /
+        Math.max(periodDates.length, 1);
+
+      const headerRowHeight = 10;
+      const rowHeight =
+        classStudents.length >= 24
+          ? 5.25
+          : classStudents.length >= 20
+          ? 5.65
+          : 6.1;
+
+      function drawCell({
+        x,
+        y,
+        width,
+        height,
+        textValue = "",
+        fontSize = 7.2,
+        bold = false,
+        fill = null,
+        textColor = [67, 63, 58],
+      }) {
+        if (fill) {
+          pdf.setFillColor(...fill);
+        }
+
+        pdf.setDrawColor(162, 157, 149);
+        pdf.setLineWidth(0.18);
+        pdf.rect(x, y, width, height, fill ? "FD" : "S");
+
+        pdf.setFont("Iansui", "normal");
+        let size = fontSize;
+        pdf.setFontSize(size);
+        pdf.setTextColor(...textColor);
+
+        const value = String(textValue ?? "");
+        while (
+          value &&
+          pdf.getTextWidth(value) > width - 2 &&
+          size > 5.2
+        ) {
+          size -= 0.25;
+          pdf.setFontSize(size);
+        }
+
+        const lines = value.includes("
+")
+          ? value.split("
+")
+          : [value];
+        const lineGap = size * 0.36;
+        const totalHeight = (lines.length - 1) * lineGap;
+        const centerY = y + height / 2 + size * 0.11;
+
+        lines.forEach((line, index) => {
+          const yy = centerY - totalHeight / 2 + index * lineGap;
+          pdf.text(line, x + width / 2, yy, {
+            align: "center",
+            baseline: "middle",
+          });
+          if (bold && line) {
+            pdf.text(line, x + width / 2 + 0.06, yy, {
+              align: "center",
+              baseline: "middle",
+            });
+          }
+        });
+      }
+
+      // Header
+      pdf.setTextColor(67, 63, 58);
+      pdf.setFont("Iansui", "normal");
+      pdf.setFontSize(20);
+      pdf.text("倍思學院", marginX, topY + 7);
+
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(135, 130, 122);
+      pdf.text("BEAST ACADEMY", marginX, topY + 11.5);
+
+      pdf.setFontSize(16);
+      pdf.setTextColor(67, 63, 58);
+      pdf.text(`${camp.name} 點名表`, pageWidth - marginX, topY + 6.5, {
+        align: "right",
+      });
+
+      pdf.setFontSize(8);
+      pdf.setTextColor(118, 113, 106);
+      pdf.text(
+        `${selectedPeriod.name}　｜　${selectedClass.name}　｜　${classStudents.length} 人`,
+        pageWidth - marginX,
+        topY + 11.5,
+        { align: "right" }
+      );
+
+      pdf.setDrawColor(165, 174, 154);
+      pdf.setLineWidth(0.7);
+      pdf.line(marginX, topY + 17, pageWidth - marginX, topY + 17);
+
+      const tableY = topY + 21;
+      const headerFill = [241, 239, 233];
+      let x = marginX;
+
+      const fixedHeaders = [
+        ["編號", fixedWidths.number],
+        ["年級", fixedWidths.grade],
+        ["中文姓名", fixedWidths.chineseName],
+        ["英文姓名", fixedWidths.englishName],
+        ["聯絡電話", fixedWidths.phone],
+      ];
+
+      fixedHeaders.forEach(([label, width]) => {
+        drawCell({
+          x,
+          y: tableY,
+          width,
+          height: headerRowHeight,
+          textValue: label,
+          fontSize: 7,
+          fill: headerFill,
+        });
+        x += width;
+      });
+
+      periodDates.forEach((dateKey) => {
+        drawCell({
+          x,
+          y: tableY,
+          width: dateWidth,
+          height: headerRowHeight,
+          textValue: `${formatShortDate(dateKey)}
+（${getWeekday(dateKey)}）`,
+          fontSize: periodDates.length >= 14 ? 6.1 : 6.6,
+          fill: headerFill,
+        });
+        x += dateWidth;
+      });
+
+      classStudents.forEach((student, index) => {
+        const y = tableY + headerRowHeight + index * rowHeight;
+        let cellX = marginX;
+
+        const fixedCells = [
+          [index + 1, fixedWidths.number, 7, false],
+          [getGradeLabel(student.grade), fixedWidths.grade, 7, false],
+          [student.chinese_name, fixedWidths.chineseName, 7.5, true],
+          [student.english_name || "", fixedWidths.englishName, 7, false],
+          [student.parent_phone || "", fixedWidths.phone, 6.6, false],
+        ];
+
+        fixedCells.forEach(([value, width, fontSize, bold]) => {
+          drawCell({
+            x: cellX,
+            y,
+            width,
+            height: rowHeight,
+            textValue: value,
+            fontSize,
+            bold,
+          });
+          cellX += width;
+        });
+
+        periodDates.forEach((dateKey) => {
+          const record = recordByStudentDate.get(`${student.id}__${dateKey}`);
+          const dayMeta = dayMetaByDate.get(dateKey);
+          const mark = getAttendanceMark(record, dayMeta);
+
+          drawCell({
+            x: cellX,
+            y,
+            width: dateWidth,
+            height: rowHeight,
+            textValue: mark,
+            fontSize:
+              mark === "兩天一夜"
+                ? 5.5
+                : periodDates.length >= 14
+                ? 6.1
+                : 6.6,
+            textColor:
+              mark === "/" ? [168, 163, 155] : [67, 63, 58],
+            bold: mark !== "/",
+          });
+          cellX += dateWidth;
+        });
+      });
+
+      const tableBottom =
+        tableY + headerRowHeight + classStudents.length * rowHeight;
+
+      pdf.setFont("Iansui", "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(118, 113, 106);
+      pdf.text(
+        "空白＝一般整日　／＝未報名　假＝請假　出＝戶外教學　其餘顯示實際報名內容",
+        marginX,
+        tableBottom + 5
+      );
+      pdf.text(
+        `${formatDate(selectedPeriod.start_date)} — ${formatDate(selectedPeriod.end_date)}`,
+        pageWidth - marginX,
+        tableBottom + 5,
+        { align: "right" }
+      );
+
+      pdf.save(
+        safeFileName(
+          `${camp.name}_${selectedPeriod.name}_${selectedClass.name}_點名表.pdf`
+        )
+      );
     } catch (error) {
-      console.error("匯出點名表 PNG 失敗：", error);
-      setErrorMessage(`匯出圖檔失敗：${error.message}`);
+      console.error("匯出營隊點名表 PDF 失敗：", error);
+      setErrorMessage(
+        `匯出 PDF 失敗：${error?.message || "請稍後再試"}`
+      );
     } finally {
       setIsExporting(false);
     }
@@ -909,42 +756,20 @@ function CampRollCallPanel({ camp, onBack }) {
           <p className="campPage__summary">一張圖為一個活動梯次 × 一個班級。</p>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-          }}
+        <button
+          type="button"
+          className="campPrimaryButton"
+          onClick={exportVectorPdf}
+          disabled={
+            isExporting ||
+            !selectedPeriod ||
+            !selectedClass ||
+            classStudents.length === 0 ||
+            hasTooManyStudents
+          }
         >
-          <button
-            type="button"
-            className="campSecondaryButton"
-            onClick={printRollCall}
-            disabled={
-              !selectedPeriod ||
-              !selectedClass ||
-              classStudents.length === 0 ||
-              hasTooManyStudents
-            }
-          >
-            列印 / PDF
-          </button>
-
-          <button
-            type="button"
-            className="campPrimaryButton"
-            onClick={exportPng}
-            disabled={
-              isExporting ||
-              !selectedPeriod ||
-              !selectedClass ||
-              classStudents.length === 0 ||
-              hasTooManyStudents
-            }
-          >
-            {isExporting ? "產生圖檔中…" : "下載 PNG"}
-          </button>
-        </div>
+          {isExporting ? "產生 PDF 中…" : "下載列印 PDF"}
+        </button>
       </header>
 
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "20px", background: "#fffdf9", border: "1px solid #e5ddd1", borderRadius: "18px", padding: "18px" }}>
