@@ -98,6 +98,170 @@ function addDays(date, amount) {
 }
 
 
+function clampDateToWeek(
+  date,
+  weekStart,
+  weekEnd
+) {
+  if (date < weekStart) {
+    return new Date(weekStart);
+  }
+
+  if (date > weekEnd) {
+    return new Date(weekEnd);
+  }
+
+  return new Date(date);
+}
+
+function buildWeekEventSegments(
+  weekDays,
+  events
+) {
+  if (!weekDays?.length) {
+    return [];
+  }
+
+  const weekStart =
+    new Date(weekDays[0]);
+
+  const weekEnd =
+    new Date(
+      weekDays[
+        weekDays.length - 1
+      ]
+    );
+
+  const segments = events
+    .map((eventItem) => {
+      const eventStart =
+        parseLocalDate(
+          eventItem.start_date
+        );
+
+      const eventEnd =
+        parseLocalDate(
+          eventItem.end_date ||
+            eventItem.start_date
+        );
+
+      if (
+        !eventStart ||
+        !eventEnd ||
+        eventEnd < weekStart ||
+        eventStart > weekEnd
+      ) {
+        return null;
+      }
+
+      const visibleStart =
+        clampDateToWeek(
+          eventStart,
+          weekStart,
+          weekEnd
+        );
+
+      const visibleEnd =
+        clampDateToWeek(
+          eventEnd,
+          weekStart,
+          weekEnd
+        );
+
+      const startColumn =
+        getMondayIndex(
+          visibleStart
+        ) + 1;
+
+      const endColumn =
+        getMondayIndex(
+          visibleEnd
+        ) + 1;
+
+      const isSingleDay =
+        formatDateKey(
+          eventStart
+        ) ===
+        formatDateKey(
+          eventEnd
+        );
+
+      return {
+        eventItem,
+        startColumn,
+        endColumn,
+        span:
+          endColumn -
+          startColumn +
+          1,
+        isSingleDay,
+        segmentStartsHere:
+          formatDateKey(
+            visibleStart
+          ) ===
+          formatDateKey(
+            eventStart
+          ),
+        segmentEndsHere:
+          formatDateKey(
+            visibleEnd
+          ) ===
+          formatDateKey(
+            eventEnd
+          ),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (
+        a.startColumn !==
+        b.startColumn
+      ) {
+        return (
+          a.startColumn -
+          b.startColumn
+        );
+      }
+
+      return (
+        b.span -
+        a.span
+      );
+    });
+
+  const laneEnds = [];
+
+  return segments.map(
+    (segment) => {
+      let laneIndex =
+        laneEnds.findIndex(
+          (endColumn) =>
+            endColumn <
+            segment.startColumn
+        );
+
+      if (laneIndex === -1) {
+        laneIndex =
+          laneEnds.length;
+
+        laneEnds.push(
+          segment.endColumn
+        );
+      } else {
+        laneEnds[
+          laneIndex
+        ] = segment.endColumn;
+      }
+
+      return {
+        ...segment,
+        laneIndex,
+      };
+    }
+  );
+}
+
+
 function MonthCalendarView({
   semesterId,
   semesterStartDate,
@@ -383,6 +547,27 @@ function MonthCalendarView({
 
       return days;
     }, [currentMonth]);
+
+
+  const monthWeeks =
+    useMemo(() => {
+      const result = [];
+
+      for (
+        let index = 0;
+        index < monthDays.length;
+        index += 7
+      ) {
+        result.push(
+          monthDays.slice(
+            index,
+            index + 7
+          )
+        );
+      }
+
+      return result;
+    }, [monthDays]);
 
 
   function getEventsForDate(
@@ -860,163 +1045,258 @@ function MonthCalendarView({
         )}
 
 
-        {monthDays.map(
-          (date) => {
-            const dateKey =
-              formatDateKey(
-                date
+        {monthWeeks.map(
+          (
+            weekDays,
+            weekIndex
+          ) => {
+            const weekSegments =
+              buildWeekEventSegments(
+                weekDays,
+                events
               );
 
-            const dateEvents =
-              getEventsForDate(
-                date
+            const rangeSegments =
+              weekSegments.filter(
+                (segment) =>
+                  !segment.isSingleDay
               );
 
-            const isCurrentMonth =
-              date.getMonth() ===
-              currentMonth.getMonth();
-
-            const isOutsideSemester =
-              (
-                semesterStart &&
-                date <
-                  semesterStart
-              ) ||
-              (
-                semesterEnd &&
-                date >
-                  semesterEnd
-              );
-
-            const isExpanded =
-              Boolean(
-                expandedDates[
-                  dateKey
-                ]
-              );
-
-            const visibleEvents =
-              isExpanded
-                ? dateEvents
-                : dateEvents.slice(
-                    0,
-                    3
-                  );
-
-            const hiddenCount =
-              Math.max(
-                dateEvents.length -
-                  3,
-                0
-              );
-
+            const maxLaneCount =
+              rangeSegments.length
+                ? Math.max(
+                    ...rangeSegments.map(
+                      (segment) =>
+                        segment.laneIndex
+                    )
+                  ) + 1
+                : 0;
 
             return (
               <div
-                key={
-                  dateKey
-                }
-                className={[
-                  "month-calendar__day",
-
-                  !isCurrentMonth
-                    ? "is-other-month"
-                    : "",
-
-                  isOutsideSemester
-                    ? "is-outside-semester"
-                    : "",
-                ]
-                  .filter(
-                    Boolean
-                  )
-                  .join(" ")}
+                key={`month-week-${weekIndex}`}
+                className="month-calendar__week-row"
+                style={{
+                  gridColumn:
+                    "1 / -1",
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(7, minmax(0, 1fr))",
+                  position: "relative",
+                }}
               >
-                <div className="month-calendar__date">
-                  {date.getDate()}
-                </div>
-
-
-                <div className="month-calendar__events">
-                  {visibleEvents.map(
-                    (eventItem) => {
-                      const schoolLabel =
-                        eventItem.applies_to_all_schools
-                          ? "全部學校"
-                          : schoolNames[
-                              eventItem.school_id
-                            ] ||
-                            "";
-
-
-                      return (
-                        <button
-                          key={
-                            eventItem.id
-                          }
-                          type="button"
-                          className="month-calendar-event"
-                          onClick={() =>
-                            openEdit(
-                              eventItem
-                            )
-                          }
-                          disabled={
-                            !canEdit
-                          }
-                        >
-                          <strong>
-                            {eventItem.title ||
-                              "行事項目"}
-                          </strong>
-
-                          {schoolLabel && (
-                            <span>
-                              {
-                                schoolLabel
-                              }
-                            </span>
-                          )}
-                        </button>
+                {weekDays.map(
+                  (date) => {
+                    const dateKey =
+                      formatDateKey(
+                        date
                       );
-                    }
-                  )}
 
+                    const dateEvents =
+                      getEventsForDate(
+                        date
+                      ).filter(
+                        (eventItem) => {
+                          const endDate =
+                            eventItem.end_date ||
+                            eventItem.start_date;
 
-                  {hiddenCount >
-                    0 && (
-                    <button
-                      type="button"
-                      className="month-calendar__more"
-                      onClick={() =>
-                        toggleExpanded(
-                          dateKey
-                        )
-                      }
-                    >
-                      {isExpanded
-                        ? "收合"
-                        : `＋${hiddenCount} 項`}
-                    </button>
-                  )}
-                </div>
+                          return (
+                            endDate ===
+                            eventItem.start_date
+                          );
+                        }
+                      );
 
+                    const isCurrentMonth =
+                      date.getMonth() ===
+                      currentMonth.getMonth();
 
-                {canEdit &&
-                  !isOutsideSemester && (
-                    <button
-                      type="button"
-                      className="month-calendar__add"
-                      onClick={() =>
-                        openCreate(
-                          date
-                        )
-                      }
-                      title="新增行事"
-                    >
-                      ＋
-                    </button>
-                  )}
+                    const isOutsideSemester =
+                      (
+                        semesterStart &&
+                        date <
+                          semesterStart
+                      ) ||
+                      (
+                        semesterEnd &&
+                        date >
+                          semesterEnd
+                      );
+
+                    return (
+                      <div
+                        key={dateKey}
+                        className={[
+                          "month-calendar__day",
+
+                          !isCurrentMonth
+                            ? "is-other-month"
+                            : "",
+
+                          isOutsideSemester
+                            ? "is-outside-semester"
+                            : "",
+                        ]
+                          .filter(
+                            Boolean
+                          )
+                          .join(" ")}
+                        style={{
+                          minHeight:
+                            maxLaneCount >
+                            0
+                              ? `${
+                                  128 +
+                                  maxLaneCount *
+                                    34
+                                }px`
+                              : undefined,
+                        }}
+                      >
+                        <div className="month-calendar__date">
+                          {date.getDate()}
+                        </div>
+
+                        <div className="month-calendar__events">
+                          {dateEvents.map(
+                            (eventItem) => {
+                              const schoolLabel =
+                                eventItem.applies_to_all_schools
+                                  ? "全部學校"
+                                  : schoolNames[
+                                      eventItem.school_id
+                                    ] || "";
+
+                              return (
+                                <button
+                                  key={
+                                    eventItem.id
+                                  }
+                                  type="button"
+                                  className="month-calendar-event"
+                                  onClick={() =>
+                                    openEdit(
+                                      eventItem
+                                    )
+                                  }
+                                  disabled={
+                                    !canEdit
+                                  }
+                                >
+                                  <strong>
+                                    {eventItem.title ||
+                                      "行事項目"}
+                                  </strong>
+
+                                  {schoolLabel && (
+                                    <span>
+                                      {
+                                        schoolLabel
+                                      }
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            }
+                          )}
+                        </div>
+
+                        {canEdit &&
+                          !isOutsideSemester && (
+                            <button
+                              type="button"
+                              className="month-calendar__add"
+                              onClick={() =>
+                                openCreate(
+                                  date
+                                )
+                              }
+                              title="新增行事"
+                            >
+                              ＋
+                            </button>
+                          )}
+                      </div>
+                    );
+                  }
+                )}
+
+                {rangeSegments.map(
+                  (segment) => {
+                    const {
+                      eventItem,
+                      startColumn,
+                      span,
+                      laneIndex,
+                      segmentStartsHere,
+                      segmentEndsHere,
+                    } = segment;
+
+                    const schoolLabel =
+                      eventItem.applies_to_all_schools
+                        ? "全部學校"
+                        : schoolNames[
+                            eventItem.school_id
+                          ] || "";
+
+                    return (
+                      <button
+                        key={`${eventItem.id}-${weekIndex}`}
+                        type="button"
+                        className={[
+                          "month-calendar-range-event",
+                          segmentStartsHere
+                            ? "is-start"
+                            : "is-continued-start",
+                          segmentEndsHere
+                            ? "is-end"
+                            : "is-continued-end",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() =>
+                          openEdit(
+                            eventItem
+                          )
+                        }
+                        disabled={
+                          !canEdit
+                        }
+                        style={{
+                          gridColumn: `${startColumn} / span ${span}`,
+                          position:
+                            "absolute",
+                          left: `calc((${
+                            startColumn - 1
+                          }) * (100% / 7) + 8px)`,
+                          width: `calc((${
+                            span
+                          }) * (100% / 7) - 16px)`,
+                          top: `${
+                            42 +
+                            laneIndex *
+                              34
+                          }px`,
+                          zIndex: 4,
+                        }}
+                      >
+                        <strong>
+                          {eventItem.title ||
+                            "行事項目"}
+                        </strong>
+
+                        {schoolLabel && (
+                          <span>
+                            {
+                              schoolLabel
+                            }
+                          </span>
+                        )}
+                      </button>
+                    );
+                  }
+                )}
               </div>
             );
           }
