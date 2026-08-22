@@ -14,6 +14,89 @@ const WEEKDAYS = [
   ["friday_pickup", "五"],
 ];
 
+
+const PICKUP_STATUS_OPTIONS = [
+  {
+    value: "NORMAL",
+    label: "正常接送",
+  },
+  {
+    value: "ABSENT",
+    label: "當天不進班",
+  },
+  {
+    value: "LATE_ARRIVAL",
+    label: "社團後進班／晚到",
+  },
+  {
+    value: "PARENT_DROP_OFF",
+    label: "家長自行送",
+  },
+];
+
+const LEGACY_NO_PICKUP =
+  "LEGACY_NO_PICKUP";
+
+function getStatusKey(
+  pickupKey
+) {
+  return pickupKey.replace(
+    "_pickup",
+    "_status"
+  );
+}
+
+function getStatusLabel(
+  status
+) {
+  if (
+    status ===
+    LEGACY_NO_PICKUP
+  ) {
+    return "舊設定：不接（請分類）";
+  }
+
+  return (
+    PICKUP_STATUS_OPTIONS.find(
+      (item) =>
+        item.value === status
+    )?.label ||
+    "正常接送"
+  );
+}
+
+function normalizeWeeklyRule(
+  rule
+) {
+  if (!rule) {
+    return rule;
+  }
+
+  const next = {
+    ...rule,
+  };
+
+  for (const [
+    pickupKey,
+  ] of WEEKDAYS) {
+    const statusKey =
+      getStatusKey(
+        pickupKey
+      );
+
+    if (
+      !next[statusKey]
+    ) {
+      next[statusKey] =
+        next[pickupKey]
+          ? "NORMAL"
+          : LEGACY_NO_PICKUP;
+    }
+  }
+
+  return next;
+}
+
 function getStudentName(student) {
   return (
     student.chinese_name ||
@@ -30,6 +113,11 @@ function defaultWeeklyForm(studentId) {
     wednesday_pickup: true,
     thursday_pickup: true,
     friday_pickup: true,
+    monday_status: "NORMAL",
+    tuesday_status: "NORMAL",
+    wednesday_status: "NORMAL",
+    thursday_status: "NORMAL",
+    friday_status: "NORMAL",
     note: "",
     is_active: true,
   };
@@ -47,7 +135,7 @@ function PickupStudentRulesPanel() {
   const [weeklyForm, setWeeklyForm] = useState(null);
 
   const [exceptionDate, setExceptionDate] = useState("");
-  const [exceptionShouldPickup, setExceptionShouldPickup] = useState(false);
+  const [exceptionStatus, setExceptionStatus] = useState("NORMAL");
   const [exceptionNote, setExceptionNote] = useState("");
 
   const [isLoading, setIsLoading] = useState(true);
@@ -102,7 +190,11 @@ function PickupStudentRulesPanel() {
       if (exceptionsResult.error) throw exceptionsResult.error;
 
       setStudents(studentsResult.data ?? []);
-      setWeeklyRules(weeklyResult.data ?? []);
+      setWeeklyRules(
+        (weeklyResult.data ?? []).map(
+          normalizeWeeklyRule
+        )
+      );
       setDateExceptions(exceptionsResult.data ?? []);
     } catch (error) {
       console.error("讀取學生特殊接送失敗：", error);
@@ -191,14 +283,16 @@ function PickupStudentRulesPanel() {
     setSelectedStudent(student);
     setWeeklyForm(
       existing
-        ? {
-            ...existing,
-          }
-        : defaultWeeklyForm(student.id)
+        ? normalizeWeeklyRule(
+            existing
+          )
+        : defaultWeeklyForm(
+            student.id
+          )
     );
 
     setExceptionDate("");
-    setExceptionShouldPickup(false);
+    setExceptionStatus("NORMAL");
     setExceptionNote("");
     setErrorMessage("");
     setSuccessMessage("");
@@ -207,27 +301,69 @@ function PickupStudentRulesPanel() {
   async function saveWeeklyRule() {
     if (!selectedStudent || !weeklyForm) return;
 
+    const legacyDay =
+      WEEKDAYS.find(
+        ([pickupKey]) =>
+          weeklyForm[
+            getStatusKey(
+              pickupKey
+            )
+          ] ===
+          LEGACY_NO_PICKUP
+      );
+
+    if (legacyDay) {
+      setErrorMessage(
+        `星期${legacyDay[1]}仍是舊版「不接」設定，請先選擇：當天不進班、社團後進班／晚到，或家長自行送。`
+      );
+      return;
+    }
+
     try {
       setIsSaving(true);
       setErrorMessage("");
       setSuccessMessage("");
 
       const payload = {
-        student_id: selectedStudent.id,
+        student_id:
+          selectedStudent.id,
+
+        monday_status:
+          weeklyForm.monday_status,
+        tuesday_status:
+          weeklyForm.tuesday_status,
+        wednesday_status:
+          weeklyForm.wednesday_status,
+        thursday_status:
+          weeklyForm.thursday_status,
+        friday_status:
+          weeklyForm.friday_status,
+
+        // 舊欄位先保留相容：
+        // 只有 NORMAL 代表接車，其餘三種都不進接車名單。
         monday_pickup:
-          Boolean(weeklyForm.monday_pickup),
+          weeklyForm.monday_status ===
+          "NORMAL",
         tuesday_pickup:
-          Boolean(weeklyForm.tuesday_pickup),
+          weeklyForm.tuesday_status ===
+          "NORMAL",
         wednesday_pickup:
-          Boolean(weeklyForm.wednesday_pickup),
+          weeklyForm.wednesday_status ===
+          "NORMAL",
         thursday_pickup:
-          Boolean(weeklyForm.thursday_pickup),
+          weeklyForm.thursday_status ===
+          "NORMAL",
         friday_pickup:
-          Boolean(weeklyForm.friday_pickup),
+          weeklyForm.friday_status ===
+          "NORMAL",
+
         note:
-          String(weeklyForm.note || "").trim() || null,
+          String(
+            weeklyForm.note || ""
+          ).trim() || null,
         is_active: true,
-        updated_at: new Date().toISOString(),
+        updated_at:
+          new Date().toISOString(),
       };
 
       const { data, error } = await supabase
@@ -248,7 +384,11 @@ function PickupStudentRulesPanel() {
         data,
       ]);
 
-      setWeeklyForm(data);
+      setWeeklyForm(
+        normalizeWeeklyRule(
+          data
+        )
+      );
       setSuccessMessage("每週固定接送日已儲存。");
     } catch (error) {
       console.error("儲存每週特殊接送失敗：", error);
@@ -318,13 +458,26 @@ function PickupStudentRulesPanel() {
       setSuccessMessage("");
 
       const payload = {
-        student_id: selectedStudent.id,
-        pickup_date: exceptionDate,
-        should_pickup: exceptionShouldPickup,
+        student_id:
+          selectedStudent.id,
+        pickup_date:
+          exceptionDate,
+
+        attendance_status:
+          exceptionStatus,
+
+        // 舊欄位保留相容：
+        // 只有 NORMAL 代表當天要接。
+        should_pickup:
+          exceptionStatus ===
+          "NORMAL",
+
         note:
-          exceptionNote.trim() || null,
+          exceptionNote.trim() ||
+          null,
         is_active: true,
-        updated_at: new Date().toISOString(),
+        updated_at:
+          new Date().toISOString(),
       };
 
       const { data, error } = await supabase
@@ -350,6 +503,7 @@ function PickupStudentRulesPanel() {
       ]);
 
       setExceptionDate("");
+      setExceptionStatus("NORMAL");
       setExceptionNote("");
       setSuccessMessage("單日例外已儲存。");
     } catch (error) {
@@ -657,45 +811,126 @@ function PickupStudentRulesPanel() {
                   marginBottom: "16px",
                 }}
               >
-                {WEEKDAYS.map(([key, label]) => (
-                  <label
-                    key={key}
-                    style={{
-                      display: "grid",
-                      placeItems: "center",
-                      gap: "7px",
-                      padding: "12px 8px",
-                      border: "1px solid #deded8",
-                      borderRadius: "12px",
-                      background: weeklyForm?.[key]
-                        ? "#eef3eb"
-                        : "#f7f3f1",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <strong>星期{label}</strong>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(
-                        weeklyForm?.[key]
-                      )}
-                      onChange={(event) =>
-                        setWeeklyForm(
-                          (current) => ({
-                            ...current,
-                            [key]:
-                              event.target.checked,
-                          })
-                        )
-                      }
-                    />
-                    <small>
-                      {weeklyForm?.[key]
-                        ? "要接"
-                        : "不接"}
-                    </small>
-                  </label>
-                ))}
+                {WEEKDAYS.map(
+                  ([pickupKey, label]) => {
+                    const statusKey =
+                      getStatusKey(
+                        pickupKey
+                      );
+
+                    const status =
+                      weeklyForm?.[
+                        statusKey
+                      ] || "NORMAL";
+
+                    const isPickup =
+                      status ===
+                      "NORMAL";
+
+                    return (
+                      <label
+                        key={
+                          pickupKey
+                        }
+                        style={{
+                          display:
+                            "grid",
+                          gap: "8px",
+                          padding:
+                            "12px 10px",
+                          border:
+                            "1px solid #deded8",
+                          borderRadius:
+                            "12px",
+                          background:
+                            isPickup
+                              ? "#eef3eb"
+                              : "#f7f3f1",
+                        }}
+                      >
+                        <strong
+                          style={{
+                            textAlign:
+                              "center",
+                          }}
+                        >
+                          星期{label}
+                        </strong>
+
+                        <select
+                          value={
+                            status
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setWeeklyForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                [statusKey]:
+                                  event
+                                    .target
+                                    .value,
+                                [pickupKey]:
+                                  event
+                                    .target
+                                    .value ===
+                                  "NORMAL",
+                              })
+                            )
+                          }
+                        >
+                          {status ===
+                            LEGACY_NO_PICKUP && (
+                            <option
+                              value={
+                                LEGACY_NO_PICKUP
+                              }
+                            >
+                              舊設定：不接（請分類）
+                            </option>
+                          )}
+
+                          {PICKUP_STATUS_OPTIONS.map(
+                            (
+                              option
+                            ) => (
+                              <option
+                                key={
+                                  option.value
+                                }
+                                value={
+                                  option.value
+                                }
+                              >
+                                {
+                                  option.label
+                                }
+                              </option>
+                            )
+                          )}
+                        </select>
+
+                        <small
+                          style={{
+                            textAlign:
+                              "center",
+                            color:
+                              isPickup
+                                ? "#58705b"
+                                : "#8a625a",
+                          }}
+                        >
+                          {isPickup
+                            ? "接車表正常"
+                            : "接車表槓掉"}
+                        </small>
+                      </label>
+                    );
+                  }
+                )}
               </div>
 
               <label
@@ -781,22 +1016,28 @@ function PickupStudentRulesPanel() {
                   <span>當天設定</span>
                   <select
                     value={
-                      exceptionShouldPickup
-                        ? "PICKUP"
-                        : "NO_PICKUP"
+                      exceptionStatus
                     }
-                    onChange={(event) =>
-                      setExceptionShouldPickup(
-                        event.target.value ===
-                          "PICKUP"
+                    onChange={(
+                      event
+                    ) =>
+                      setExceptionStatus(
+                        event.target
+                          .value
                       )
                     }
                   >
-                    <option value="NO_PICKUP">
-                      臨時不接
-                    </option>
-                    <option value="PICKUP">
+                    <option value="NORMAL">
                       臨時要接
+                    </option>
+                    <option value="ABSENT">
+                      當天不進班
+                    </option>
+                    <option value="LATE_ARRIVAL">
+                      社團後進班／晚到
+                    </option>
+                    <option value="PARENT_DROP_OFF">
+                      家長自行送
                     </option>
                   </select>
                 </label>
@@ -876,9 +1117,13 @@ function PickupStudentRulesPanel() {
                           {item.pickup_date}
                         </strong>
                         <span>
-                          {item.should_pickup
-                            ? "臨時要接"
-                            : "臨時不接"}
+                          {item.attendance_status
+                            ? getStatusLabel(
+                                item.attendance_status
+                              )
+                            : item.should_pickup
+                              ? "臨時要接"
+                              : "舊設定：不接（未分類）"}
                         </span>
                         <span
                           style={{
