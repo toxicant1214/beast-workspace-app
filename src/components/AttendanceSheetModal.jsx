@@ -877,7 +877,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
               headerHeight,
             textValue:
               label,
-            fontSize: 7,
+            fontSize: 8.4,
             fill:
               headerFill,
             bold: true,
@@ -903,8 +903,8 @@ function AttendanceSheetModal({ classItem, onClose }) {
             fontSize:
               visibleColumns.length >=
               22
-                ? 5.8
-                : 6.4,
+                ? 6.8
+                : 7.4,
             fill:
               day.isHoliday
                 ? [
@@ -955,7 +955,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
             [
               index + 1,
               fixedWidths.number,
-              6.8,
+              8.2,
               false,
             ],
             [
@@ -963,7 +963,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
                 row
               ),
               fixedWidths.chineseName,
-              7.2,
+              9.4,
               true,
             ],
             [
@@ -971,7 +971,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
                 row
               ),
               fixedWidths.englishName,
-              6.5,
+              8.4,
               false,
             ],
             [
@@ -979,7 +979,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
                 row.students
               ),
               fixedWidths.phone,
-              6.5,
+              8.2,
               false,
             ],
             [
@@ -987,7 +987,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
                 studentId
               ),
               fixedWidths.englishClass,
-              6.3,
+              8.2,
               false,
             ],
           ];
@@ -1059,32 +1059,8 @@ function AttendanceSheetModal({ classItem, onClose }) {
               if (
                 day.isHoliday
               ) {
-                drawCell({
-                  x: cellX,
-                  y,
-                  width:
-                    dateWidth,
-                  height:
-                    rowHeight,
-                  textValue:
-                    index === 0
-                      ? "休"
-                      : "",
-                  fontSize:
-                    7,
-                  fill: [
-                    243,
-                    232,
-                    229,
-                  ],
-                  textColor: [
-                    141,
-                    81,
-                    73,
-                  ],
-                  bold:
-                    index === 0,
-                });
+                // 假日欄位改為整欄合併，學生列先略過；
+                // 等所有學生列畫完後再一次繪製整欄。
               } else {
                 drawCell({
                   x: cellX,
@@ -1112,6 +1088,91 @@ function AttendanceSheetModal({ classItem, onClose }) {
         }
       );
 
+      // 假日欄位：整欄合併，與系統預覽一致
+      visibleColumns.forEach(
+        (day, dayIndex) => {
+          if (!day.isHoliday) {
+            return;
+          }
+
+          const holidayX =
+            marginX +
+            fixedTotal +
+            dayIndex * dateWidth;
+
+          const holidayY =
+            headerTop +
+            headerHeight;
+
+          const holidayHeight =
+            students.length *
+            rowHeight;
+
+          pdf.setFillColor(
+            243,
+            232,
+            229
+          );
+
+          pdf.setDrawColor(
+            70,
+            83,
+            75
+          );
+
+          pdf.setLineWidth(
+            0.16
+          );
+
+          pdf.rect(
+            holidayX,
+            holidayY,
+            dateWidth,
+            holidayHeight,
+            "FD"
+          );
+
+          pdf.setFont(
+            "Iansui",
+            "normal"
+          );
+
+          pdf.setFontSize(
+            8.3
+          );
+
+          pdf.setTextColor(
+            141,
+            81,
+            73
+          );
+
+          const holidayLabel =
+            String(
+              day.holidayLabel ||
+              "休假"
+            );
+
+          const verticalLabel =
+            holidayLabel
+              .split("")
+              .join("\n");
+
+          pdf.text(
+            verticalLabel,
+            holidayX +
+              dateWidth / 2,
+            holidayY +
+              holidayHeight / 2,
+            {
+              align: "center",
+              baseline: "middle",
+              lineHeightFactor: 1.35,
+            }
+          );
+        }
+      );
+
       const tableBottom =
         headerTop +
         headerHeight +
@@ -1119,7 +1180,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
           rowHeight;
 
       pdf.setFontSize(
-        7
+        8.2
       );
 
       pdf.setTextColor(
