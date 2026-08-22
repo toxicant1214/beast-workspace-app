@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import SemesterExportView from "./SemesterExportView";
 
@@ -361,6 +361,149 @@ function getEventTitle(
     ] ||
     eventItem.title ||
     "行事項目"
+  );
+}
+
+
+function AutoFitSemesterEventLine({
+  eventItem,
+  schoolLabel,
+}) {
+  const lineRef = useRef(null);
+  const [fontSize, setFontSize] = useState(10);
+
+  const dateText = formatInlineDate(
+    eventItem.start_date
+  );
+
+  const titleText = getEventTitle(
+    eventItem
+  );
+
+  useLayoutEffect(() => {
+    const node = lineRef.current;
+
+    if (!node) {
+      return undefined;
+    }
+
+    const fitLine = () => {
+      let nextSize = 10;
+
+      node.style.fontSize = `${nextSize}px`;
+
+      while (
+        node.scrollWidth >
+          node.clientWidth &&
+        nextSize > 6.5
+      ) {
+        nextSize -= 0.25;
+        node.style.fontSize = `${nextSize}px`;
+      }
+
+      setFontSize(nextSize);
+    };
+
+    fitLine();
+
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(fitLine)
+        : null;
+
+    observer?.observe(node);
+
+    window.addEventListener(
+      "resize",
+      fitLine
+    );
+
+    return () => {
+      observer?.disconnect();
+
+      window.removeEventListener(
+        "resize",
+        fitLine
+      );
+    };
+  }, [
+    dateText,
+    titleText,
+    schoolLabel,
+  ]);
+
+  return (
+    <div
+      ref={lineRef}
+      className="semester-table-event-line"
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        gap: "4px",
+        width: "100%",
+        minWidth: 0,
+        overflow: "hidden",
+        whiteSpace: "nowrap",
+        fontSize: `${fontSize}px`,
+        lineHeight: 1.35,
+      }}
+    >
+      <span
+        className="semester-table-event-line__date"
+        style={{
+          flex: "0 0 auto",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {dateText}
+      </span>
+
+      <span
+        className="semester-table-event-line__divider"
+        style={{
+          flex: "0 0 auto",
+          whiteSpace: "nowrap",
+        }}
+      >
+        ｜
+      </span>
+
+      <span
+        className="semester-table-event-line__title"
+        style={{
+          flex: "0 0 auto",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {titleText}
+      </span>
+
+      {schoolLabel && (
+        <>
+          <span
+            className="semester-table-event-line__slash"
+            style={{
+              flex: "0 0 auto",
+              whiteSpace: "nowrap",
+            }}
+          >
+            ／
+          </span>
+
+          <span
+            className="semester-table-event-line__school"
+            style={{
+              flex: "0 0 auto",
+              whiteSpace: "nowrap",
+              opacity: 0.72,
+              fontSize: "0.9em",
+            }}
+          >
+            {schoolLabel}
+          </span>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -945,38 +1088,11 @@ function SemesterTableView({
 
 
                                 return (
-                                  <div
+                                  <AutoFitSemesterEventLine
                                     key={eventItem.id}
-                                    className="semester-table-event-line"
-                                  >
-                                    <span className="semester-table-event-line__date">
-                                      {formatInlineDate(
-                                        eventItem.start_date
-                                      )}
-                                    </span>
-
-                                    <span className="semester-table-event-line__divider">
-                                      ｜
-                                    </span>
-
-                                    <span className="semester-table-event-line__title">
-                                      {getEventTitle(
-                                        eventItem
-                                      )}
-                                    </span>
-
-                                    {schoolLabel && (
-                                      <>
-                                        <span className="semester-table-event-line__slash">
-                                          ／
-                                        </span>
-
-                                        <span className="semester-table-event-line__school">
-                                          {schoolLabel}
-                                        </span>
-                                      </>
-                                    )}
-                                  </div>
+                                    eventItem={eventItem}
+                                    schoolLabel={schoolLabel}
+                                  />
                                 );
                               }
                             )}
