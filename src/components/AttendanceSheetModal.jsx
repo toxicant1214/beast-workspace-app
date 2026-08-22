@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
-import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import "./AttendanceSheetModal.css";
 
 function pad2(value) {
@@ -517,129 +517,661 @@ function AttendanceSheetModal({ classItem, onClose }) {
     );
   }
 
-  async function exportAttendanceImage() {
-    const sheet = document.getElementById(
-      "attendance-print-sheet"
-    );
-
-    if (!sheet) {
-      window.alert(
-        "找不到點名表內容，請重新開啟後再試一次。"
-      );
+  async function exportAttendancePdf() {
+    if (loading || students.length === 0) {
       return;
     }
 
     try {
-      const sourceCanvas =
-        await html2canvas(
-          sheet,
+      setErrorMessage("");
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      const fontResponse = await fetch(
+        "https://cdn.jsdelivr.net/gh/ButTaiwan/iansui@main/fonts/ttf/Iansui-Regular.ttf"
+      );
+
+      if (!fontResponse.ok) {
+        throw new Error(
+          `芫荽體載入失敗（${fontResponse.status}）`
+        );
+      }
+
+      const fontBytes = new Uint8Array(
+        await fontResponse.arrayBuffer()
+      );
+
+      let binary = "";
+      const chunkSize = 0x8000;
+
+      for (
+        let offset = 0;
+        offset < fontBytes.length;
+        offset += chunkSize
+      ) {
+        binary += String.fromCharCode(
+          ...fontBytes.subarray(
+            offset,
+            Math.min(
+              offset + chunkSize,
+              fontBytes.length
+            )
+          )
+        );
+      }
+
+      pdf.addFileToVFS(
+        "Iansui-Regular.ttf",
+        btoa(binary)
+      );
+
+      pdf.addFont(
+        "Iansui-Regular.ttf",
+        "Iansui",
+        "normal"
+      );
+
+      pdf.setFont(
+        "Iansui",
+        "normal"
+      );
+
+      const pageWidth =
+        pdf.internal.pageSize.getWidth();
+
+      const pageHeight =
+        pdf.internal.pageSize.getHeight();
+
+      const marginX = 7;
+      const topY = 7;
+      const contentWidth =
+        pageWidth - marginX * 2;
+
+      const fixedWidths = {
+        number: 8,
+        chineseName: 18,
+        englishName: 22,
+        phone: 28,
+        englishClass: 22,
+      };
+
+      const fixedTotal =
+        fixedWidths.number +
+        fixedWidths.chineseName +
+        fixedWidths.englishName +
+        fixedWidths.phone +
+        fixedWidths.englishClass;
+
+      const dateWidth =
+        (
+          contentWidth -
+          fixedTotal
+        ) /
+        Math.max(
+          visibleColumns.length,
+          1
+        );
+
+      const headerHeight = 10;
+
+      const headerTop =
+        topY + 20;
+
+      const footerReserve = 10;
+
+      const availableBodyHeight =
+        pageHeight -
+        headerTop -
+        headerHeight -
+        footerReserve -
+        7;
+
+      const rowHeight = Math.min(
+        7.6,
+        Math.max(
+          4.6,
+          availableBodyHeight /
+            Math.max(
+              students.length,
+              1
+            )
+        )
+      );
+
+      function drawCell({
+        x,
+        y,
+        width,
+        height,
+        textValue = "",
+        fontSize = 7,
+        fill = null,
+        textColor = [31, 42, 36],
+        bold = false,
+        rotate = 0,
+      }) {
+        if (fill) {
+          pdf.setFillColor(
+            fill[0],
+            fill[1],
+            fill[2]
+          );
+        }
+
+        pdf.setDrawColor(
+          70,
+          83,
+          75
+        );
+
+        pdf.setLineWidth(
+          0.16
+        );
+
+        pdf.rect(
+          x,
+          y,
+          width,
+          height,
+          fill ? "FD" : "S"
+        );
+
+        let value =
+          String(
+            textValue ?? ""
+          );
+
+        let size =
+          fontSize;
+
+        pdf.setFont(
+          "Iansui",
+          "normal"
+        );
+
+        pdf.setFontSize(
+          size
+        );
+
+        pdf.setTextColor(
+          textColor[0],
+          textColor[1],
+          textColor[2]
+        );
+
+        while (
+          value &&
+          rotate === 0 &&
+          pdf.getTextWidth(
+            value
+          ) >
+            width - 1.2 &&
+          size > 5
+        ) {
+          size -= 0.2;
+          pdf.setFontSize(
+            size
+          );
+        }
+
+        const textX =
+          x + width / 2;
+
+        const textY =
+          y +
+          height / 2 +
+          size * 0.11;
+
+        pdf.text(
+          value,
+          textX,
+          textY,
           {
-            backgroundColor:
-              "#ffffff",
-            scale: 2,
-            useCORS: true,
-            logging: false,
+            align: "center",
+            baseline: "middle",
+            angle: rotate,
           }
         );
 
-      /*
-       * 固定輸出 A4 橫式比例：
-       * 3508 × 2480 px（約 300 DPI 比例）
-       *
-       * 不直接下載 html2canvas 原圖，
-       * 避免 DOM 實際尺寸稍有誤差，
-       * 最後仍統一塞進標準 A4 畫布。
-       */
-      const finalCanvas =
-        document.createElement(
-          "canvas"
-        );
+        if (
+          bold &&
+          value
+        ) {
+          pdf.text(
+            value,
+            textX + 0.05,
+            textY,
+            {
+              align: "center",
+              baseline: "middle",
+              angle: rotate,
+            }
+          );
+        }
+      }
 
-      finalCanvas.width = 3508;
-      finalCanvas.height = 2480;
-
-      const context =
-        finalCanvas.getContext(
-          "2d"
-        );
-
-      context.fillStyle =
-        "#ffffff";
-
-      context.fillRect(
-        0,
-        0,
-        finalCanvas.width,
-        finalCanvas.height
+      // Header
+      pdf.setTextColor(
+        31,
+        42,
+        36
       );
 
-      const safeMargin = 36;
-
-      const availableWidth =
-        finalCanvas.width -
-        safeMargin * 2;
-
-      const availableHeight =
-        finalCanvas.height -
-        safeMargin * 2;
-
-      const scale = Math.min(
-        availableWidth /
-          sourceCanvas.width,
-        availableHeight /
-          sourceCanvas.height
+      pdf.setFont(
+        "Iansui",
+        "normal"
       );
 
-      const drawWidth =
-        sourceCanvas.width *
-        scale;
+      pdf.setFontSize(10);
+      pdf.text(
+        "倍思學院",
+        marginX,
+        topY + 4
+      );
 
-      const drawHeight =
-        sourceCanvas.height *
-        scale;
+      pdf.setFontSize(17);
+      pdf.text(
+        `${classItem.class_name}｜點名表`,
+        marginX,
+        topY + 11
+      );
 
-      const drawX =
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(
+        104,
+        118,
+        110
+      );
+
+      const classMeta = [
+        classItem.academic_year || "",
+        classItem.term || "",
+      ]
+        .filter(Boolean)
+        .join(" ・ ");
+
+      if (classMeta) {
+        pdf.text(
+          classMeta,
+          marginX,
+          topY + 15
+        );
+      }
+
+      pdf.setTextColor(
+        31,
+        42,
+        36
+      );
+
+      pdf.setFontSize(12);
+      pdf.text(
+        `${year} 年 ${month} 月`,
+        pageWidth - marginX,
+        topY + 11,
+        {
+          align: "right",
+        }
+      );
+
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(
+        104,
+        118,
+        110
+      );
+
+      pdf.text(
+        `學生 ${students.length} 人　｜　上班日 ${workdayCount} 天`,
+        pageWidth - marginX,
+        topY + 15,
+        {
+          align: "right",
+        }
+      );
+
+      let x =
+        marginX;
+
+      const headerFill =
+        [242, 244, 240];
+
+      const fixedHeaders = [
+        [
+          "序",
+          fixedWidths.number,
+        ],
+        [
+          "中文姓名",
+          fixedWidths.chineseName,
+        ],
+        [
+          "英文姓名",
+          fixedWidths.englishName,
+        ],
+        [
+          "家長電話",
+          fixedWidths.phone,
+        ],
+        [
+          "英文班級",
+          fixedWidths.englishClass,
+        ],
+      ];
+
+      fixedHeaders.forEach(
+        ([
+          label,
+          width,
+        ]) => {
+          drawCell({
+            x,
+            y: headerTop,
+            width,
+            height:
+              headerHeight,
+            textValue:
+              label,
+            fontSize: 7,
+            fill:
+              headerFill,
+            bold: true,
+          });
+
+          x += width;
+        }
+      );
+
+      visibleColumns.forEach(
+        (day) => {
+          drawCell({
+            x,
+            y: headerTop,
+            width:
+              dateWidth,
+            height:
+              headerHeight,
+            textValue:
+              `${day.day}/${getWeekdayLabel(
+                day.weekday
+              )}`,
+            fontSize:
+              visibleColumns.length >=
+              22
+                ? 5.8
+                : 6.4,
+            fill:
+              day.isHoliday
+                ? [
+                    243,
+                    232,
+                    229,
+                  ]
+                : headerFill,
+            textColor:
+              day.isHoliday
+                ? [
+                    141,
+                    81,
+                    73,
+                  ]
+                : [
+                    31,
+                    42,
+                    36,
+                  ],
+            bold: true,
+          });
+
+          x +=
+            dateWidth;
+        }
+      );
+
+      // Student rows
+      students.forEach(
         (
-          finalCanvas.width -
-          drawWidth
-        ) / 2;
+          row,
+          index
+        ) => {
+          const y =
+            headerTop +
+            headerHeight +
+            index *
+              rowHeight;
 
-      const drawY =
-        (
-          finalCanvas.height -
-          drawHeight
-        ) / 2;
+          let cellX =
+            marginX;
 
-      context.drawImage(
-        sourceCanvas,
-        drawX,
-        drawY,
-        drawWidth,
-        drawHeight
+          const studentId =
+            row.student_id;
+
+          const fixedCells = [
+            [
+              index + 1,
+              fixedWidths.number,
+              6.8,
+              false,
+            ],
+            [
+              getStudentChineseName(
+                row
+              ),
+              fixedWidths.chineseName,
+              7.2,
+              true,
+            ],
+            [
+              getStudentEnglishName(
+                row
+              ),
+              fixedWidths.englishName,
+              6.5,
+              false,
+            ],
+            [
+              getParentPhone(
+                row.students
+              ),
+              fixedWidths.phone,
+              6.5,
+              false,
+            ],
+            [
+              getEnglishClassName(
+                studentId
+              ),
+              fixedWidths.englishClass,
+              6.3,
+              false,
+            ],
+          ];
+
+          fixedCells.forEach(
+            ([
+              value,
+              width,
+              fontSize,
+              bold,
+            ]) => {
+              drawCell({
+                x: cellX,
+                y,
+                width,
+                height:
+                  rowHeight,
+                textValue:
+                  value,
+                fontSize,
+                bold,
+              });
+
+              cellX +=
+                width;
+            }
+          );
+
+          visibleColumns.forEach(
+            (day) => {
+              const periods =
+                Array.isArray(
+                  row.membershipPeriods
+                ) &&
+                row.membershipPeriods
+                  .length > 0
+                  ? row.membershipPeriods
+                  : [
+                      {
+                        joined_at:
+                          row.joined_at ||
+                          null,
+                        left_at:
+                          row.left_at ||
+                          null,
+                      },
+                    ];
+
+              const activeOnDate =
+                periods.some(
+                  (period) => {
+                    const joined =
+                      !period.joined_at ||
+                      period.joined_at <=
+                        day.dateString;
+
+                    const notLeft =
+                      !period.left_at ||
+                      period.left_at >=
+                        day.dateString;
+
+                    return (
+                      joined &&
+                      notLeft
+                    );
+                  }
+                );
+
+              if (
+                day.isHoliday
+              ) {
+                drawCell({
+                  x: cellX,
+                  y,
+                  width:
+                    dateWidth,
+                  height:
+                    rowHeight,
+                  textValue:
+                    index === 0
+                      ? "休"
+                      : "",
+                  fontSize:
+                    7,
+                  fill: [
+                    243,
+                    232,
+                    229,
+                  ],
+                  textColor: [
+                    141,
+                    81,
+                    73,
+                  ],
+                  bold:
+                    index === 0,
+                });
+              } else {
+                drawCell({
+                  x: cellX,
+                  y,
+                  width:
+                    dateWidth,
+                  height:
+                    rowHeight,
+                  textValue: "",
+                  fill:
+                    activeOnDate
+                      ? null
+                      : [
+                          240,
+                          241,
+                          239,
+                        ],
+                });
+              }
+
+              cellX +=
+                dateWidth;
+            }
+          );
+        }
       );
 
-      const link =
-        document.createElement(
-          "a"
+      const tableBottom =
+        headerTop +
+        headerHeight +
+        students.length *
+          rowHeight;
+
+      pdf.setFontSize(
+        7
+      );
+
+      pdf.setTextColor(
+        90,
+        102,
+        95
+      );
+
+      pdf.text(
+        `學生人數：${students.length}`,
+        marginX,
+        tableBottom + 5
+      );
+
+      pdf.text(
+        `上班日：${workdayCount} 天`,
+        pageWidth / 2,
+        tableBottom + 5,
+        {
+          align: "center",
+        }
+      );
+
+      pdf.text(
+        "導師簽名：______________",
+        pageWidth - marginX,
+        tableBottom + 5,
+        {
+          align: "right",
+        }
+      );
+
+      const safeClassName =
+        String(
+          classItem.class_name ||
+          "班級"
+        ).replace(
+          /[\/:*?"<>|]/g,
+          "_"
         );
 
-      link.download =
-        `${classItem.class_name}_${year}年${month}月_點名表.png`;
-
-      link.href =
-        finalCanvas.toDataURL(
-          "image/png"
-        );
-
-      link.click();
+      pdf.save(
+        `${safeClassName}_${year}年${month}月_點名表.pdf`
+      );
     } catch (error) {
       console.error(
-        "產出點名表圖檔失敗：",
+        "產出點名表 PDF 失敗：",
         error
       );
 
       window.alert(
-        `產出點名表圖檔失敗：${error.message}`
+        `產出點名表 PDF 失敗：${error.message}`
       );
     }
   }
@@ -745,13 +1277,13 @@ function AttendanceSheetModal({ classItem, onClose }) {
             <button
               type="button"
               onClick={
-                exportAttendanceImage
+                exportAttendancePdf
               }
               disabled={
                 loading
               }
             >
-              產出 A4 圖檔
+              下載列印 PDF
             </button>
 
             <button
