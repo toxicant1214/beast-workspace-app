@@ -450,12 +450,20 @@ function SemesterExportView({
       function getEventLineText(
         eventItem
       ) {
+        const eventCategory =
+          eventItem.category ||
+          "SCHOOL";
+
         const schoolLabel =
-          eventItem.applies_to_all_schools
-            ? "全部學校"
-            : schoolNames[
-                eventItem.school_id
-              ] || "";
+          eventCategory === "SCHOOL"
+            ? (
+                eventItem.applies_to_all_schools
+                  ? "全部學校"
+                  : schoolNames[
+                      eventItem.school_id
+                    ] || ""
+              )
+            : "";
 
         const startText =
           formatInlineDate(
@@ -1157,13 +1165,20 @@ function SemesterExportView({
                               <div className="semester-long-export-work-content">
                                 {weekEvents.map(
                                   (eventItem) => {
+                                    const eventCategory =
+                                      eventItem.category ||
+                                      "SCHOOL";
+
                                     const schoolLabel =
-                                      eventItem.applies_to_all_schools
-                                        ? "全部學校"
-                                        : schoolNames[
-                                            eventItem.school_id
-                                          ] ||
-                                          "";
+                                      eventCategory === "SCHOOL"
+                                        ? (
+                                            eventItem.applies_to_all_schools
+                                              ? "全部學校"
+                                              : schoolNames[
+                                                  eventItem.school_id
+                                                ] || ""
+                                          )
+                                        : "";
 
                                     const startText =
                                       formatInlineDate(
