@@ -108,7 +108,7 @@
 
 .attendanceSheet__brand {
   text-align: center;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.18em;
   margin-bottom: 1.5mm;
@@ -124,25 +124,29 @@
 
 .attendanceSheet__title h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 23px;
   letter-spacing: 0.04em;
 }
 
 .attendanceSheet__title p {
   margin: 2px 0 0;
-  font-size: 10px;
+  font-size: 11px;
   color: #68766e;
 }
 
 .attendanceSheet__title strong {
-  font-size: 14px;
+  font-size: 15px;
 }
+
+/* =========================
+   點名表主體
+   ========================= */
 
 .attendanceSheet__table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 8.5px;
+  font-size: 11px;
 }
 
 .attendanceSheet__table th,
@@ -151,13 +155,15 @@
   text-align: center;
   vertical-align: middle;
   height: 7.6mm;
-  padding: 0.5mm;
+  padding: 0.35mm;
   overflow: hidden;
+  line-height: 1.15;
 }
 
 .attendanceSheet__table th {
   background: #f2f4f0;
   font-weight: 700;
+  font-size: 11px;
 }
 
 .attendanceSheet__table th span,
@@ -169,13 +175,13 @@
 
 .attendanceSheet__table th small {
   margin-top: 1px;
-  font-size: 7px;
+  font-size: 8.5px;
   color: #6d786f;
 }
 
 .attendanceSheet__table th em {
   margin-top: 2px;
-  font-size: 6px;
+  font-size: 7.5px;
   font-style: normal;
   line-height: 1.05;
   color: #9a514a;
@@ -183,6 +189,10 @@
   text-overflow: ellipsis;
   overflow: hidden;
 }
+
+/* =========================
+   固定欄寬
+   ========================= */
 
 .attendanceSheet__number {
   width: 6mm;
@@ -204,6 +214,10 @@
   width: 20mm;
 }
 
+/* =========================
+   學生資料字體
+   ========================= */
+
 .attendanceSheet__studentChineseName,
 .attendanceSheet__studentEnglishName,
 .attendanceSheet__studentPhone,
@@ -214,21 +228,25 @@
 }
 
 .attendanceSheet__studentChineseName {
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .attendanceSheet__studentEnglishName {
-  font-size: 7.8px;
+  font-size: 11px;
 }
 
 .attendanceSheet__studentPhone {
-  font-size: 7.8px;
+  font-size: 11px;
 }
 
 .attendanceSheet__studentEnglishClass {
-  font-size: 7.8px;
+  font-size: 11px;
 }
+
+/* =========================
+   假日
+   ========================= */
 
 .attendanceSheet__table th.is-holiday,
 .attendanceSheet__table td.is-holiday {
@@ -248,9 +266,9 @@
   display: inline-block;
   white-space: pre-line;
   text-align: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 1.55;
+  line-height: 1.45;
   letter-spacing: 0.04em;
 }
 
@@ -261,13 +279,17 @@
   color: #a4aaa6;
 }
 
+/* =========================
+   頁尾
+   ========================= */
+
 .attendanceSheet__footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   margin-top: 3mm;
-  font-size: 9px;
+  font-size: 10.5px;
 }
 
 .attendanceSheet__loading {
@@ -276,6 +298,10 @@
   place-items: center;
   color: #748078;
 }
+
+/* =========================
+   A4 Landscape
+   ========================= */
 
 @page {
   size: A4 landscape;
