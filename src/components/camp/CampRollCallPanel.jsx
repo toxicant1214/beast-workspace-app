@@ -560,10 +560,8 @@ function CampRollCallPanel({ camp, onBack }) {
           pdf.setFontSize(size);
         }
 
-        const lines = value.includes("
-")
-          ? value.split("
-")
+        const lines = value.includes("\n")
+          ? value.split("\n")
           : [value];
         const lineGap = size * 0.36;
         const totalHeight = (lines.length - 1) * lineGap;
