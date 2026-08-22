@@ -2900,51 +2900,49 @@ background 0.15s ease;
   color: #81766b;
   overflow-wrap: break-word;
 }
-/* ===== 學期總表：單筆事項保持單行 ===== */
+/* ===== 學期總表：事件單筆完整單行，不斷字、不溢出 ===== */
 
 .semester-table-event-line {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr) max-content max-content;
   align-items: baseline;
+  column-gap: 5px;
+
   width: 100%;
   min-width: 0;
-  gap: 4px;
 
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: clamp(7px, 0.68vw, 10px);
+  line-height: 1.35;
 
   white-space: nowrap;
 }
 
-.semester-table-event-line__date {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
-.semester-table-event-line__divider {
-  flex: 0 0 auto;
+.semester-table-event-line__date,
+.semester-table-event-line__divider,
+.semester-table-event-line__slash,
+.semester-table-event-line__school {
   white-space: nowrap;
 }
 
 .semester-table-event-line__title {
-  flex: 0 1 auto;
   min-width: 0;
   white-space: nowrap;
-}
 
-.semester-table-event-line__slash {
-  flex: 0 0 auto;
-  white-space: nowrap;
+  /* 空間不足時縮字，而不是換行 */
+  font-size: min(1em, 100%);
 }
 
 .semester-table-event-line__school {
-  flex: 0 0 auto;
-  white-space: nowrap;
+  font-size: 0.9em;
+  opacity: 0.72;
 }
 
 .semester-table__work-cell {
-  height: auto;
+  overflow: hidden;
 }
 
 .semester-table__work-content {
-  overflow: visible;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
