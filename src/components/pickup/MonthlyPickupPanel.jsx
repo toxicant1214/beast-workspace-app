@@ -1016,10 +1016,7 @@ function MonthlyPickupPanel() {
                   ?.current_grade !==
                   student.current_grade;
 
-              const borderWidth =
-                isNewGrade
-                  ? 0.42
-                  : 0.16;
+              const borderWidth = 0.16;
 
               let cellX =
                 marginX;
@@ -1618,9 +1615,7 @@ function MonthlyPickupPanel() {
                   const isNewGrade =
                     index > 0 &&
                     previousStudent?.current_grade !== student.current_grade;
-                  const rowTopBorder = isNewGrade
-                    ? `1.5px solid ${PDF_STRONG_GRID_COLOR}`
-                    : `1px solid ${PDF_GRID_COLOR}`;
+                  const rowTopBorder = `1px solid ${PDF_GRID_COLOR}`;
 
                   return (
                     <tr key={student.id} style={{ height: "23px" }}>
