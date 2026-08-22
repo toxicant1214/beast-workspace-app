@@ -1145,7 +1145,7 @@ function MonthCalendarView({
                         style={{
                           minHeight:
                             maxLaneCount > 0
-                              ? `${136 + maxLaneCount * 34}px`
+                              ? `${146 + maxLaneCount * 34}px`
                               : undefined,
                         }}
                       >
@@ -1158,7 +1158,7 @@ function MonthCalendarView({
                           style={{
                             paddingTop:
                               maxLaneCount > 0
-                                ? `${maxLaneCount * 34 + 8}px`
+                                ? `${maxLaneCount * 34 + 18}px`
                                 : undefined,
                           }}
                         >
@@ -1236,12 +1236,12 @@ function MonthCalendarView({
                       position: "absolute",
                       left: 0,
                       right: 0,
-                      top: "42px",
+                      top: "48px",
                       display: "grid",
                       gridTemplateColumns:
                         "repeat(7, minmax(0, 1fr))",
                       gridAutoRows: "30px",
-                      rowGap: "4px",
+                      rowGap: "6px",
                       pointerEvents: "none",
                       zIndex: 4,
                     }}
