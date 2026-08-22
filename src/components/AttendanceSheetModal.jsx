@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { jsPDF } from "jspdf";
+import { getStudentPickupDecision } from "./pickup/pickupStudentSchedule";
 import "./AttendanceSheetModal.css";
 
 function pad2(value) {
@@ -77,6 +78,8 @@ function AttendanceSheetModal({ classItem, onClose }) {
   const [students, setStudents] = useState([]);
   const [englishClassMap, setEnglishClassMap] = useState(new Map());
   const [overrides, setOverrides] = useState([]);
+  const [studentWeeklyRules, setStudentWeeklyRules] = useState([]);
+  const [studentDateExceptions, setStudentDateExceptions] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -103,6 +106,8 @@ function AttendanceSheetModal({ classItem, onClose }) {
       const [
         studentsResult,
         overridesResult,
+        studentWeeklyResult,
+        studentExceptionsResult,
       ] = await Promise.all([
         supabase
           .from("class_students")
@@ -144,6 +149,18 @@ function AttendanceSheetModal({ classItem, onClose }) {
             "override_date",
             endDate
           ),
+
+        supabase
+          .from("pickup_student_weekly_rules")
+          .select("*")
+          .eq("is_active", true),
+
+        supabase
+          .from("pickup_student_date_exceptions")
+          .select("*")
+          .eq("is_active", true)
+          .gte("pickup_date", startDate)
+          .lte("pickup_date", endDate),
       ]);
 
       if (studentsResult.error) {
@@ -152,6 +169,14 @@ function AttendanceSheetModal({ classItem, onClose }) {
 
       if (overridesResult.error) {
         throw overridesResult.error;
+      }
+
+      if (studentWeeklyResult.error) {
+        throw studentWeeklyResult.error;
+      }
+
+      if (studentExceptionsResult.error) {
+        throw studentExceptionsResult.error;
       }
 
       /*
@@ -343,6 +368,16 @@ function AttendanceSheetModal({ classItem, onClose }) {
         overridesResult.data ||
         []
       );
+
+      setStudentWeeklyRules(
+        studentWeeklyResult.data ||
+        []
+      );
+
+      setStudentDateExceptions(
+        studentExceptionsResult.data ||
+        []
+      );
     } catch (error) {
       console.error(
         "讀取點名表資料失敗：",
@@ -358,6 +393,8 @@ function AttendanceSheetModal({ classItem, onClose }) {
         new Map()
       );
       setOverrides([]);
+      setStudentWeeklyRules([]);
+      setStudentDateExceptions([]);
     } finally {
       setLoading(false);
     }
@@ -514,6 +551,29 @@ function AttendanceSheetModal({ classItem, onClose }) {
     return (
       names.join("／") ||
       "—"
+    );
+  }
+
+
+  function shouldCrossOutAttendance(
+    studentId,
+    dateKey
+  ) {
+    const decision =
+      getStudentPickupDecision({
+        studentId,
+        dateKey,
+        weeklyRules:
+          studentWeeklyRules,
+        dateExceptions:
+          studentDateExceptions,
+      });
+
+    // 班級點名表只認「當天不進班」。
+    // 晚到／社團後進班、家長自行送仍保留正常點名格。
+    return (
+      decision.status ===
+      "ABSENT"
     );
   }
 
@@ -1062,6 +1122,13 @@ function AttendanceSheetModal({ classItem, onClose }) {
                 // 假日欄位改為整欄合併，學生列先略過；
                 // 等所有學生列畫完後再一次繪製整欄。
               } else {
+                const isAbsent =
+                  activeOnDate &&
+                  shouldCrossOutAttendance(
+                    studentId,
+                    day.dateString
+                  );
+
                 drawCell({
                   x: cellX,
                   y,
@@ -1069,7 +1136,14 @@ function AttendanceSheetModal({ classItem, onClose }) {
                     dateWidth,
                   height:
                     rowHeight,
-                  textValue: "",
+                  textValue:
+                    isAbsent
+                      ? "／"
+                      : "",
+                  fontSize:
+                    isAbsent
+                      ? 9
+                      : 7,
                   fill:
                     activeOnDate
                       ? null
@@ -1077,6 +1151,18 @@ function AttendanceSheetModal({ classItem, onClose }) {
                           240,
                           241,
                           239,
+                        ],
+                  textColor:
+                    isAbsent
+                      ? [
+                          125,
+                          130,
+                          126,
+                        ]
+                      : [
+                          31,
+                          42,
+                          36,
                         ],
                 });
               }
@@ -1573,6 +1659,13 @@ function AttendanceSheetModal({ classItem, onClose }) {
                               );
                             }
 
+                            const isAbsent =
+                              activeOnDate &&
+                              shouldCrossOutAttendance(
+                                row.student_id,
+                                day.dateString
+                              );
+
                             return (
                               <td
                                 key={
@@ -1580,11 +1673,29 @@ function AttendanceSheetModal({ classItem, onClose }) {
                                 }
                                 className={
                                   activeOnDate
-                                    ? ""
+                                    ? (
+                                        isAbsent
+                                          ? "is-absent"
+                                          : ""
+                                      )
                                     : "is-inactive"
                                 }
+                                style={
+                                  isAbsent
+                                    ? {
+                                        color:
+                                          "#7d827e",
+                                        fontSize:
+                                          "13px",
+                                        fontWeight:
+                                          700,
+                                      }
+                                    : undefined
+                                }
                               >
-                                {""}
+                                {isAbsent
+                                  ? "／"
+                                  : ""}
                               </td>
                             );
                           }
