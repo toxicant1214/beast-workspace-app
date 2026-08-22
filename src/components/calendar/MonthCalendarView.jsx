@@ -1158,15 +1158,27 @@ function MonthCalendarView({
                           {date.getDate()}
                         </div>
 
-                        <div className="month-calendar__events">
+                        <div
+                          className="month-calendar__events"
+                          style={{
+                            paddingTop:
+                              maxLaneCount > 0
+                                ? `${maxLaneCount * 34}px`
+                                : undefined,
+                          }}
+                        >
                           {dateEvents.map(
                             (eventItem) => {
                               const schoolLabel =
-                                eventItem.applies_to_all_schools
-                                  ? "全部學校"
-                                  : schoolNames[
-                                      eventItem.school_id
-                                    ] || "";
+                                eventItem.category === "school"
+                                  ? (
+                                      eventItem.applies_to_all_schools
+                                        ? "全部學校"
+                                        : schoolNames[
+                                            eventItem.school_id
+                                          ] || ""
+                                    )
+                                  : "";
 
                               return (
                                 <button
@@ -1234,11 +1246,15 @@ function MonthCalendarView({
                     } = segment;
 
                     const schoolLabel =
-                      eventItem.applies_to_all_schools
-                        ? "全部學校"
-                        : schoolNames[
-                            eventItem.school_id
-                          ] || "";
+                      eventItem.category === "school"
+                        ? (
+                            eventItem.applies_to_all_schools
+                              ? "全部學校"
+                              : schoolNames[
+                                  eventItem.school_id
+                                ] || ""
+                          )
+                        : "";
 
                     return (
                       <button
@@ -1278,6 +1294,20 @@ function MonthCalendarView({
                             laneIndex *
                               34
                           }px`,
+                          minHeight: "28px",
+                          padding: "5px 12px",
+                          border: "1px solid #dfd1bd",
+                          borderRadius: "10px",
+                          background: "#f7f0e6",
+                          color: "#4f493f",
+                          boxSizing: "border-box",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "5px",
+                          overflow: "hidden",
+                          whiteSpace: "nowrap",
+                          textOverflow: "ellipsis",
                           zIndex: 4,
                         }}
                       >
