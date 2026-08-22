@@ -72,11 +72,22 @@ export function getStudentPickupDecision({
 
 
   if (dateException) {
+    const status =
+      dateException.attendance_status ||
+      (
+        dateException.should_pickup
+          ? "NORMAL"
+          : "LEGACY_NO_PICKUP"
+      );
+
     return {
+      // 接車表：
+      // 只有 NORMAL 需要接車。
+      // 其餘特殊狀態全部槓掉。
       shouldPickup:
-        Boolean(
-          dateException.should_pickup
-        ),
+        status === "NORMAL",
+
+      status,
 
       source:
         "DATE_EXCEPTION",
@@ -108,6 +119,9 @@ export function getStudentPickupDecision({
       shouldPickup:
         false,
 
+      status:
+        "WEEKEND",
+
       source:
         "WEEKEND",
 
@@ -129,14 +143,15 @@ export function getStudentPickupDecision({
 
   /*
    * 沒有建立學生特殊規則：
-   *
-   * 不干涉原本的
-   * pickup_rules。
+   * 不干涉原本 pickup_rules。
    */
   if (!weeklyRule) {
     return {
       shouldPickup:
         true,
+
+      status:
+        "NORMAL",
 
       source:
         "DEFAULT",
@@ -147,17 +162,36 @@ export function getStudentPickupDecision({
   }
 
 
-  const columnName =
+  const pickupColumnName =
     `${weekdayKey}_pickup`;
+
+  const statusColumnName =
+    `${weekdayKey}_status`;
+
+
+  const status =
+    weeklyRule[
+      statusColumnName
+    ] ||
+    (
+      weeklyRule[
+        pickupColumnName
+      ]
+        ? "NORMAL"
+        : "LEGACY_NO_PICKUP"
+    );
 
 
   return {
+    // 接車表：
+    // NORMAL → 正常接車
+    // ABSENT → 不接
+    // LATE_ARRIVAL → 不接
+    // PARENT_DROP_OFF → 不接
     shouldPickup:
-      Boolean(
-        weeklyRule[
-          columnName
-        ]
-      ),
+      status === "NORMAL",
+
+    status,
 
     source:
       "WEEKLY_RULE",
