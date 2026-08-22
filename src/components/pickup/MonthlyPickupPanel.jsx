@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { supabase } from "../../lib/supabase";
 import { getStudentPickupDecision } from "./pickupStudentSchedule";
@@ -473,11 +472,11 @@ function MonthlyPickupPanel() {
       };
     }
 
-    if (pickupTime === "12:50") {
+    if (pickupTime === "12:20") {
       return {
         text: "",
         className: "monthlyPickupCell pickup-noon",
-        title: "12:50 接車",
+        title: "12:20 接車",
       };
     }
 
@@ -497,11 +496,7 @@ function MonthlyPickupPanel() {
   }
 
   async function exportPickupPdf() {
-    const pageElements = Array.from(
-      document.querySelectorAll("[data-pickup-pdf-page]")
-    );
-
-    if (pageElements.length === 0) {
+    if (pdfPages.length === 0) {
       setErrorMessage("目前沒有可匯出的接車資料。");
       return;
     }
@@ -510,8 +505,6 @@ function MonthlyPickupPanel() {
     setErrorMessage("");
 
     try {
-      await document.fonts?.ready;
-
       const pdf = new jsPDF({
         orientation: "landscape",
         unit: "mm",
@@ -519,47 +512,686 @@ function MonthlyPickupPanel() {
         compress: true,
       });
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+      // 嵌入芫荽體，讓 PDF 中文維持向量文字。
+      const fontResponse = await fetch(
+        "https://cdn.jsdelivr.net/gh/ButTaiwan/iansui@main/fonts/ttf/Iansui-Regular.ttf"
+      );
 
-      for (let index = 0; index < pageElements.length; index += 1) {
-        const canvas = await html2canvas(pageElements[index], {
-          scale: 2,
-          backgroundColor: "#ffffff",
-          useCORS: true,
-          logging: false,
-          width: 1122,
-          height: 794,
-          windowWidth: 1122,
-          windowHeight: 794,
-        });
-
-        if (index > 0) {
-          pdf.addPage("a4", "landscape");
-        }
-
-        pdf.addImage(
-          canvas.toDataURL("image/jpeg", 0.94),
-          "JPEG",
-          0,
-          0,
-          pageWidth,
-          pageHeight,
-          undefined,
-          "FAST"
+      if (!fontResponse.ok) {
+        throw new Error(
+          `芫荽體載入失敗（${fontResponse.status}）`
         );
       }
+
+      const fontBytes = new Uint8Array(
+        await fontResponse.arrayBuffer()
+      );
+
+      let binary = "";
+      const chunkSize = 0x8000;
+
+      for (
+        let offset = 0;
+        offset < fontBytes.length;
+        offset += chunkSize
+      ) {
+        binary += String.fromCharCode(
+          ...fontBytes.subarray(
+            offset,
+            Math.min(
+              offset + chunkSize,
+              fontBytes.length
+            )
+          )
+        );
+      }
+
+      pdf.addFileToVFS(
+        "Iansui-Regular.ttf",
+        btoa(binary)
+      );
+
+      pdf.addFont(
+        "Iansui-Regular.ttf",
+        "Iansui",
+        "normal"
+      );
+
+      pdf.setFont(
+        "Iansui",
+        "normal"
+      );
+
+      const pageWidth =
+        pdf.internal.pageSize.getWidth();
+
+      const pageHeight =
+        pdf.internal.pageSize.getHeight();
+
+      const marginX = 7;
+      const topY = 7;
+      const contentWidth =
+        pageWidth - marginX * 2;
+
+      // 保留原本 PDF 欄位：年級／姓名／家長電話／每個平日。
+      const fixedWidths = {
+        grade: 16,
+        name: 23,
+        phone: 31,
+      };
+
+      const fixedTotal =
+        fixedWidths.grade +
+        fixedWidths.name +
+        fixedWidths.phone;
+
+      const dateWidth =
+        (
+          contentWidth -
+          fixedTotal
+        ) /
+        Math.max(
+          monthDays.length,
+          1
+        );
+
+      const tableHeaderHeight = 10;
+      const rowHeight = 5.6;
+      const tableTop = 30;
+
+      const headerFill = [
+        247,
+        247,
+        245,
+      ];
+
+      const noonFill = [
+        228,
+        228,
+        226,
+      ];
+
+      const closedFill = [
+        246,
+        223,
+        220,
+      ];
+
+      const missingFill = [
+        242,
+        242,
+        239,
+      ];
+
+      const noneFill = [
+        248,
+        248,
+        246,
+      ];
+
+      function drawCell({
+        x,
+        y,
+        width,
+        height,
+        textValue = "",
+        fontSize = 7.2,
+        fill = null,
+        textColor = [47, 47, 47],
+        bold = false,
+        lineWidth = 0.16,
+      }) {
+        if (fill) {
+          pdf.setFillColor(
+            fill[0],
+            fill[1],
+            fill[2]
+          );
+        }
+
+        pdf.setDrawColor(
+          114,
+          114,
+          114
+        );
+
+        pdf.setLineWidth(
+          lineWidth
+        );
+
+        pdf.rect(
+          x,
+          y,
+          width,
+          height,
+          fill ? "FD" : "S"
+        );
+
+        let value =
+          String(
+            textValue ?? ""
+          );
+
+        let size =
+          fontSize;
+
+        pdf.setFont(
+          "Iansui",
+          "normal"
+        );
+
+        pdf.setFontSize(
+          size
+        );
+
+        pdf.setTextColor(
+          textColor[0],
+          textColor[1],
+          textColor[2]
+        );
+
+        while (
+          value &&
+          pdf.getTextWidth(
+            value
+          ) >
+            width - 1.4 &&
+          size > 5.3
+        ) {
+          size -= 0.2;
+          pdf.setFontSize(
+            size
+          );
+        }
+
+        const textX =
+          x + width / 2;
+
+        const textY =
+          y +
+          height / 2 +
+          size * 0.11;
+
+        pdf.text(
+          value,
+          textX,
+          textY,
+          {
+            align: "center",
+            baseline: "middle",
+          }
+        );
+
+        if (
+          bold &&
+          value
+        ) {
+          pdf.text(
+            value,
+            textX + 0.05,
+            textY,
+            {
+              align: "center",
+              baseline: "middle",
+            }
+          );
+        }
+      }
+
+      function getVectorCellStyle(cell) {
+        const className =
+          cell.className || "";
+
+        if (
+          className.includes(
+            "pickup-noon"
+          )
+        ) {
+          return {
+            fill: noonFill,
+            textColor: [
+              47,
+              47,
+              47,
+            ],
+          };
+        }
+
+        if (
+          className.includes(
+            "is-closed"
+          )
+        ) {
+          return {
+            fill: closedFill,
+            textColor: [
+              163,
+              72,
+              63,
+            ],
+          };
+        }
+
+        if (
+          className.includes(
+            "is-missing"
+          )
+        ) {
+          return {
+            fill: missingFill,
+            textColor: [
+              138,
+              106,
+              36,
+            ],
+          };
+        }
+
+        if (
+          className.includes(
+            "is-none"
+          )
+        ) {
+          return {
+            fill: noneFill,
+            textColor: [
+              137,
+              145,
+              141,
+            ],
+          };
+        }
+
+        return {
+          fill: null,
+          textColor: [
+            47,
+            47,
+            47,
+          ],
+        };
+      }
+
+      pdfPages.forEach(
+        (
+          page,
+          pageIndex
+        ) => {
+          if (
+            pageIndex > 0
+          ) {
+            pdf.addPage(
+              "a4",
+              "landscape"
+            );
+          }
+
+          // ===== 頁首 =====
+          pdf.setFont(
+            "Iansui",
+            "normal"
+          );
+
+          pdf.setTextColor(
+            119,
+            119,
+            119
+          );
+
+          pdf.setFontSize(
+            7
+          );
+
+          pdf.text(
+            "BEAST ACADEMY｜MONTHLY PICKUP ROSTER",
+            marginX,
+            topY + 3
+          );
+
+          pdf.setTextColor(
+            47,
+            47,
+            47
+          );
+
+          pdf.setFontSize(
+            17
+          );
+
+          pdf.text(
+            `${page.schoolName}｜${year} 年 ${month} 月接車點名表`,
+            marginX,
+            topY + 10
+          );
+
+          pdf.setFontSize(
+            7.5
+          );
+
+          pdf.setTextColor(
+            85,
+            85,
+            85
+          );
+
+          pdf.text(
+            `本頁 ${page.students.length} 位　｜　本校第 ${page.pageInSchool}／${page.totalPagesInSchool} 頁`,
+            pageWidth - marginX,
+            topY + 5,
+            {
+              align: "right",
+            }
+          );
+
+          pdf.text(
+            "灰色：12:20 接　｜　白色：15:30 接　｜　休：停接　｜　—：不接或尚未設定",
+            pageWidth - marginX,
+            topY + 10,
+            {
+              align: "right",
+            }
+          );
+
+          pdf.setDrawColor(
+            79,
+            79,
+            79
+          );
+
+          pdf.setLineWidth(
+            0.3
+          );
+
+          pdf.line(
+            marginX,
+            topY + 14,
+            pageWidth - marginX,
+            topY + 14
+          );
+
+          // ===== 表頭 =====
+          let x =
+            marginX;
+
+          drawCell({
+            x,
+            y: tableTop,
+            width:
+              fixedWidths.grade,
+            height:
+              tableHeaderHeight,
+            textValue:
+              "年級",
+            fontSize: 7.4,
+            fill:
+              headerFill,
+            bold: true,
+          });
+
+          x +=
+            fixedWidths.grade;
+
+          drawCell({
+            x,
+            y: tableTop,
+            width:
+              fixedWidths.name,
+            height:
+              tableHeaderHeight,
+            textValue:
+              "姓名",
+            fontSize: 7.4,
+            fill:
+              headerFill,
+            bold: true,
+          });
+
+          x +=
+            fixedWidths.name;
+
+          drawCell({
+            x,
+            y: tableTop,
+            width:
+              fixedWidths.phone,
+            height:
+              tableHeaderHeight,
+            textValue:
+              "家長電話",
+            fontSize: 7.4,
+            fill:
+              headerFill,
+            bold: true,
+          });
+
+          x +=
+            fixedWidths.phone;
+
+          monthDays.forEach(
+            (day) => {
+              drawCell({
+                x,
+                y: tableTop,
+                width:
+                  dateWidth,
+                height:
+                  tableHeaderHeight,
+                textValue:
+                  `${day.day}/${day.weekdayLabel}`,
+                fontSize:
+                  monthDays.length >=
+                  22
+                    ? 6.2
+                    : 6.7,
+                fill:
+                  headerFill,
+                bold: true,
+              });
+
+              x +=
+                dateWidth;
+            }
+          );
+
+          // ===== 學生列 =====
+          page.students.forEach(
+            (
+              student,
+              index
+            ) => {
+              const y =
+                tableTop +
+                tableHeaderHeight +
+                index *
+                  rowHeight;
+
+              const previousStudent =
+                page.students[
+                  index - 1
+                ];
+
+              const isNewGrade =
+                index > 0 &&
+                previousStudent
+                  ?.current_grade !==
+                  student.current_grade;
+
+              const borderWidth =
+                isNewGrade
+                  ? 0.42
+                  : 0.16;
+
+              let cellX =
+                marginX;
+
+              drawCell({
+                x: cellX,
+                y,
+                width:
+                  fixedWidths.grade,
+                height:
+                  rowHeight,
+                textValue:
+                  student.current_grade,
+                fontSize: 7.1,
+                lineWidth:
+                  borderWidth,
+              });
+
+              cellX +=
+                fixedWidths.grade;
+
+              drawCell({
+                x: cellX,
+                y,
+                width:
+                  fixedWidths.name,
+                height:
+                  rowHeight,
+                textValue:
+                  student.chinese_name,
+                fontSize: 8.2,
+                bold: true,
+                lineWidth:
+                  borderWidth,
+              });
+
+              cellX +=
+                fixedWidths.name;
+
+              drawCell({
+                x: cellX,
+                y,
+                width:
+                  fixedWidths.phone,
+                height:
+                  rowHeight,
+                textValue:
+                  student.primary_parent_phone ||
+                  "—",
+                fontSize: 7.2,
+                lineWidth:
+                  borderWidth,
+              });
+
+              cellX +=
+                fixedWidths.phone;
+
+              monthDays.forEach(
+                (day) => {
+                  const cell =
+                    getCell(
+                      student,
+                      day
+                    );
+
+                  const style =
+                    getVectorCellStyle(
+                      cell
+                    );
+
+                  drawCell({
+                    x: cellX,
+                    y,
+                    width:
+                      dateWidth,
+                    height:
+                      rowHeight,
+                    textValue:
+                      cell.text,
+                    fontSize: 7,
+                    fill:
+                      style.fill,
+                    textColor:
+                      style.textColor,
+                    bold:
+                      Boolean(
+                        cell.text
+                      ),
+                    lineWidth:
+                      borderWidth,
+                  });
+
+                  cellX +=
+                    dateWidth;
+                }
+              );
+            }
+          );
+
+          // ===== 頁尾 =====
+          const tableBottom =
+            tableTop +
+            tableHeaderHeight +
+            page.students.length *
+              rowHeight;
+
+          pdf.setDrawColor(
+            114,
+            114,
+            114
+          );
+
+          pdf.setLineWidth(
+            0.16
+          );
+
+          pdf.line(
+            marginX,
+            tableBottom + 3,
+            pageWidth - marginX,
+            tableBottom + 3
+          );
+
+          pdf.setFontSize(
+            6.6
+          );
+
+          pdf.setTextColor(
+            102,
+            102,
+            102
+          );
+
+          pdf.text(
+            "倍思學院｜接車點名表",
+            marginX,
+            tableBottom + 7
+          );
+
+          pdf.text(
+            `列印日期：${printDate}　｜　PDF 第 ${pageIndex + 1}／${pdfPages.length} 頁`,
+            pageWidth - marginX,
+            tableBottom + 7,
+            {
+              align: "right",
+            }
+          );
+        }
+      );
 
       const safeSchoolName =
         school === "ALL"
           ? "各校"
-          : school.replace(/[**\\/**:\*?"<>|]/g, "");
+          : school.replace(
+              /[\/:*?"<>|]/g,
+              ""
+            );
 
-      pdf.save(`${year}年${month}月_${safeSchoolName}_接車點名表.pdf`);
+      pdf.save(
+        `${year}年${month}月_${safeSchoolName}_接車點名表.pdf`
+      );
     } catch (error) {
-      console.error("產生接車點名表 PDF 失敗：", error);
+      console.error(
+        "產生接車點名表 PDF 失敗：",
+        error
+      );
+
       setErrorMessage(
-        `產生 PDF 失敗：${error?.message || "請稍後再試"}`
+        `產生 PDF 失敗：${
+          error?.message ||
+          "請稍後再試"
+        }`
       );
     } finally {
       setIsExporting(false);
@@ -587,7 +1219,7 @@ function MonthlyPickupPanel() {
   </h1>
 
   <p>
-    灰色：12:50 接車　｜　白色：15:30 接車　｜　休：停接　｜　—：不接或尚未設定
+    灰色：12:20 接車　｜　白色：15:30 接車　｜　休：停接　｜　—：不接或尚未設定
   </p>
 </div>
 <div className="monthlyPickupPrintFooter">
@@ -708,7 +1340,7 @@ function MonthlyPickupPanel() {
       <div className="monthlyPickupLegend" aria-label="月接車表圖例">
         <span>
           <i className="legendBox legendBox--noon" aria-hidden="true" />
-          12:50 接
+          12:20 接
         </span>
 
         <span>
@@ -938,7 +1570,7 @@ function MonthlyPickupPanel() {
               }}
             >
               <div>
-                灰色：12:50 接　｜　白色：15:30 接　｜　休：停接　｜　—：不接或尚未設定
+                灰色：12:20 接　｜　白色：15:30 接　｜　休：停接　｜　—：不接或尚未設定
               </div>
               <div style={{ whiteSpace: "nowrap" }}>
                 本頁 {page.students.length} 位
