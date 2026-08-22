@@ -829,104 +829,103 @@ function PickupStudentRulesPanel() {
 
                     return (
                       <label
-                        key={
-                          pickupKey
-                        }
+                        key={pickupKey}
                         style={{
-                          display:
-                            "grid",
-                          gap: "8px",
-                          padding:
-                            "12px 10px",
-                          border:
-                            "1px solid #deded8",
-                          borderRadius:
-                            "12px",
-                          background:
-                            isPickup
-                              ? "#eef3eb"
-                              : "#f7f3f1",
+                          display: "grid",
+                          gap: "7px",
+                          padding: "10px",
+                          border: "1px solid #e2ded5",
+                          borderRadius: "14px",
+                          background: "#fffdf9",
+                          minWidth: 0,
                         }}
                       >
-                        <strong
+                        <div
                           style={{
-                            textAlign:
-                              "center",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "8px",
                           }}
                         >
-                          星期{label}
-                        </strong>
+                          <strong
+                            style={{
+                              fontSize: "14px",
+                              lineHeight: 1.2,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            星期{label}
+                          </strong>
+
+                          <span
+                            style={{
+                              flex: "0 0 auto",
+                              padding: "3px 7px",
+                              borderRadius: "999px",
+                              fontSize: "10px",
+                              lineHeight: 1.2,
+                              color: isPickup
+                                ? "#5f7464"
+                                : "#8b665e",
+                              background: isPickup
+                                ? "#edf3ec"
+                                : "#f4ebe7",
+                            }}
+                          >
+                            {isPickup
+                              ? "接車"
+                              : "不接"}
+                          </span>
+                        </div>
 
                         <select
-                          value={
-                            status
-                          }
-                          onChange={(
-                            event
-                          ) =>
+                          value={status}
+                          onChange={(event) =>
                             setWeeklyForm(
-                              (
-                                current
-                              ) => ({
+                              (current) => ({
                                 ...current,
                                 [statusKey]:
-                                  event
-                                    .target
-                                    .value,
+                                  event.target.value,
                                 [pickupKey]:
-                                  event
-                                    .target
-                                    .value ===
+                                  event.target.value ===
                                   "NORMAL",
                               })
                             )
                           }
+                          style={{
+                            width: "100%",
+                            minWidth: 0,
+                            height: "34px",
+                            padding: "0 30px 0 9px",
+                            border: "1px solid #dedad1",
+                            borderRadius: "9px",
+                            background: "#fff",
+                            font: "inherit",
+                            fontSize: "12px",
+                            color: "#373934",
+                          }}
                         >
                           {status ===
                             LEGACY_NO_PICKUP && (
                             <option
-                              value={
-                                LEGACY_NO_PICKUP
-                              }
+                              value={LEGACY_NO_PICKUP}
                             >
                               舊設定：不接（請分類）
                             </option>
                           )}
 
                           {PICKUP_STATUS_OPTIONS.map(
-                            (
-                              option
-                            ) => (
+                            (option) => (
                               <option
-                                key={
-                                  option.value
-                                }
-                                value={
-                                  option.value
-                                }
+                                key={option.value}
+                                value={option.value}
                               >
-                                {
-                                  option.label
-                                }
+                                {option.label}
                               </option>
                             )
                           )}
                         </select>
-
-                        <small
-                          style={{
-                            textAlign:
-                              "center",
-                            color:
-                              isPickup
-                                ? "#58705b"
-                                : "#8a625a",
-                          }}
-                        >
-                          {isPickup
-                            ? "接車表正常"
-                            : "接車表槓掉"}
-                        </small>
                       </label>
                     );
                   }
