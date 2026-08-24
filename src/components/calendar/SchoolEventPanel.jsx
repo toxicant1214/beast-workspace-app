@@ -1103,7 +1103,11 @@ function SchoolEventPanel({
                     </label>
 
                     <label className="calendar-field">
-                      <span>提前幾天開始提醒</span>
+                      <span>
+                        {form.reminderType === "NOTICE"
+                          ? "提前幾天通知（僅提醒一次）"
+                          : "提前幾天開始提醒（持續至完成）"}
+                      </span>
 
                       <input
                         type="number"
@@ -1206,22 +1210,20 @@ function SchoolEventPanel({
                       </div>
                     )}
 
-                    {form.reminderType === "TASK" && (
-                      <div
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: "9px",
-                          background: "#f2f6f1",
-                          fontSize: "12px",
-                          lineHeight: 1.7,
-                          color: "#647067",
-                        }}
-                      >
-                        任務型事項會從提醒日起持續出現在晨報，
-                        完成後才停止；超過行事曆日期仍未完成時，
-                        後續會標記為逾期。
-                      </div>
-                    )}
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "9px",
+                        background: "#f2f6f1",
+                        fontSize: "12px",
+                        lineHeight: 1.7,
+                        color: "#647067",
+                      }}
+                    >
+                      {form.reminderType === "NOTICE"
+                        ? "通知會在指定的提前日於晨報出現一次，不需完成。"
+                        : "任務會從指定日期開始持續出現在晨報，直到完成；逾期未完成仍會繼續提醒。"}
+                    </div>
                   </>
                 )}
               </section>

@@ -307,6 +307,9 @@ function MonthCalendarView({
   const [events, setEvents] =
     useState([]);
 
+  const [teachers, setTeachers] =
+    useState([]);
+
   const [
     schoolNames,
     setSchoolNames,
@@ -349,6 +352,7 @@ function MonthCalendarView({
   useEffect(() => {
     if (!semesterId) {
       setEvents([]);
+      setTeachers([]);
       setSchoolNames({});
       setSemesterSchools([]);
       return;
@@ -367,6 +371,7 @@ function MonthCalendarView({
       const [
         eventResult,
         schoolResult,
+        teacherResult,
       ] =
         await Promise.all([
           supabase
@@ -385,7 +390,12 @@ function MonthCalendarView({
               event_type,
               category,
               notes,
-              affects_pickup
+              affects_pickup,
+              morning_brief_enabled,
+              reminder_type,
+              reminder_days_before,
+              reminder_audience,
+              reminder_teacher_ids
               `
             )
             .eq(
@@ -416,6 +426,17 @@ function MonthCalendarView({
               "semester_id",
               semesterId
             ),
+
+          supabase
+            .from("teachers")
+            .select(
+              "id, chinese_name, english_name, status"
+            )
+            .eq("status", "active")
+            .order(
+              "chinese_name",
+              { ascending: true }
+            ),
         ]);
 
 
@@ -428,9 +449,17 @@ function MonthCalendarView({
         throw schoolResult.error;
       }
 
+      if (teacherResult.error) {
+        throw teacherResult.error;
+      }
+
 
       setEvents(
         eventResult.data || []
+      );
+
+      setTeachers(
+        teacherResult.data || []
       );
 
 
@@ -654,6 +683,11 @@ function MonthCalendarView({
         "ADMIN",
       schoolId: "ALL",
       notes: "",
+      morningBriefEnabled: false,
+      reminderType: "NOTICE",
+      reminderDaysBefore: 0,
+      reminderAudience: "ALL",
+      reminderTeacherIds: [],
     });
 
     setErrorMessage("");
@@ -689,6 +723,22 @@ function MonthCalendarView({
       notes:
         eventItem.notes ||
         "",
+      morningBriefEnabled:
+        eventItem.morning_brief_enabled === true,
+      reminderType:
+        eventItem.reminder_type || "NOTICE",
+      reminderDaysBefore:
+        Number(
+          eventItem.reminder_days_before || 0
+        ),
+      reminderAudience:
+        eventItem.reminder_audience || "ALL",
+      reminderTeacherIds:
+        Array.isArray(
+          eventItem.reminder_teacher_ids
+        )
+          ? eventItem.reminder_teacher_ids
+          : [],
     });
 
     setErrorMessage("");
@@ -711,13 +761,18 @@ function MonthCalendarView({
     const {
       name,
       value,
+      type,
+      checked,
     } = event.target;
 
     setForm(
       (current) => {
         const next = {
           ...current,
-          [name]: value,
+          [name]:
+            type === "checkbox"
+              ? checked
+              : value,
         };
 
         if (
@@ -727,9 +782,48 @@ function MonthCalendarView({
           next.schoolId = "ALL";
         }
 
+        if (
+          name === "morningBriefEnabled" &&
+          !checked
+        ) {
+          next.reminderType = "NOTICE";
+          next.reminderDaysBefore = 0;
+          next.reminderAudience = "ALL";
+          next.reminderTeacherIds = [];
+        }
+
+        if (
+          name === "reminderAudience" &&
+          value === "ALL"
+        ) {
+          next.reminderTeacherIds = [];
+        }
+
         return next;
       }
     );
+  }
+
+  function toggleReminderTeacher(
+    teacherId
+  ) {
+    setForm((current) => {
+      const selected = new Set(
+        current.reminderTeacherIds || []
+      );
+
+      if (selected.has(teacherId)) {
+        selected.delete(teacherId);
+      } else {
+        selected.add(teacherId);
+      }
+
+      return {
+        ...current,
+        reminderTeacherIds:
+          Array.from(selected),
+      };
+    });
   }
 
 
@@ -771,6 +865,33 @@ function MonthCalendarView({
     ) {
       setErrorMessage(
         "結束日期不能早於開始日期。"
+      );
+      return;
+    }
+
+    if (
+      form.morningBriefEnabled &&
+      Number(
+        form.reminderDaysBefore
+      ) < 0
+    ) {
+      setErrorMessage(
+        "提前提醒天數不可小於 0。"
+      );
+      return;
+    }
+
+    if (
+      form.morningBriefEnabled &&
+      form.reminderAudience ===
+        "SELECTED" &&
+      (
+        form.reminderTeacherIds ||
+        []
+      ).length === 0
+    ) {
+      setErrorMessage(
+        "請至少選擇一位提醒老師。"
       );
       return;
     }
@@ -827,6 +948,34 @@ function MonthCalendarView({
 
         affects_pickup:
           false,
+
+        morning_brief_enabled:
+          form.morningBriefEnabled,
+
+        reminder_type:
+          form.morningBriefEnabled
+            ? form.reminderType
+            : "NOTICE",
+
+        reminder_days_before:
+          form.morningBriefEnabled
+            ? Number(
+                form.reminderDaysBefore ||
+                  0
+              )
+            : 0,
+
+        reminder_audience:
+          form.morningBriefEnabled
+            ? form.reminderAudience
+            : "ALL",
+
+        reminder_teacher_ids:
+          form.morningBriefEnabled &&
+          form.reminderAudience ===
+            "SELECTED"
+            ? form.reminderTeacherIds
+            : [],
 
         updated_at:
           new Date()
@@ -1580,6 +1729,239 @@ function MonthCalendarView({
                   rows="4"
                 />
               </label>
+
+
+              <section
+                style={{
+                  padding: "16px",
+                  border:
+                    "1px solid #e3e6df",
+                  borderRadius: "12px",
+                  background: "#fafbf8",
+                  display: "grid",
+                  gap: "14px",
+                }}
+              >
+                <div>
+                  <strong>
+                    晨報與任務
+                  </strong>
+
+                  <div
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "12px",
+                      color: "#7c857e",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    行事曆日期就是任務基準日；
+                    區間事項以開始日期為基準。
+                  </div>
+                </div>
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    name="morningBriefEnabled"
+                    checked={
+                      form.morningBriefEnabled
+                    }
+                    onChange={
+                      handleFormChange
+                    }
+                    disabled={saving}
+                  />
+                  <span>
+                    加入晨報提醒
+                  </span>
+                </label>
+
+                {form.morningBriefEnabled && (
+                  <>
+                    <label className="calendar-field">
+                      <span>
+                        提醒類型
+                      </span>
+                      <select
+                        name="reminderType"
+                        value={
+                          form.reminderType
+                        }
+                        onChange={
+                          handleFormChange
+                        }
+                        disabled={saving}
+                      >
+                        <option value="NOTICE">
+                          通知－只需知道
+                        </option>
+                        <option value="TASK">
+                          任務－需要完成
+                        </option>
+                      </select>
+                    </label>
+
+                    <label className="calendar-field">
+                      <span>
+                        {form.reminderType ===
+                        "NOTICE"
+                          ? "提前幾天通知（僅提醒一次）"
+                          : "提前幾天開始提醒（持續至完成）"}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        name="reminderDaysBefore"
+                        value={
+                          form.reminderDaysBefore
+                        }
+                        onChange={
+                          handleFormChange
+                        }
+                        disabled={saving}
+                      />
+                    </label>
+
+                    <label className="calendar-field">
+                      <span>
+                        提醒對象
+                      </span>
+                      <select
+                        name="reminderAudience"
+                        value={
+                          form.reminderAudience
+                        }
+                        onChange={
+                          handleFormChange
+                        }
+                        disabled={saving}
+                      >
+                        <option value="ALL">
+                          全部在職老師
+                        </option>
+                        <option value="SELECTED">
+                          指定老師
+                        </option>
+                      </select>
+                    </label>
+
+                    {form.reminderAudience ===
+                      "SELECTED" && (
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: "8px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            color: "#707970",
+                          }}
+                        >
+                          指定老師
+                        </span>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(140px, 1fr))",
+                            gap: "8px",
+                          }}
+                        >
+                          {teachers.map(
+                            (teacher) => {
+                              const checked =
+                                (
+                                  form.reminderTeacherIds ||
+                                  []
+                                ).includes(
+                                  teacher.id
+                                );
+
+                              const displayName =
+                                teacher.chinese_name ||
+                                teacher.english_name ||
+                                "未命名老師";
+
+                              return (
+                                <label
+                                  key={
+                                    teacher.id
+                                  }
+                                  style={{
+                                    display:
+                                      "flex",
+                                    alignItems:
+                                      "center",
+                                    gap: "8px",
+                                    padding:
+                                      "8px 10px",
+                                    border:
+                                      "1px solid #dfe4dc",
+                                    borderRadius:
+                                      "9px",
+                                    background:
+                                      checked
+                                        ? "#eef5ef"
+                                        : "#fff",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      checked
+                                    }
+                                    onChange={() =>
+                                      toggleReminderTeacher(
+                                        teacher.id
+                                      )
+                                    }
+                                    disabled={
+                                      saving
+                                    }
+                                  />
+                                  <span>
+                                    {
+                                      displayName
+                                    }
+                                  </span>
+                                </label>
+                              );
+                            }
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        padding:
+                          "10px 12px",
+                        borderRadius: "9px",
+                        background: "#f2f6f1",
+                        fontSize: "12px",
+                        lineHeight: 1.7,
+                        color: "#647067",
+                      }}
+                    >
+                      {form.reminderType ===
+                      "NOTICE"
+                        ? "通知會在指定的提前日於晨報出現一次，不需完成。"
+                        : "任務會從指定日期開始持續出現在晨報，直到完成；逾期未完成仍會繼續提醒。"}
+                    </div>
+                  </>
+                )}
+              </section>
 
 
               <div className="month-event-form__actions">
