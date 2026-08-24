@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { updateTodo } from "../services/todoService";
+import { addTodo, updateTodo } from "../services/todoService";
 
 const REMINDER_OPTIONS = [
   {
@@ -42,7 +42,16 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
   const [reminderOffsets, setReminderOffsets] = useState([]);
 
   useEffect(() => {
-    if (!task) return;
+    if (!open) return;
+
+    if (!task) {
+      setTitle("");
+      setDeadlineDate("");
+      setDeadlineTime("");
+      setPriority("normal");
+      setReminderOffsets([]);
+      return;
+    }
 
     const date = task.deadline_at
       ? new Date(task.deadline_at)
@@ -87,9 +96,9 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
         ? `${parts.hour}:${parts.minute}`
         : ""
     );
-  }, [task]);
+  }, [open, task]);
 
-  if (!open || !task) return null;
+  if (!open) return null;
 
   function toggleReminder(value) {
     setReminderOffsets((prev) =>
@@ -100,6 +109,10 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
   }
 
   async function handleSave() {
+    if (!title.trim() || !deadlineDate) {
+      return;
+    }
+
     const time = deadlineTime || "23:59";
 
     const deadline_at = new Date(
@@ -118,15 +131,21 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
       }
     );
 
-    await updateTodo(task.id, {
-      title,
+    const values = {
+      title: title.trim(),
       priority,
       deadline_at,
       has_time: Boolean(deadlineTime),
       reminder_offsets: validReminderOffsets,
-    });
+    };
 
-    onSaved();
+    if (task) {
+      await updateTodo(task.id, values);
+    } else {
+      await addTodo(values);
+    }
+
+    await onSaved();
     onClose();
   }
 
@@ -140,7 +159,7 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
         onClick={(event) => event.stopPropagation()}
       >
         <div className="drawerHeader">
-          <h2>編輯任務</h2>
+          <h2>{task ? "編輯任務" : "新增任務"}</h2>
 
           <button
             type="button"
@@ -252,8 +271,9 @@ function TaskDrawer({ open, task, onClose, onSaved }) {
           <button
             type="button"
             onClick={handleSave}
+            disabled={!title.trim() || !deadlineDate}
           >
-            儲存
+            {task ? "儲存" : "新增"}
           </button>
         </div>
       </div>

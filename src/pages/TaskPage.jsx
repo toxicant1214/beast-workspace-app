@@ -40,9 +40,14 @@ function TaskPage() {
     await loadTasks();
   }
   function handleOpenTask(task) {
-  setSelectedTask(task);
-  setDrawerOpen(true);
-}
+    setSelectedTask(task);
+    setDrawerOpen(true);
+  }
+
+  function handleCreateTask() {
+    setSelectedTask(null);
+    setDrawerOpen(true);
+  }
 
   function formatDeadline(task) {
     const date = new Date(task.deadline_at);
@@ -93,11 +98,21 @@ function TaskPage() {
   return (
     <div className="taskPage">
       <section className="pageHeader">
-        <p className="eyebrow">TASK CENTER</p>
-        <h1>任務中心</h1>
-        <p className="summary">
-          查看未完成任務、已完成紀錄，並清除測試或誤植資料。
-        </p>
+        <div>
+          <p className="eyebrow">TASK CENTER</p>
+          <h1>任務中心</h1>
+          <p className="summary">
+            查看未完成任務、已完成紀錄，並清除測試或誤植資料。
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="taskCreateButton"
+          onClick={handleCreateTask}
+        >
+          ＋ 新增任務
+        </button>
       </section>
 
       <div className="taskPageGrid">
@@ -123,7 +138,10 @@ function TaskPage() {
                   <button
                     type="button"
                     className="taskCheck"
-                    onClick={() => handleCompleteTask(task.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleCompleteTask(task.id);
+                    }}
                   >
                     □
                   </button>
@@ -202,11 +220,14 @@ function TaskPage() {
         </section>
       </div>
       <TaskDrawer
-  open={drawerOpen}
-  task={selectedTask}
-  onClose={() => setDrawerOpen(false)}
-  onSaved={loadTasks}
-/>
+        open={drawerOpen}
+        task={selectedTask}
+        onClose={() => {
+          setDrawerOpen(false);
+          setSelectedTask(null);
+        }}
+        onSaved={loadTasks}
+      />
     </div>
     
   );
