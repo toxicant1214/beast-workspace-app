@@ -16,6 +16,7 @@ import CoursePage from "./pages/CoursePage";
 import CampPage from "./pages/CampPage";
 import CalendarPage from "./pages/CalendarPage";
 import PickupPage from "./pages/PickupPage";
+import SnackManagementPage from "./pages/SnackManagementPage";
 import LearningReportPage from "./pages/LearningReportPage";
 import CleaningPage from "./pages/CleaningPage";
 import LineReminderPage from "./pages/LineReminderPage";
@@ -81,6 +82,10 @@ const PAGE_OPTIONS = [
   {
     label: "接送管理",
     key: "pickup",
+  },
+  {
+    label: "點心管理",
+    key: "snack_management",
   },
   {
     label: "學習報告書",
@@ -793,6 +798,16 @@ return hasPagePermission(
             currentTeacher
           }
         />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "點心管理"
+    ) {
+      return (
+        <SnackManagementPage />
       );
     }
 
