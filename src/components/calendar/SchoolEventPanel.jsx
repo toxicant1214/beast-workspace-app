@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import {
+  syncCalendarEventAssignment,
+  removeCalendarEventAssignment,
+} from "../../services/teacherAssignmentService";
 
 const ALL_SCHOOLS_VALUE = "__ALL_SCHOOLS__";
 
@@ -546,6 +550,8 @@ function SchoolEventPanel({
       setErrorMessage("");
       setSuccessMessage("");
 
+      let savedEventId = editingId || null;
+
       if (editingId) {
         const { error } = await supabase
           .from("calendar_school_events")
@@ -561,13 +567,20 @@ function SchoolEventPanel({
           `已更新「${payload.title}」。`
         );
       } else {
-        const { error } = await supabase
+        const {
+          data: createdEvent,
+          error,
+        } = await supabase
           .from("calendar_school_events")
-          .insert(payload);
+          .insert(payload)
+          .select("id")
+          .single();
 
         if (error) {
           throw error;
         }
+
+        savedEventId = createdEvent.id;
 
         const scopeLabel =
           payload.category === "SCHOOL"
@@ -578,6 +591,33 @@ function SchoolEventPanel({
 
         setSuccessMessage(
           `已新增「${scopeLabel}－${payload.title}」。`
+        );
+      }
+
+      const isTask =
+        payload.morning_brief_enabled === true &&
+        payload.reminder_type === "TASK";
+
+      if (isTask) {
+        const teacherIds =
+          payload.reminder_audience === "SELECTED"
+            ? payload.reminder_teacher_ids
+            : teachers.map((teacher) => teacher.id);
+
+        await syncCalendarEventAssignment(
+          {
+            id: savedEventId,
+            title: payload.title,
+            notes: payload.notes,
+            start_date: payload.start_date,
+            reminder_days_before:
+              payload.reminder_days_before,
+          },
+          teacherIds
+        );
+      } else if (savedEventId) {
+        await removeCalendarEventAssignment(
+          savedEventId
         );
       }
 
@@ -624,6 +664,10 @@ function SchoolEventPanel({
       setDeletingId(eventItem.id);
       setErrorMessage("");
       setSuccessMessage("");
+
+      await removeCalendarEventAssignment(
+        eventItem.id
+      );
 
       const { error } = await supabase
         .from("calendar_school_events")

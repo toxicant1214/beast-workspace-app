@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import {
+  syncCalendarEventAssignment,
+  removeCalendarEventAssignment,
+} from "../../services/teacherAssignmentService";
 
 
 const WEEKDAYS = [
@@ -983,6 +987,8 @@ function MonthCalendarView({
       };
 
 
+      let savedEventId = editingEvent?.id || null;
+
       if (editingEvent) {
         const { error } =
           await supabase
@@ -1001,18 +1007,55 @@ function MonthCalendarView({
           throw error;
         }
       } else {
-        const { error } =
+        const {
+          data: createdEvent,
+          error,
+        } =
           await supabase
             .from(
               "calendar_school_events"
             )
             .insert(
               payload
-            );
+            )
+            .select("id")
+            .single();
 
         if (error) {
           throw error;
         }
+
+        savedEventId =
+          createdEvent.id;
+      }
+
+      const isTask =
+        payload.morning_brief_enabled === true &&
+        payload.reminder_type === "TASK";
+
+      if (isTask) {
+        const teacherIds =
+          payload.reminder_audience === "SELECTED"
+            ? payload.reminder_teacher_ids
+            : teachers.map(
+                (teacher) => teacher.id
+              );
+
+        await syncCalendarEventAssignment(
+          {
+            id: savedEventId,
+            title: payload.title,
+            notes: payload.notes,
+            start_date: payload.start_date,
+            reminder_days_before:
+              payload.reminder_days_before,
+          },
+          teacherIds
+        );
+      } else if (savedEventId) {
+        await removeCalendarEventAssignment(
+          savedEventId
+        );
       }
 
 
@@ -1060,6 +1103,10 @@ function MonthCalendarView({
       setSaving(true);
       setErrorMessage("");
 
+
+      await removeCalendarEventAssignment(
+        editingEvent.id
+      );
 
       const { error } =
         await supabase
