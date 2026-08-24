@@ -3411,3 +3411,61 @@ body {
     padding: 20px 22px 40px;
   }
 }
+/* 任務中心－新增任務按鈕 */
+.taskPage .pageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.taskCreateButton {
+  flex: 0 0 auto;
+  min-width: 150px;
+  height: 52px;
+  padding: 0 24px;
+
+  border: 1px solid #8f967f;
+  border-radius: 14px;
+
+  background: #7f8874;
+  color: #ffffff;
+
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 8px 20px rgba(70, 76, 65, 0.12);
+
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.taskCreateButton:hover {
+  background: #707967;
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 10px 24px rgba(70, 76, 65, 0.16);
+}
+
+.taskCreateButton:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 760px) {
+  .taskPage .pageHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .taskCreateButton {
+    width: 100%;
+  }
+}
