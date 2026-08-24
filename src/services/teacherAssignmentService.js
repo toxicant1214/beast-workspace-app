@@ -292,17 +292,19 @@ export async function syncCalendarEventAssignment(
   );
 
   const reminderOffsets =
-    Number.isInteger(daysBefore) &&
-    daysBefore > 0
-      ? [daysBefore]
-      : [];
+  Number.isInteger(daysBefore) &&
+  daysBefore > 0
+    ? [daysBefore * 24 * 60]
+    : [];
 
   const assignmentPayload = {
     title,
     description:
       calendarEvent.notes?.trim() || null,
     deadline:
-      calendarEvent.start_date || null,
+  calendarEvent.start_date
+    ? `${calendarEvent.start_date}T23:00:00`
+    : null,
     priority: "normal",
     status: "active",
     reminder_offsets: reminderOffsets,
