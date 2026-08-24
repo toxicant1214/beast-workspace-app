@@ -1160,29 +1160,28 @@ function SnackManagementPage() {
         ) : (
           <div
             style={{
-              overflowX: "auto",
+              overflowX: "hidden",
+              width: "100%",
               border: "1px solid #e1e5df",
               borderRadius: "14px",
             }}
           >
             <table
               style={{
-                width: "max-content",
-                minWidth: "100%",
+                width: "100%",
+                tableLayout: "fixed",
                 borderCollapse: "separate",
                 borderSpacing: 0,
-                fontSize: "13px",
+                fontSize: "12px",
+                whiteSpace: "nowrap",
               }}
             >
               <thead>
                 <tr>
                   <th
                     style={{
-                      position: "sticky",
-                      left: 0,
-                      zIndex: 3,
-                      minWidth: "130px",
-                      padding: "12px",
+                      width: "58px",
+                      padding: "10px 4px",
                       textAlign: "left",
                       background: "#f4f6f2",
                       borderBottom:
@@ -1196,8 +1195,8 @@ function SnackManagementPage() {
 
                   <th
                     style={{
-                      minWidth: "96px",
-                      padding: "10px",
+                      width: "70px",
+                      padding: "8px 3px",
                       textAlign: "center",
                       background: "#f4f6f2",
                       borderBottom:
@@ -1222,8 +1221,8 @@ function SnackManagementPage() {
                           day.dateString
                         }
                         style={{
-                          minWidth: "52px",
-                          padding: "9px 6px",
+                          width: "auto",
+                          padding: "7px 1px",
                           textAlign: "center",
                           background: closed
                             ? "#f1f1ee"
@@ -1268,11 +1267,8 @@ function SnackManagementPage() {
                   <tr key={classItem.id}>
                     <th
                       style={{
-                        position: "sticky",
-                        left: 0,
-                        zIndex: 2,
-                        minWidth: "130px",
-                        padding: "12px",
+                        width: "58px",
+                        padding: "10px 4px",
                         textAlign: "left",
                         background: "#fff",
                         color: "#34423a",
@@ -1313,8 +1309,8 @@ function SnackManagementPage() {
                         }
                         disabled={savingCell}
                         style={{
-                          width: "78px",
-                          height: "32px",
+                          width: "60px",
+                          height: "30px",
                           border:
                             "1px solid #d9ded8",
                           borderRadius:
@@ -1355,8 +1351,8 @@ function SnackManagementPage() {
                             }
                           }}
                           style={{
-                            height: "46px",
-                            padding: "6px",
+                            height: "44px",
+                            padding: "4px 1px",
                             textAlign: "center",
                             fontWeight: 700,
                             background: closed
@@ -1418,10 +1414,8 @@ function SnackManagementPage() {
                 <tr>
                   <th
                     style={{
-                      position: "sticky",
-                      left: 0,
-                      zIndex: 2,
-                      padding: "12px",
+                      width: "58px",
+                      padding: "10px 4px",
                       textAlign: "left",
                       background: "#f4f6f2",
                       color: "#34423a",
@@ -1434,7 +1428,7 @@ function SnackManagementPage() {
 
                   <td
                     style={{
-                      padding: "10px 6px",
+                      padding: "8px 2px",
                       textAlign: "center",
                       fontWeight: 700,
                       background: "#f4f6f2",
@@ -1453,7 +1447,7 @@ function SnackManagementPage() {
                         index
                       }
                       style={{
-                        padding: "10px 6px",
+                        padding: "8px 2px",
                         textAlign: "center",
                         fontWeight: 800,
                         background:
