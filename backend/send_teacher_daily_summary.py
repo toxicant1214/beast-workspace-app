@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from services.teacher_service import supabase
 from services.teacher_assignment_service import (
-    get_teacher_assignments_by_teacher_id,
+    get_teacher_morning_assignments_by_teacher_id,
 )
 from services.line_service import (
     send_line_message_to_user,
@@ -109,14 +109,6 @@ def get_today_cleaning_by_teacher_id(
     teacher_id,
     today_date,
 ):
-    """
-    取得指定老師今天的清潔任務。
-
-    cleaning_tasks 底層仍保留每位老師自己的任務，
-    因此公共輪值、固定專責、共同任務都可以直接
-    依 teacher_id + task_date 查詢。
-    """
-
     task_response = (
         supabase
         .table("cleaning_tasks")
@@ -203,6 +195,60 @@ def get_today_cleaning_by_teacher_id(
     return result
 
 
+def get_upcoming_calendar_events(
+    start_date,
+    end_date,
+):
+    """
+    取得每日工作摘要最下方要顯示的未來行事。
+
+    只顯示有開啟晨報的 NOTICE 行事曆事件，
+    並抓今天到指定結束日之間的事件。
+
+    TASK 已經顯示在上方老師任務區，
+    因此不再重複列入「未來一個月行事」。
+    """
+
+    response = (
+        supabase
+        .table("calendar_school_events")
+        .select(
+            """
+            id,
+            title,
+            start_date,
+            end_date,
+            category,
+            morning_brief_enabled,
+            reminder_type
+            """
+        )
+        .eq(
+            "morning_brief_enabled",
+            True,
+        )
+        .eq(
+            "reminder_type",
+            "NOTICE",
+        )
+        .gte(
+            "start_date",
+            start_date,
+        )
+        .lte(
+            "start_date",
+            end_date,
+        )
+        .order(
+            "start_date",
+            desc=False,
+        )
+        .execute()
+    )
+
+    return response.data or []
+
+
 def format_time(time_string):
     if not time_string:
         return ""
@@ -250,11 +296,121 @@ def get_makeup_source_name(item):
     )
 
 
+def split_teacher_assignments(
+    assignments,
+    now,
+):
+    overdue = []
+    pending = []
+    waiting_confirm = []
+
+    for member in assignments:
+        assignment = (
+            member.get(
+                "teacher_assignments"
+            )
+            or {}
+        )
+
+        deadline = assignment.get(
+            "deadline"
+        )
+
+        deadline_dt = None
+
+        if deadline:
+            try:
+                deadline_dt = (
+                    datetime.fromisoformat(
+                        str(
+                            deadline
+                        ).replace(
+                            "Z",
+                            "+00:00",
+                        )
+                    )
+                )
+            except ValueError:
+                deadline_dt = None
+
+        if (
+            deadline_dt
+            and deadline_dt.tzinfo is None
+        ):
+            deadline_dt = deadline_dt.replace(
+                tzinfo=TAIPEI_TZ
+            )
+        elif deadline_dt:
+            deadline_dt = deadline_dt.astimezone(
+                TAIPEI_TZ
+            )
+
+        if member.get(
+            "teacher_completed"
+        ):
+            waiting_confirm.append(
+                member
+            )
+            continue
+
+        if (
+            deadline_dt
+            and deadline_dt < now
+        ):
+            overdue.append(
+                member
+            )
+        else:
+            pending.append(
+                member
+            )
+
+    return (
+        overdue,
+        pending,
+        waiting_confirm,
+    )
+
+
+def format_assignment_line(
+    member,
+):
+    assignment = (
+        member.get(
+            "teacher_assignments"
+        )
+        or {}
+    )
+
+    title = (
+        assignment.get("title")
+        or "未命名任務"
+    )
+
+    deadline = (
+        assignment.get("deadline")
+        or ""
+    )
+
+    deadline_text = ""
+
+    if deadline:
+        deadline_text = (
+            f"｜{str(deadline)[:10]}"
+        )
+
+    return (
+        f"・{title}"
+        f"{deadline_text}"
+    )
+
+
 def build_teacher_daily_summary(
     teacher,
     assignments,
     makeups,
     cleaning_tasks,
+    calendar_events,
     today,
 ):
     teacher_name = (
@@ -263,59 +419,73 @@ def build_teacher_daily_summary(
         or "老師"
     )
 
+    (
+        overdue_assignments,
+        pending_assignments,
+        waiting_confirm_assignments,
+    ) = split_teacher_assignments(
+        assignments,
+        today,
+    )
+
     lines = [
         f"☀️ {today.strftime('%m/%d')} 今日工作摘要",
         "",
         f"{teacher_name}老師您好：",
-        "",
-        "📋 老師任務",
     ]
 
-    if assignments:
-        for member in assignments:
-            assignment = (
-                member.get(
-                    "teacher_assignments"
-                )
-                or {}
-            )
+    if overdue_assignments:
+        lines.extend(
+            [
+                "",
+                "⚠️ 逾期未完成",
+            ]
+        )
 
-            title = (
-                assignment.get("title")
-                or "未命名任務"
-            )
-
-            deadline = (
-                assignment.get("deadline")
-                or ""
-            )
-
-            deadline_text = ""
-
-            if deadline:
-                deadline_text = (
-                    f"｜{str(deadline)[:10]}"
-                )
-
-            if member.get(
-                "teacher_completed"
-            ):
-                status_text = (
-                    "等待主管確認"
-                )
-            else:
-                status_text = (
-                    "未完成"
-                )
-
+        for member in overdue_assignments:
             lines.append(
-                f"・{title}"
-                f"{deadline_text}"
-                f"｜{status_text}"
+                format_assignment_line(
+                    member
+                )
             )
-    else:
-        lines.append(
-            "目前沒有未完成的老師任務。"
+
+    if pending_assignments:
+        lines.extend(
+            [
+                "",
+                "📌 近期任務",
+            ]
+        )
+
+        for member in pending_assignments:
+            lines.append(
+                format_assignment_line(
+                    member
+                )
+            )
+
+    if waiting_confirm_assignments:
+        lines.extend(
+            [
+                "",
+                "⏳ 已回報・待主管確認",
+            ]
+        )
+
+        for member in waiting_confirm_assignments:
+            lines.append(
+                format_assignment_line(
+                    member
+                )
+            )
+
+    if not assignments:
+        lines.extend(
+            [
+                "",
+                "📋 老師任務",
+                "目前沒有需要追蹤的老師任務。",
+            ]
         )
 
     lines.extend(
@@ -401,6 +571,57 @@ def build_teacher_daily_summary(
             "今日無輪值，請協助維持教室與個人區域整潔。"
         )
 
+    lines.extend(
+        [
+            "",
+            "📅 未來一個月行事",
+        ]
+    )
+
+    if calendar_events:
+        for event in calendar_events:
+            start_date = (
+                event.get(
+                    "start_date"
+                )
+                or ""
+            )
+
+            end_date = (
+                event.get(
+                    "end_date"
+                )
+                or ""
+            )
+
+            title = (
+                event.get("title")
+                or "未命名行事"
+            )
+
+            if (
+                end_date
+                and end_date != start_date
+            ):
+                date_text = (
+                    f"{start_date[5:]}"
+                    f"～{end_date[5:]}"
+                )
+            else:
+                date_text = (
+                    start_date[5:]
+                    if start_date
+                    else ""
+                )
+
+            lines.append(
+                f"・{date_text} {title}"
+            )
+    else:
+        lines.append(
+            "目前沒有未來行事。"
+        )
+
     return "\n".join(lines)
 
 
@@ -411,6 +632,40 @@ def main():
 
     today_date = (
         now.date().isoformat()
+    )
+
+    if now.month == 12:
+        next_month_year = (
+            now.year + 1
+        )
+        next_month_number = 1
+    else:
+        next_month_year = now.year
+        next_month_number = (
+            now.month + 1
+        )
+
+    from calendar import monthrange
+
+    next_month_day = min(
+        now.day,
+        monthrange(
+            next_month_year,
+            next_month_number,
+        )[1],
+    )
+
+    upcoming_end = now.replace(
+        year=next_month_year,
+        month=next_month_number,
+        day=next_month_day,
+    )
+
+    upcoming_events = (
+        get_upcoming_calendar_events(
+            today_date,
+            upcoming_end.date().isoformat(),
+        )
     )
 
     teachers = (
@@ -432,8 +687,9 @@ def main():
         )
 
         assignments = (
-            get_teacher_assignments_by_teacher_id(
-                teacher_id
+            get_teacher_morning_assignments_by_teacher_id(
+                teacher_id,
+                now=now,
             )
         )
 
@@ -459,12 +715,15 @@ def main():
                 cleaning_tasks=(
                     cleaning_tasks
                 ),
+                calendar_events=(
+                    upcoming_events
+                ),
                 today=now,
             )
         )
 
         print(
-            "發送老師晨報：",
+            "發送老師每日工作摘要：",
             teacher.get(
                 "chinese_name"
             ),

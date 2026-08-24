@@ -281,15 +281,16 @@ def get_teacher_morning_assignments_by_teacher_id(
     now=None,
 ):
     """
-    取得指定老師 09:00 晨報要顯示的任務。
+    取得指定老師每日工作摘要要顯示的任務。
 
     規則：
     1. 只看該老師自己的任務。
     2. 尚未經主管確認。
     3. 任務仍為 active。
     4. 已逾期但尚未正式完成的任務保留。
-    5. 顯示今天到未來 14 天內的任務。
-    6. 超過未來 14 天的任務不顯示。
+    5. 顯示今天到下個月同日內的任務。
+    6. 超過滾動一個月範圍的任務不顯示。
+    7. 老師已回報但主管尚未確認者仍保留。
     """
 
     taipei_tz = ZoneInfo(
@@ -309,9 +310,31 @@ def get_teacher_morning_assignments_by_teacher_id(
             taipei_tz
         )
 
-    cutoff_date = (
-        now.date()
-        + timedelta(days=14)
+    # 滾動一個月：
+    # 例如 9/2 -> 10/2。
+    # 若下個月沒有相同日期，
+    # 則使用下個月最後一天。
+    if now.month == 12:
+        next_year = now.year + 1
+        next_month = 1
+    else:
+        next_year = now.year
+        next_month = now.month + 1
+
+    from calendar import monthrange
+
+    cutoff_day = min(
+        now.day,
+        monthrange(
+            next_year,
+            next_month,
+        )[1],
+    )
+
+    cutoff_date = now.date().replace(
+        year=next_year,
+        month=next_month,
+        day=cutoff_day,
     )
 
     all_assignments = (
@@ -386,7 +409,7 @@ def get_teacher_assignments_by_line_user_id(
     查詢老師與其尚未正式完成的全部任務。
 
     這裡維持「全部任務」，
-    不使用 14 天限制。
+    不使用晨報的一個月範圍限制。
     """
 
     teacher_response = (

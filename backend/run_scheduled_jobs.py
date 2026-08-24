@@ -1,4 +1,5 @@
 import os
+from calendar import monthrange
 from datetime import datetime, time
 
 from dotenv import load_dotenv
@@ -27,6 +28,7 @@ from send_teacher_daily_summary import (
     get_active_line_teachers,
     get_today_cleaning_by_teacher_id,
     get_today_makeups_by_teacher_id,
+    get_upcoming_calendar_events,
 )
 
 
@@ -41,7 +43,10 @@ TAIPEI_TZ = ZoneInfo(
 )
 
 
-def get_morning_window(now):
+def get_admin_morning_window(now):
+    """
+    主管晨報維持每天 09:00～09:09。
+    """
     window_start = datetime.combine(
         now.date(),
         time(
@@ -63,6 +68,102 @@ def get_morning_window(now):
     return (
         window_start,
         window_end,
+    )
+
+
+def get_teacher_report_window(now):
+    """
+    老師每日工作摘要發送時間：
+
+    週一、週二、週四：13:00～13:09
+    週三、週五：11:30～11:39
+    週六、週日：不發送
+    """
+
+    weekday = now.weekday()
+
+    # Monday=0, Tuesday=1, Wednesday=2,
+    # Thursday=3, Friday=4, Saturday=5, Sunday=6
+    if weekday in (
+        0,
+        1,
+        3,
+    ):
+        report_time = time(
+            hour=13,
+            minute=0,
+        )
+
+    elif weekday in (
+        2,
+        4,
+    ):
+        report_time = time(
+            hour=11,
+            minute=30,
+        )
+
+    else:
+        return (
+            None,
+            None,
+        )
+
+    window_start = datetime.combine(
+        now.date(),
+        report_time,
+        tzinfo=TAIPEI_TZ,
+    )
+
+    window_end = window_start.replace(
+        minute=(
+            window_start.minute
+            + 10
+        )
+    )
+
+    return (
+        window_start,
+        window_end,
+    )
+
+
+def get_upcoming_month_end(now):
+    """
+    取得「下個月同日」作為未來一個月行事的結束日。
+
+    例如：
+    9/2 -> 10/2
+
+    若下個月沒有相同日期：
+    1/31 -> 2/28（閏年則 2/29）
+    """
+
+    if now.month == 12:
+        next_year = (
+            now.year + 1
+        )
+        next_month = 1
+    else:
+        next_year = now.year
+        next_month = (
+            now.month + 1
+        )
+
+    last_day = monthrange(
+        next_year,
+        next_month,
+    )[1]
+
+    next_day = min(
+        now.day,
+        last_day,
+    )
+
+    return now.replace(
+        year=next_year,
+        month=next_month,
+        day=next_day,
     )
 
 
@@ -90,11 +191,7 @@ def send_morning_report_if_due(
     台灣時間 09:00～09:09 之間，
     每天只發送一次。
 
-    晨報只顯示：
-    1. 已逾期但尚未完成的個人待辦
-    2. 今天到未來 14 天內的未完成待辦
-
-    手動查詢全部待辦不受影響。
+    主管晨報與老師每日工作摘要分開排程。
     """
 
     if not ADMIN_LINE_USER_ID:
@@ -110,7 +207,7 @@ def send_morning_report_if_due(
     (
         window_start,
         window_end,
-    ) = get_morning_window(
+    ) = get_admin_morning_window(
         now
     )
 
@@ -209,18 +306,21 @@ def send_teacher_reports_if_due(
     now=None,
 ):
     """
-    老師專屬晨報。
+    老師每日工作摘要。
+
+    發送時間：
+    週一、週二、週四 13:00
+    週三、週五 11:30
+    週六、週日不發。
 
     每位老師只取得：
-    1. 自己兩週內或已逾期的老師任務
+    1. 自己晨報範圍內或已逾期的老師任務
     2. notify_teacher_id 指定給自己的今日補課
     3. 自己今天的清潔任務
+    4. 未來一個月、已開啟晨報的行事曆事件
 
-    即使今天沒有被安排清潔，
-    晨報仍會顯示維持環境整潔提醒。
-
-    老師手動查詢全部自己的任務不受影響。
-    不會查詢主管個人待辦。
+    老師已回報但主管尚未確認的任務仍保留，
+    直到主管確認才正式結案。
     """
 
     now = normalize_taipei_time(
@@ -230,9 +330,25 @@ def send_teacher_reports_if_due(
     (
         window_start,
         window_end,
-    ) = get_morning_window(
+    ) = get_teacher_report_window(
         now
     )
+
+    if (
+        window_start is None
+        or window_end is None
+    ):
+        print(
+            "今天是週末，"
+            "不發送老師每日工作摘要。"
+        )
+
+        return {
+            "due": False,
+            "sent": 0,
+            "skipped": 0,
+            "failed": 0,
+        }
 
     if not (
         window_start
@@ -240,7 +356,7 @@ def send_teacher_reports_if_due(
         < window_end
     ):
         print(
-            "目前不是台灣老師晨報發送時段。"
+            "目前不是台灣老師每日工作摘要發送時段。"
         )
 
         return {
@@ -254,6 +370,21 @@ def send_teacher_reports_if_due(
         now.date().isoformat()
     )
 
+    upcoming_end = (
+        get_upcoming_month_end(
+            now
+        )
+        .date()
+        .isoformat()
+    )
+
+    upcoming_events = (
+        get_upcoming_calendar_events(
+            today_date,
+            upcoming_end,
+        )
+    )
+
     teachers = (
         get_active_line_teachers()
     )
@@ -263,7 +394,7 @@ def send_teacher_reports_if_due(
     failed_count = 0
 
     print(
-        f"老師晨報：找到 "
+        f"老師每日工作摘要：找到 "
         f"{len(teachers)} 位"
         "在職且已綁定 LINE 的老師。"
     )
@@ -325,7 +456,7 @@ def send_teacher_reports_if_due(
                         line_user_id
                     ),
                     reminder_type=(
-                        "teacher_morning_report"
+                        "teacher_daily_report"
                     ),
                     scheduled_at=(
                         window_start
@@ -337,7 +468,7 @@ def send_teacher_reports_if_due(
                 skipped_count += 1
 
                 print(
-                    f"老師晨報略過："
+                    f"老師每日工作摘要略過："
                     f"{teacher_name} "
                     "今日已發送或正在處理。"
                 )
@@ -355,6 +486,9 @@ def send_teacher_reports_if_due(
                         cleaning_tasks=(
                             cleaning_tasks
                         ),
+                        calendar_events=(
+                            upcoming_events
+                        ),
                         today=now,
                     )
                 )
@@ -371,7 +505,7 @@ def send_teacher_reports_if_due(
                 sent_count += 1
 
                 print(
-                    f"老師晨報發送成功："
+                    f"老師每日工作摘要發送成功："
                     f"{teacher_name}"
                 )
 
@@ -384,7 +518,7 @@ def send_teacher_reports_if_due(
                 failed_count += 1
 
                 print(
-                    f"老師晨報發送失敗："
+                    f"老師每日工作摘要發送失敗："
                     f"{teacher_name}",
                     type(error).__name__,
                     error,
@@ -394,7 +528,7 @@ def send_teacher_reports_if_due(
             failed_count += 1
 
             print(
-                f"老師晨報資料整理失敗："
+                f"老師每日工作摘要資料整理失敗："
                 f"{teacher_name}",
                 type(error).__name__,
                 error,
@@ -439,7 +573,7 @@ def main():
         )
     )
 
-    teacher_morning_result = (
+    teacher_report_result = (
         send_teacher_reports_if_due(
             now=now
         )
@@ -460,8 +594,8 @@ def main():
         admin_morning_result,
     )
     print(
-        "老師晨報結果：",
-        teacher_morning_result,
+        "老師每日工作摘要結果：",
+        teacher_report_result,
     )
     print(
         "================================="
