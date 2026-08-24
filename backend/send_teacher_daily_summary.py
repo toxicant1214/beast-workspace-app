@@ -395,14 +395,40 @@ def format_assignment_line(
     deadline_text = ""
 
     if deadline:
-        deadline_text = (
-            f"｜{str(deadline)[:10]}"
+        try:
+            deadline_dt = datetime.fromisoformat(
+                str(deadline).replace(
+                    "Z",
+                    "+00:00",
+                )
+            )
+
+            deadline_text = (
+                deadline_dt.strftime(
+                    "%m/%d"
+                )
+            )
+
+        except ValueError:
+            raw_deadline = str(deadline)[:10]
+
+            if len(raw_deadline) >= 10:
+                deadline_text = (
+                    raw_deadline[5:].replace(
+                        "-",
+                        "/",
+                    )
+                )
+            else:
+                deadline_text = raw_deadline
+
+    if deadline_text:
+        return (
+            f"・{deadline_text} "
+            f"{title}"
         )
 
-    return (
-        f"・{title}"
-        f"{deadline_text}"
-    )
+    return f"・{title}"
 
 
 def build_teacher_daily_summary(
@@ -603,13 +629,34 @@ def build_teacher_daily_summary(
                 end_date
                 and end_date != start_date
             ):
+                start_text = (
+                    start_date[5:].replace(
+                        "-",
+                        "/",
+                    )
+                    if start_date
+                    else ""
+                )
+
+                end_text = (
+                    end_date[5:].replace(
+                        "-",
+                        "/",
+                    )
+                    if end_date
+                    else ""
+                )
+
                 date_text = (
-                    f"{start_date[5:]}"
-                    f"～{end_date[5:]}"
+                    f"{start_text}"
+                    f"～{end_text}"
                 )
             else:
                 date_text = (
-                    start_date[5:]
+                    start_date[5:].replace(
+                        "-",
+                        "/",
+                    )
                     if start_date
                     else ""
                 )
