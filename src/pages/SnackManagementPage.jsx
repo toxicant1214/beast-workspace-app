@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import { supabase } from "../lib/supabase";
+import { jsPDF } from "jspdf";
 import { getStudentPickupDecision } from "../components/pickup/pickupStudentSchedule";
 
 const TABS = [
@@ -1068,6 +1069,464 @@ function SnackManagementPage() {
     });
   }
 
+  async function exportMonthlySnackPdf() {
+    if (
+      !selectedSemester ||
+      !selectedMonth ||
+      classRows.length === 0 ||
+      monthlyLoading
+    ) {
+      return;
+    }
+
+    try {
+      setErrorMessage("");
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      const fontResponse = await fetch(
+        "https://cdn.jsdelivr.net/gh/ButTaiwan/iansui@main/fonts/ttf/Iansui-Regular.ttf"
+      );
+
+      if (!fontResponse.ok) {
+        throw new Error(
+          `芫荽體載入失敗（${fontResponse.status}）`
+        );
+      }
+
+      const fontBytes = new Uint8Array(
+        await fontResponse.arrayBuffer()
+      );
+
+      let binary = "";
+      const chunkSize = 0x8000;
+
+      for (
+        let offset = 0;
+        offset < fontBytes.length;
+        offset += chunkSize
+      ) {
+        binary += String.fromCharCode(
+          ...fontBytes.subarray(
+            offset,
+            Math.min(
+              offset + chunkSize,
+              fontBytes.length
+            )
+          )
+        );
+      }
+
+      pdf.addFileToVFS(
+        "Iansui-Regular.ttf",
+        btoa(binary)
+      );
+      pdf.addFont(
+        "Iansui-Regular.ttf",
+        "Iansui",
+        "normal"
+      );
+      pdf.setFont("Iansui", "normal");
+
+      const pageWidth =
+        pdf.internal.pageSize.getWidth();
+      const pageHeight =
+        pdf.internal.pageSize.getHeight();
+      const marginX = 7;
+      const marginTop = 7;
+      const contentWidth =
+        pageWidth - marginX * 2;
+
+      pdf.setTextColor(31, 42, 36);
+      pdf.setFontSize(10);
+      pdf.text(
+        "倍思學院",
+        marginX,
+        marginTop + 4
+      );
+
+      pdf.setFontSize(17);
+      pdf.text(
+        "月點心表",
+        marginX,
+        marginTop + 11
+      );
+
+      pdf.setFontSize(8);
+      pdf.setTextColor(104, 118, 110);
+      pdf.text(
+        selectedSemester.name,
+        marginX,
+        marginTop + 15
+      );
+
+      pdf.setTextColor(31, 42, 36);
+      pdf.setFontSize(12);
+      pdf.text(
+        formatMonthLabel(selectedMonth),
+        pageWidth - marginX,
+        marginTop + 11,
+        { align: "right" }
+      );
+
+      const fixedWidths = {
+        className: 14,
+        teacher: 16,
+      };
+
+      const fixedTotal =
+        fixedWidths.className +
+        fixedWidths.teacher;
+
+      const dateWidth =
+        (contentWidth - fixedTotal) /
+        Math.max(monthDays.length, 1);
+
+      const headerTop = marginTop + 20;
+      const headerHeight = 10;
+      const rowHeight = 7.2;
+
+      function drawCell({
+        x,
+        y,
+        width,
+        height,
+        textValue = "",
+        fontSize = 7.2,
+        fill = null,
+        textColor = [31, 42, 36],
+        align = "center",
+      }) {
+        if (fill) {
+          pdf.setFillColor(...fill);
+        }
+
+        pdf.setDrawColor(201, 207, 202);
+        pdf.setLineWidth(0.14);
+        pdf.rect(
+          x,
+          y,
+          width,
+          height,
+          fill ? "FD" : "S"
+        );
+
+        pdf.setFont("Iansui", "normal");
+        pdf.setFontSize(fontSize);
+        pdf.setTextColor(...textColor);
+
+        const text = String(
+          textValue ?? ""
+        );
+
+        if (!text) return;
+
+        const textX =
+          align === "left"
+            ? x + 1.2
+            : x + width / 2;
+        const textY =
+          y + height / 2 + fontSize * 0.11;
+
+        pdf.text(
+          text,
+          textX,
+          textY,
+          {
+            align,
+            baseline: "middle",
+          }
+        );
+      }
+
+      let x = marginX;
+      const headerFill = [242, 244, 240];
+
+      drawCell({
+        x,
+        y: headerTop,
+        width: fixedWidths.className,
+        height: headerHeight,
+        textValue: "班級",
+        fontSize: 8,
+        fill: headerFill,
+      });
+      x += fixedWidths.className;
+
+      drawCell({
+        x,
+        y: headerTop,
+        width: fixedWidths.teacher,
+        height: headerHeight,
+        textValue: "老師點心",
+        fontSize: 7.5,
+        fill: headerFill,
+      });
+      x += fixedWidths.teacher;
+
+      monthDays.forEach((day) => {
+        const closed =
+          closedDateMap.get(day.dateString);
+
+        drawCell({
+          x,
+          y: headerTop,
+          width: dateWidth,
+          height: headerHeight,
+          textValue:
+            `${day.day}\n${[
+              "日",
+              "一",
+              "二",
+              "三",
+              "四",
+              "五",
+              "六",
+            ][day.weekday]}`,
+          fontSize: 6.6,
+          fill: closed
+            ? [243, 240, 236]
+            : headerFill,
+          textColor: closed
+            ? [145, 128, 118]
+            : [31, 42, 36],
+        });
+
+        x += dateWidth;
+      });
+
+      classRows.forEach(
+        (classItem, rowIndex) => {
+          const y =
+            headerTop +
+            headerHeight +
+            rowIndex * rowHeight;
+
+          let cellX = marginX;
+
+          drawCell({
+            x: cellX,
+            y,
+            width: fixedWidths.className,
+            height: rowHeight,
+            textValue:
+              classItem.class_name,
+            fontSize: 7.5,
+            align: "left",
+          });
+          cellX += fixedWidths.className;
+
+          drawCell({
+            x: cellX,
+            y,
+            width: fixedWidths.teacher,
+            height: rowHeight,
+            textValue:
+              getClassTeacherEatsSnack(
+                classItem.id
+              )
+                ? "要"
+                : "不要",
+            fontSize: 7.3,
+          });
+          cellX += fixedWidths.teacher;
+
+          classItem.counts.forEach(
+            (cell) => {
+              const closed =
+                closedDateMap.get(
+                  cell.dateString
+                );
+
+              drawCell({
+                x: cellX,
+                y,
+                width: dateWidth,
+                height: rowHeight,
+                textValue: closed
+                  ? "休"
+                  : cell.count,
+                fontSize: 7.2,
+                fill: closed
+                  ? [247, 245, 242]
+                  : null,
+                textColor: closed
+                  ? [153, 145, 138]
+                  : [31, 42, 36],
+              });
+
+              cellX += dateWidth;
+            }
+          );
+        }
+      );
+
+      const totalY =
+        headerTop +
+        headerHeight +
+        classRows.length * rowHeight;
+
+      let totalX = marginX;
+
+      drawCell({
+        x: totalX,
+        y: totalY,
+        width: fixedWidths.className,
+        height: rowHeight,
+        textValue: "當日總計",
+        fontSize: 7.2,
+        fill: headerFill,
+        align: "left",
+      });
+      totalX += fixedWidths.className;
+
+      drawCell({
+        x: totalX,
+        y: totalY,
+        width: fixedWidths.teacher,
+        height: rowHeight,
+        textValue: "—",
+        fontSize: 7.2,
+        fill: headerFill,
+      });
+      totalX += fixedWidths.teacher;
+
+      dailyTotals.forEach((total) => {
+        drawCell({
+          x: totalX,
+          y: totalY,
+          width: dateWidth,
+          height: rowHeight,
+          textValue:
+            total === null ? "—" : total,
+          fontSize: 7.2,
+          fill: headerFill,
+        });
+
+        totalX += dateWidth;
+      });
+
+      const adjustmentNotes = [];
+
+      classRows.forEach((classItem) => {
+        classItem.counts.forEach((cell) => {
+          if (
+            cell.breakdown
+              ?.excludedCount > 0 ||
+            cell.breakdown
+              ?.adjustment !== 0 ||
+            cell.breakdown
+              ?.adjustmentNote
+          ) {
+            const parts = [];
+
+            if (
+              cell.breakdown
+                ?.excludedCount > 0
+            ) {
+              parts.push(
+                `臨時不吃 ${cell.breakdown.excludedCount} 人`
+              );
+            }
+
+            if (
+              cell.breakdown
+                ?.adjustment !== 0
+            ) {
+              const value =
+                cell.breakdown.adjustment;
+              parts.push(
+                `手動 ${value > 0 ? "+" : ""}${value}`
+              );
+            }
+
+            if (
+              cell.breakdown
+                ?.adjustmentNote
+            ) {
+              parts.push(
+                cell.breakdown.adjustmentNote
+              );
+            }
+
+            adjustmentNotes.push(
+              `${cell.dateString}｜${classItem.class_name}｜${parts.join("；")}`
+            );
+          }
+        });
+      });
+
+      if (adjustmentNotes.length > 0) {
+        pdf.addPage("a4", "landscape");
+        pdf.setTextColor(31, 42, 36);
+        pdf.setFontSize(15);
+        pdf.text(
+          "點心調整備註",
+          marginX,
+          marginTop + 8
+        );
+
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(92, 103, 96);
+
+        let noteY = marginTop + 17;
+
+        adjustmentNotes.forEach(
+          (note) => {
+            if (
+              noteY >
+              pageHeight - 10
+            ) {
+              pdf.addPage(
+                "a4",
+                "landscape"
+              );
+              noteY = marginTop + 10;
+            }
+
+            pdf.text(
+              `• ${note}`,
+              marginX,
+              noteY
+            );
+            noteY += 6;
+          }
+        );
+      }
+
+      const safeSemester =
+        String(
+          selectedSemester.name ||
+          "學期"
+        ).replace(
+          /[\\/:*?"<>|]/g,
+          "_"
+        );
+
+      const safeMonth =
+        selectedMonth.replace("-", "年") +
+        "月";
+
+      pdf.save(
+        `${safeSemester}_${safeMonth}_月點心表.pdf`
+      );
+    } catch (error) {
+      console.error(
+        "產出月點心表 PDF 失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `產出 PDF 失敗：${error.message}`
+      );
+    }
+  }
+
   function renderMonthlyTable() {
     return (
       <div
@@ -1109,29 +1568,60 @@ function SnackManagementPage() {
             </span>
           </div>
 
-          <select
-            value={selectedMonth}
-            onChange={(event) =>
-              setSelectedMonth(event.target.value)
-            }
+          <div
             style={{
-              height: "38px",
-              padding: "0 12px",
-              border: "1px solid #d9ded8",
-              borderRadius: "10px",
-              background: "#fff",
-              font: "inherit",
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              flexWrap: "wrap",
             }}
           >
-            {availableMonths.map((monthValue) => (
-              <option
-                key={monthValue}
-                value={monthValue}
-              >
-                {formatMonthLabel(monthValue)}
-              </option>
-            ))}
-          </select>
+            <select
+              value={selectedMonth}
+              onChange={(event) =>
+                setSelectedMonth(event.target.value)
+              }
+              style={{
+                height: "38px",
+                padding: "0 12px",
+                border: "1px solid #d9ded8",
+                borderRadius: "10px",
+                background: "#fff",
+                font: "inherit",
+              }}
+            >
+              {availableMonths.map((monthValue) => (
+                <option
+                  key={monthValue}
+                  value={monthValue}
+                >
+                  {formatMonthLabel(monthValue)}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={exportMonthlySnackPdf}
+              disabled={
+                monthlyLoading ||
+                classRows.length === 0
+              }
+              style={{
+                height: "38px",
+                padding: "0 14px",
+                border: "1px solid #cfd7d0",
+                borderRadius: "10px",
+                background: "#fff",
+                color: "#445149",
+                font: "inherit",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              下載 PDF
+            </button>
+          </div>
         </div>
 
         {monthlyLoading ? (
