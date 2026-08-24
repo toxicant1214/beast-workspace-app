@@ -264,3 +264,255 @@ export async function deleteTeacherAssignment(assignmentId) {
 
   return true;
 }
+/**
+ * 將行事曆「任務型」事件同步到老師任務系統
+ */
+export async function syncCalendarEventAssignment(
+  calendarEvent,
+  teacherIds = []
+) {
+  if (!calendarEvent?.id) {
+    throw new Error("缺少行事曆事件 ID");
+  }
+
+  const cleanTeacherIds = [
+    ...new Set((teacherIds || []).filter(Boolean)),
+  ];
+
+  if (cleanTeacherIds.length === 0) {
+    throw new Error("行事曆任務至少需要一位老師");
+  }
+
+  const title =
+    calendarEvent.title?.trim() ||
+    "未命名行事曆任務";
+
+  const daysBefore = Number(
+    calendarEvent.reminder_days_before || 0
+  );
+
+  const reminderOffsets =
+    Number.isInteger(daysBefore) &&
+    daysBefore > 0
+      ? [daysBefore]
+      : [];
+
+  const assignmentPayload = {
+    title,
+    description:
+      calendarEvent.notes?.trim() || null,
+    deadline:
+      calendarEvent.start_date || null,
+    priority: "normal",
+    status: "active",
+    reminder_offsets: reminderOffsets,
+    calendar_event_id: calendarEvent.id,
+  };
+
+  // 先找這筆行事曆是否已經有對應任務
+  const {
+    data: existing,
+    error: existingError,
+  } = await supabase
+    .from(ASSIGNMENT_TABLE)
+    .select("id")
+    .eq(
+      "calendar_event_id",
+      calendarEvent.id
+    )
+    .maybeSingle();
+
+  if (existingError) {
+    console.error(
+      "查詢行事曆對應任務失敗：",
+      existingError
+    );
+    throw existingError;
+  }
+
+  let assignmentId;
+
+  // 有 → 更新原本任務
+  if (existing?.id) {
+    const {
+      data: updated,
+      error: updateError,
+    } = await supabase
+      .from(ASSIGNMENT_TABLE)
+      .update(assignmentPayload)
+      .eq("id", existing.id)
+      .select("id")
+      .single();
+
+    if (updateError) {
+      console.error(
+        "更新行事曆任務失敗：",
+        updateError
+      );
+      throw updateError;
+    }
+
+    assignmentId = updated.id;
+  } else {
+    // 沒有 → 第一次建立
+    const {
+      data: created,
+      error: createError,
+    } = await supabase
+      .from(ASSIGNMENT_TABLE)
+      .insert([assignmentPayload])
+      .select("id")
+      .single();
+
+    if (createError) {
+      console.error(
+        "建立行事曆任務失敗：",
+        createError
+      );
+      throw createError;
+    }
+
+    assignmentId = created.id;
+  }
+
+  // 取得目前已指派老師
+  const {
+    data: existingMembers,
+    error: memberQueryError,
+  } = await supabase
+    .from(MEMBER_TABLE)
+    .select(`
+      id,
+      teacher_id,
+      teacher_completed,
+      admin_confirmed
+    `)
+    .eq(
+      "assignment_id",
+      assignmentId
+    );
+
+  if (memberQueryError) {
+    console.error(
+      "查詢行事曆任務成員失敗：",
+      memberQueryError
+    );
+    throw memberQueryError;
+  }
+
+  const members =
+    existingMembers || [];
+
+  const existingByTeacher =
+    new Map(
+      members.map((member) => [
+        member.teacher_id,
+        member,
+      ])
+    );
+
+  const desiredTeacherSet =
+    new Set(cleanTeacherIds);
+
+  // 找出新增加的老師
+  const teacherIdsToAdd =
+    cleanTeacherIds.filter(
+      (teacherId) =>
+        !existingByTeacher.has(teacherId)
+    );
+
+  if (teacherIdsToAdd.length > 0) {
+    const newMembers =
+      teacherIdsToAdd.map(
+        (teacherId) => ({
+          assignment_id: assignmentId,
+          teacher_id: teacherId,
+          teacher_completed: false,
+          teacher_completed_at: null,
+          admin_confirmed: false,
+          admin_confirmed_at: null,
+        })
+      );
+
+    const { error: addError } =
+      await supabase
+        .from(MEMBER_TABLE)
+        .insert(newMembers);
+
+    if (addError) {
+      console.error(
+        "新增行事曆任務老師失敗：",
+        addError
+      );
+      throw addError;
+    }
+  }
+
+  // 已取消指派，而且尚未完成的老師可以移除
+  // 已經完成的老師保留，避免洗掉完成紀錄
+  const memberIdsToRemove =
+    members
+      .filter(
+        (member) =>
+          !desiredTeacherSet.has(
+            member.teacher_id
+          ) &&
+          member.teacher_completed !== true
+      )
+      .map((member) => member.id);
+
+  if (memberIdsToRemove.length > 0) {
+    const { error: removeError } =
+      await supabase
+        .from(MEMBER_TABLE)
+        .delete()
+        .in(
+          "id",
+          memberIdsToRemove
+        );
+
+    if (removeError) {
+      console.error(
+        "移除行事曆任務老師失敗：",
+        removeError
+      );
+      throw removeError;
+    }
+  }
+
+  return assignmentId;
+}
+
+
+/**
+ * 當行事曆不再設定為「需要完成」，
+ * 刪除它原本產生的老師任務。
+ *
+ * 手動建立的任務 calendar_event_id 為 null，
+ * 不會被這裡刪除。
+ */
+export async function removeCalendarEventAssignment(
+  calendarEventId
+) {
+  if (!calendarEventId) {
+    throw new Error("缺少行事曆事件 ID");
+  }
+
+  const { error } = await supabase
+    .from(ASSIGNMENT_TABLE)
+    .delete()
+    .eq(
+      "calendar_event_id",
+      calendarEventId
+    );
+
+  if (error) {
+    console.error(
+      "移除行事曆對應任務失敗：",
+      error
+    );
+    throw error;
+  }
+
+  return true;
+}
