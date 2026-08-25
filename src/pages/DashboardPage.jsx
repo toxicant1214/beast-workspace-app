@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
 import { getWeather } from "../services/weatherService";
-import TaskCard from "../components/TaskCard";
-import { getTodos, completeTodo, addTodo, deleteTodo } from "../services/todoService";
 
 function DashboardPage() {
   const [weather, setWeather] = useState(null);
-  const [tasks, setTasks] = useState([]);
 
   const today = new Date();
 
@@ -16,7 +13,7 @@ function DashboardPage() {
     weekday: "long",
   });
 
-  const hour = new Date().getHours();
+  const hour = today.getHours();
 
   let greeting = "早安";
 
@@ -39,42 +36,7 @@ function DashboardPage() {
     }
 
     loadWeather();
-    loadTodos();
   }, []);
-
-  async function loadTodos() {
-    try {
-      const data = await getTodos();
-      setTasks(data);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function handleCompleteTask(id) {
-    try {
-      await completeTodo(id);
-      await loadTodos();
-    } catch (error) {
-      console.error(error);
-    }
-  }
-  async function handleAddTask(task) {
-  try {
-    await addTodo(task);
-    await loadTodos();
-  } catch (error) {
-    console.error(error);
-  }
-}
-async function handleDeleteTask(id) {
-  try {
-    await deleteTodo(id);
-    await loadTodos();
-  } catch (error) {
-    console.error(error);
-  }
-}
 
   function getWeatherEmoji(condition) {
     if (!condition) return "🌤️";
@@ -111,7 +73,9 @@ async function handleDeleteTask(id) {
                 <div className="weatherText">
                   {weather.condition}｜{weather.temperature}°C
                 </div>
-                <div className="weatherRain">濕度 {weather.humidity}%</div>
+                <div className="weatherRain">
+                  濕度 {weather.humidity}%
+                </div>
               </div>
             </>
           ) : (
@@ -120,25 +84,117 @@ async function handleDeleteTask(id) {
         </div>
       </section>
 
-      <div className="dashboardGrid">
-        <section className="dashboardCard">
-          <p className="eyebrow">TODAY</p>
-          <h2>今日概況</h2>
+      <section className="dashboardSection">
+        <div className="dashboardSectionHeader">
+          <div>
+            <p className="eyebrow">TODAY</p>
+            <h2>今日概況</h2>
+          </div>
+        </div>
 
-          <div className="todoList">
-            <div>🚌 接送提醒</div>
-            <div>🎂 今日生日</div>
-            <div>📌 待辦事項</div>
-            <div>🏕️ 營隊安排</div>
+        <div className="dashboardOverviewGrid">
+          <div className="dashboardMetricCard">
+            <span className="dashboardMetricIcon">🚌</span>
+            <div>
+              <span className="dashboardMetricLabel">接送提醒</span>
+              <strong className="dashboardMetricValue">—</strong>
+            </div>
+          </div>
+
+          <div className="dashboardMetricCard">
+            <span className="dashboardMetricIcon">🎂</span>
+            <div>
+              <span className="dashboardMetricLabel">今日生日</span>
+              <strong className="dashboardMetricValue">—</strong>
+            </div>
+          </div>
+
+          <div className="dashboardMetricCard">
+            <span className="dashboardMetricIcon">🎒</span>
+            <div>
+              <span className="dashboardMetricLabel">今日補課</span>
+              <strong className="dashboardMetricValue">—</strong>
+            </div>
+          </div>
+
+          <div className="dashboardMetricCard">
+            <span className="dashboardMetricIcon">📅</span>
+            <div>
+              <span className="dashboardMetricLabel">今日行程</span>
+              <strong className="dashboardMetricValue">—</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="dashboardSection">
+        <div className="dashboardSectionHeader">
+          <div>
+            <p className="eyebrow">OPERATIONS</p>
+            <h2>營運數據</h2>
+          </div>
+        </div>
+
+        <div className="dashboardStatsGrid">
+          <div className="dashboardStatCard">
+            <span>在籍學生</span>
+            <strong>—</strong>
+          </div>
+
+          <div className="dashboardStatCard">
+            <span>安親人數</span>
+            <strong>—</strong>
+          </div>
+
+          <div className="dashboardStatCard">
+            <span>美語人數</span>
+            <strong>—</strong>
+          </div>
+
+          <div className="dashboardStatCard">
+            <span>才藝人次</span>
+            <strong>—</strong>
+          </div>
+        </div>
+      </section>
+
+      <div className="dashboardBottomGrid">
+        <section className="dashboardSection">
+          <div className="dashboardSectionHeader">
+            <div>
+              <p className="eyebrow">THIS MONTH</p>
+              <h2>本月動態</h2>
+            </div>
+          </div>
+
+          <div className="dashboardPlaceholderList">
+            <div>
+              <span>本月新生</span>
+              <strong>—</strong>
+            </div>
+            <div>
+              <span>本月退班</span>
+              <strong>—</strong>
+            </div>
+            <div>
+              <span>待追蹤事項</span>
+              <strong>—</strong>
+            </div>
           </div>
         </section>
 
-        <TaskCard
-  tasks={tasks.slice(0, 5)}
-  onComplete={handleCompleteTask}
-  onAdd={handleAddTask}
-  onDelete={handleDeleteTask}
-/>
+        <section className="dashboardSection">
+          <div className="dashboardSectionHeader">
+            <div>
+              <p className="eyebrow">CLASSES</p>
+              <h2>班級概況</h2>
+            </div>
+          </div>
+
+          <div className="dashboardEmptyState">
+            班級人數與容量將顯示於此
+          </div>
+        </section>
       </div>
     </div>
   );
