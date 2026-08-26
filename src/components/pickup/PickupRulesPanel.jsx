@@ -138,7 +138,7 @@ function PickupRulesPanel() {
   function togglePickupDay(field) {
     setForm((current) => ({
       ...current,
-      [field]: current[field] ? "" : "12:00",
+      [field]: current[field] ? "" : "12:20",
     }));
   }
 

@@ -142,12 +142,31 @@ function TeacherTags({
   }
 
   return (
-    <div className="pickupStaffTagEditor">
-      <div className="pickupStaffTags">
+    <div
+      className="pickupStaffTagEditor"
+      style={{ minWidth: 0, width: "100%" }}
+    >
+      <div
+        className="pickupStaffTags"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "8px",
+          width: "100%",
+          minWidth: 0,
+          overflow: "visible",
+        }}
+      >
         {names.map((name) => (
           <span
             key={name}
             className="pickupStaffTag"
+            style={{
+              flex: "0 0 auto",
+              maxWidth: "100%",
+              whiteSpace: "nowrap",
+            }}
           >
             {name}
 
@@ -660,12 +679,16 @@ function PickupStaffPanel() {
   }
 
   async function exportStaffSchedulePdf() {
-    const pageElement = document.querySelector(
-      "[data-pickup-staff-pdf]"
+    const pageElements = Array.from(
+      document.querySelectorAll(
+        "[data-pickup-staff-pdf-page]"
+      )
     );
 
-    if (!pageElement) {
-      setErrorMessage("找不到可輸出的接車老師安排表。");
+    if (pageElements.length === 0) {
+      setErrorMessage(
+        "找不到可輸出的接車老師安排表。"
+      );
       return;
     }
 
@@ -675,17 +698,6 @@ function PickupStaffPanel() {
     try {
       await document.fonts?.ready;
 
-      const canvas = await html2canvas(pageElement, {
-        scale: 3,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        width: 1122,
-        height: 794,
-        windowWidth: 1122,
-        windowHeight: 794,
-      });
-
       const pdf = new jsPDF({
         orientation: "landscape",
         unit: "mm",
@@ -693,26 +705,337 @@ function PickupStaffPanel() {
         compress: true,
       });
 
-      pdf.addImage(
-        canvas.toDataURL("image/png"),
-        "PNG",
-        0,
-        0,
-        pdf.internal.pageSize.getWidth(),
-        pdf.internal.pageSize.getHeight(),
-        undefined,
-        "FAST"
-      );
+      const pageWidth =
+        pdf.internal.pageSize.getWidth();
+      const pageHeight =
+        pdf.internal.pageSize.getHeight();
+
+      for (
+        let index = 0;
+        index < pageElements.length;
+        index += 1
+      ) {
+        const canvas = await html2canvas(
+          pageElements[index],
+          {
+            scale: 2.5,
+            backgroundColor: "#ffffff",
+            useCORS: true,
+            logging: false,
+            width: 1122,
+            height: 794,
+            windowWidth: 1122,
+            windowHeight: 794,
+          }
+        );
+
+        if (index > 0) {
+          pdf.addPage("a4", "landscape");
+        }
+
+        pdf.addImage(
+          canvas.toDataURL("image/png"),
+          "PNG",
+          0,
+          0,
+          pageWidth,
+          pageHeight,
+          undefined,
+          "FAST"
+        );
+      }
 
       pdf.save("接車老師週安排表.pdf");
     } catch (error) {
-      console.error("輸出接車老師安排表失敗：", error);
+      console.error(
+        "輸出接車老師安排表失敗：",
+        error
+      );
       setErrorMessage(
-        `輸出 PDF 失敗：${error?.message || "請稍後再試"}`
+        `輸出 PDF 失敗：${
+          error?.message || "請稍後再試"
+        }`
       );
     } finally {
       setIsExporting(false);
     }
+  }
+
+  function renderPdfWeekdayPage(weekday) {
+    const periods = ["NOON", "AFTERNOON"];
+
+    return (
+      <div
+        key={weekday.value}
+        data-pickup-staff-pdf-page
+        style={{
+          boxSizing: "border-box",
+          width: "1122px",
+          height: "794px",
+          padding: "24px 32px 20px",
+          background: "#ffffff",
+          color: "#2f2f2f",
+          fontFamily:
+            '"Iansui", "Noto Sans TC", sans-serif',
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            marginBottom: "16px",
+            paddingBottom: "10px",
+            borderBottom: "1px solid #999999",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: "10px",
+                letterSpacing: "1.6px",
+                color: "#777777",
+                marginBottom: "4px",
+              }}
+            >
+              BEAST ACADEMY｜WEEKLY PICKUP STAFF
+            </div>
+
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "25px",
+                lineHeight: 1.15,
+              }}
+            >
+              接車老師週安排表｜{weekday.label}
+            </h1>
+          </div>
+
+          <div
+            style={{
+              fontSize: "10px",
+              color: "#555555",
+              textAlign: "right",
+              lineHeight: 1.6,
+            }}
+          >
+            中午：12:20 前後時段｜下午：14:00 後時段
+            <br />
+            人數依接車規則自動計算
+          </div>
+        </div>
+
+        {periods.map((period) => {
+          const times = getPeriodTimes(
+            weekday.value,
+            period
+          );
+
+          return (
+            <section
+              key={period}
+              style={{
+                marginBottom: "18px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: "12px",
+                  marginBottom: "8px",
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize: "16px",
+                  }}
+                >
+                  {getPeriodLabel(period)}
+                </strong>
+
+                <span
+                  style={{
+                    color: "#666666",
+                    fontSize: "11px",
+                  }}
+                >
+                  {times.length > 0
+                    ? times.join("／")
+                    : "無接車時段"}
+                </span>
+              </div>
+
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  tableLayout: "fixed",
+                  fontSize: "11px",
+                }}
+              >
+                <colgroup>
+                  <col style={{ width: "18%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "50%" }} />
+                  <col style={{ width: "18%" }} />
+                </colgroup>
+
+                <thead>
+                  <tr>
+                    {[
+                      "學校",
+                      "時間",
+                      "接車老師",
+                      "人數",
+                    ].map((label) => (
+                      <th
+                        key={label}
+                        style={{
+                          border: "1px solid #777777",
+                          padding: "7px 8px",
+                          background: "#f3f3f0",
+                          textAlign: "center",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {schools.map((school) => {
+                    const cell = getSummaryCell(
+                      weekday.value,
+                      period,
+                      school
+                    );
+
+                    const cellTimes =
+                      cell.times.length > 0
+                        ? cell.times.join("／")
+                        : "—";
+
+                    return (
+                      <tr key={school}>
+                        <td
+                          style={{
+                            border: "1px solid #999999",
+                            padding: "8px",
+                            textAlign: "center",
+                            fontWeight: 600,
+                            background: cell.hasSchedule
+                              ? "#ffffff"
+                              : "#f7f7f5",
+                          }}
+                        >
+                          {school}
+                        </td>
+
+                        <td
+                          style={{
+                            border: "1px solid #999999",
+                            padding: "8px",
+                            textAlign: "center",
+                            background: cell.hasSchedule
+                              ? "#ffffff"
+                              : "#f7f7f5",
+                          }}
+                        >
+                          {cell.hasSchedule
+                            ? cellTimes
+                            : "—"}
+                        </td>
+
+                        <td
+                          style={{
+                            border: "1px solid #999999",
+                            padding: "7px 10px",
+                            textAlign: "left",
+                            verticalAlign: "middle",
+                            lineHeight: 1.45,
+                            background: cell.hasSchedule
+                              ? "#ffffff"
+                              : "#f7f7f5",
+                          }}
+                        >
+                          {cell.hasSchedule ? (
+                            cell.teacherNames.length > 0 ? (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns:
+                                    "repeat(2, minmax(0, 1fr))",
+                                  columnGap: "16px",
+                                  rowGap: "3px",
+                                }}
+                              >
+                                {cell.teacherNames.map(
+                                  (name) => (
+                                    <span key={name}>
+                                      {name}
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            ) : (
+                              "尚未安排"
+                            )
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+
+                        <td
+                          style={{
+                            border: "1px solid #999999",
+                            padding: "8px",
+                            textAlign: "center",
+                            fontSize: "14px",
+                            fontWeight: 700,
+                            background: cell.hasSchedule
+                              ? "#ffffff"
+                              : "#f7f7f5",
+                          }}
+                        >
+                          {cell.hasSchedule
+                            ? cell.studentCount
+                            : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </section>
+          );
+        })}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: "8px",
+            paddingTop: "7px",
+            borderTop: "1px solid #aaaaaa",
+            fontSize: "9px",
+            color: "#666666",
+          }}
+        >
+          <span>倍思學院｜接車老師週安排表</span>
+          <span>
+            列印日期：
+            {new Intl.DateTimeFormat(
+              "zh-TW"
+            ).format(new Date())}
+          </span>
+        </div>
+      </div>
+    );
   }
 
   function renderSummaryTable(isPdf = false) {
@@ -887,18 +1210,27 @@ function PickupStaffPanel() {
                             verticalAlign: "middle",
                             lineHeight: 1.25,
                             fontSize: isPdf ? "8px" : "10px",
-                            whiteSpace: "nowrap",
-                            wordBreak: "keep-all",
-                            overflow: "hidden",
-                            textOverflow: "clip",
+                            whiteSpace: "normal",
+                            wordBreak: "break-word",
+                            overflow: "visible",
                             background: cell.hasSchedule
                               ? "#ffffff"
                               : "#f3f3f1",
                           }}
                         >
                           {cell.hasSchedule
-                            ? cell.teacherNames.join("、") ||
-                              "尚未安排"
+                            ? cell.teacherNames.length > 0
+                              ? cell.teacherNames.map((name) => (
+                                  <div
+                                    key={name}
+                                    style={{
+                                      lineHeight: 1.45,
+                                    }}
+                                  >
+                                    {name}
+                                  </div>
+                                ))
+                              : "尚未安排"
                             : "—"}
                         </td>
                       );
@@ -1322,92 +1654,12 @@ function PickupStaffPanel() {
           left: "-20000px",
           top: 0,
           width: "1122px",
-          height: "794px",
           pointerEvents: "none",
         }}
       >
-        <div
-          data-pickup-staff-pdf
-          style={{
-            boxSizing: "border-box",
-            width: "1122px",
-            height: "794px",
-            padding: "24px 28px 20px",
-            background: "#ffffff",
-            color: "#2f2f2f",
-            fontFamily:
-              '"Iansui", "Noto Sans TC", sans-serif',
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              marginBottom: "12px",
-              paddingBottom: "10px",
-              borderBottom: "0.5px solid #999999",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: "10px",
-                  letterSpacing: "1.6px",
-                  color: "#777777",
-                  marginBottom: "4px",
-                }}
-              >
-                BEAST ACADEMY｜WEEKLY PICKUP STAFF
-              </div>
-
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: "25px",
-                  lineHeight: 1.15,
-                }}
-              >
-                接車老師週安排表
-              </h1>
-            </div>
-
-            <div
-              style={{
-                fontSize: "10px",
-                color: "#555555",
-                textAlign: "right",
-                lineHeight: 1.5,
-              }}
-            >
-              週一至週五｜中午、下午
-              <br />
-              人數依接車規則自動計算
-            </div>
-          </div>
-
-          {renderSummaryTable(true)}
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: "10px",
-              paddingTop: "6px",
-              borderTop: "0.5px solid #aaaaaa",
-              fontSize: "9px",
-              color: "#666666",
-            }}
-          >
-            <span>倍思學院｜接車老師週安排表</span>
-            <span>
-              列印日期：
-              {new Intl.DateTimeFormat("zh-TW").format(
-                new Date()
-              )}
-            </span>
-          </div>
-        </div>
+        {WEEKDAYS.map((weekday) =>
+          renderPdfWeekdayPage(weekday)
+        )}
       </div>
     </section>
   );
