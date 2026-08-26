@@ -79,7 +79,15 @@ function getMonthDays(monthValue, semester) {
   for (let day = 1; day <= lastDay; day += 1) {
     const date = new Date(year, month - 1, day);
     const dateString = toDateString(date);
+    const weekday = date.getDay();
 
+    // 點心固定只供應週一至週五。
+    // 六、日不建立點心日期，也不提供特殊例外。
+    if (weekday === 0 || weekday === 6) {
+      continue;
+    }
+
+    // 點心日期直接沿用行事曆學期起訖日。
     if (
       dateString < semester.start_date ||
       dateString > semester.end_date
@@ -91,7 +99,7 @@ function getMonthDays(monthValue, semester) {
       date,
       dateString,
       day,
-      weekday: date.getDay(),
+      weekday,
     });
   }
 

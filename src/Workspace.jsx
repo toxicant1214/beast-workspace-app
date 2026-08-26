@@ -807,7 +807,11 @@ return hasPagePermission(
       "點心管理"
     ) {
       return (
-        <SnackManagementPage />
+        <SnackManagementPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
       );
     }
 
