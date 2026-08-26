@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { supabase } from "../../lib/supabase";
-import { getStudentPickupDecision } from "../../utils/pickupStudentSchedule";
+import { getStudentPickupDecision } from "./pickupStudentSchedule";
 
 const WEEKDAYS = [
   {
