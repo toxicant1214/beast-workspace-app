@@ -38,6 +38,15 @@ function normalizeTime(value) {
   return String(value).slice(0, 5);
 }
 
+function getPickupTimeWithOverride(
+  defaultPickupTime,
+  pickupPeriod
+) {
+  if (pickupPeriod === "NOON") return "12:20";
+  if (pickupPeriod === "AFTERNOON") return "15:30";
+  return normalizeTime(defaultPickupTime);
+}
+
 function getMonthDays(year, month) {
   const result = [];
   const lastDay = new Date(year, month, 0).getDate();
@@ -462,7 +471,10 @@ function MonthlyPickupPanel() {
       (item) => item.value === day.weekday
     );
 
-    const pickupTime = normalizeTime(rule[weekday.column]);
+    const pickupTime = getPickupTimeWithOverride(
+      rule[weekday.column],
+      pickupDecision.pickupPeriod
+    );
 
     if (!pickupTime) {
       return {

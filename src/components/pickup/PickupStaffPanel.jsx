@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { supabase } from "../../lib/supabase";
+import { getStudentPickupDecision } from "../../utils/pickupStudentSchedule";
 
 const WEEKDAYS = [
   {
@@ -142,31 +143,12 @@ function TeacherTags({
   }
 
   return (
-    <div
-      className="pickupStaffTagEditor"
-      style={{ minWidth: 0, width: "100%" }}
-    >
-      <div
-        className="pickupStaffTags"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: "8px",
-          width: "100%",
-          minWidth: 0,
-          overflow: "visible",
-        }}
-      >
+    <div className="pickupStaffTagEditor">
+      <div className="pickupStaffTags">
         {names.map((name) => (
           <span
             key={name}
             className="pickupStaffTag"
-            style={{
-              flex: "0 0 auto",
-              maxWidth: "100%",
-              whiteSpace: "nowrap",
-            }}
           >
             {name}
 
@@ -222,6 +204,8 @@ function PickupStaffPanel() {
   const [rules, setRules] = useState([]);
   const [staffRules, setStaffRules] =
     useState([]);
+  const [studentWeeklyRules, setStudentWeeklyRules] =
+    useState([]);
 
   const [selectedSchool, setSelectedSchool] =
     useState("");
@@ -253,6 +237,7 @@ function PickupStaffPanel() {
       studentsResult,
       pickupRulesResult,
       staffRulesResult,
+      studentWeeklyRulesResult,
     ] = await Promise.all([
       supabase
         .from("students")
@@ -303,6 +288,11 @@ function PickupStaffPanel() {
         .order("school")
         .order("weekday")
         .order("pickup_time"),
+
+      supabase
+        .from("pickup_student_weekly_rules")
+        .select("*")
+        .eq("is_active", true),
     ]);
 
     if (studentsResult.error) {
@@ -342,6 +332,19 @@ function PickupStaffPanel() {
       return;
     }
 
+    if (studentWeeklyRulesResult.error) {
+      console.error(
+        studentWeeklyRulesResult.error
+      );
+
+      setErrorMessage(
+        `讀取學生特殊接送規則失敗：${studentWeeklyRulesResult.error.message}`
+      );
+
+      setIsLoading(false);
+      return;
+    }
+
     const nextRules =
       pickupRulesResult.data ?? [];
 
@@ -350,6 +353,9 @@ function PickupStaffPanel() {
 
     setStaffRules(
       staffRulesResult.data ?? []
+    );
+    setStudentWeeklyRules(
+      studentWeeklyRulesResult.data ?? []
     );
 
     const schools = Array.from(
@@ -587,6 +593,40 @@ function PickupStaffPanel() {
   }
 
 
+  function getRepresentativeDateForWeekday(weekdayValue) {
+    // 2026/08/24 是星期一；只用來讓核心判斷取得星期欄位。
+    const base = new Date(2026, 7, 24, 12, 0, 0);
+    base.setDate(base.getDate() + Number(weekdayValue) - 1);
+
+    const year = base.getFullYear();
+    const month = String(base.getMonth() + 1).padStart(2, "0");
+    const day = String(base.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
+  function getStudentFinalPeriod(student, weekday, matchingRule) {
+    const decision = getStudentPickupDecision({
+      studentId: student.id,
+      dateKey: getRepresentativeDateForWeekday(weekday.value),
+      weeklyRules: studentWeeklyRules,
+      dateExceptions: [],
+    });
+
+    if (!decision.shouldPickup) {
+      return "";
+    }
+
+    if (decision.pickupPeriod) {
+      return decision.pickupPeriod;
+    }
+
+    return getTimePeriod(
+      matchingRule?.[weekday.column]
+    );
+  }
+
+
   const summaryCells = useMemo(() => {
     const result = new Map();
 
@@ -607,8 +647,22 @@ function PickupStaffPanel() {
             const gradeGroup =
               GRADE_GROUP_MAP[student.current_grade];
 
-            return matchingRules.some(
-              (rule) => rule.grade_group === gradeGroup
+            const matchingRule = rules.find(
+              (rule) =>
+                rule.school === school &&
+                rule.grade_group === gradeGroup
+            );
+
+            if (!matchingRule) {
+              return false;
+            }
+
+            return (
+              getStudentFinalPeriod(
+                student,
+                weekday,
+                matchingRule
+              ) === period
             );
           }).length;
 
@@ -649,7 +703,7 @@ function PickupStaffPanel() {
     });
 
     return result;
-  }, [rules, students, scheduleRows, staffRules, schools]);
+  }, [rules, students, scheduleRows, staffRules, schools, studentWeeklyRules]);
 
   function getSummaryCell(weekday, period, school) {
     return (
@@ -686,9 +740,7 @@ function PickupStaffPanel() {
     );
 
     if (pageElements.length === 0) {
-      setErrorMessage(
-        "找不到可輸出的接車老師安排表。"
-      );
+      setErrorMessage("找不到可輸出的接車老師安排表。");
       return;
     }
 
@@ -699,38 +751,28 @@ function PickupStaffPanel() {
       await document.fonts?.ready;
 
       const pdf = new jsPDF({
-        orientation: "landscape",
+        orientation: "portrait",
         unit: "mm",
         format: "a4",
         compress: true,
       });
 
-      const pageWidth =
-        pdf.internal.pageSize.getWidth();
-      const pageHeight =
-        pdf.internal.pageSize.getHeight();
+      for (let index = 0; index < pageElements.length; index += 1) {
+        const pageElement = pageElements[index];
 
-      for (
-        let index = 0;
-        index < pageElements.length;
-        index += 1
-      ) {
-        const canvas = await html2canvas(
-          pageElements[index],
-          {
-            scale: 2.5,
-            backgroundColor: "#ffffff",
-            useCORS: true,
-            logging: false,
-            width: 1122,
-            height: 794,
-            windowWidth: 1122,
-            windowHeight: 794,
-          }
-        );
+        const canvas = await html2canvas(pageElement, {
+          scale: 2.5,
+          backgroundColor: "#ffffff",
+          useCORS: true,
+          logging: false,
+          width: 794,
+          height: 1122,
+          windowWidth: 794,
+          windowHeight: 1122,
+        });
 
         if (index > 0) {
-          pdf.addPage("a4", "landscape");
+          pdf.addPage("a4", "portrait");
         }
 
         pdf.addImage(
@@ -738,8 +780,8 @@ function PickupStaffPanel() {
           "PNG",
           0,
           0,
-          pageWidth,
-          pageHeight,
+          pdf.internal.pageSize.getWidth(),
+          pdf.internal.pageSize.getHeight(),
           undefined,
           "FAST"
         );
@@ -747,21 +789,16 @@ function PickupStaffPanel() {
 
       pdf.save("接車老師週安排表.pdf");
     } catch (error) {
-      console.error(
-        "輸出接車老師安排表失敗：",
-        error
-      );
+      console.error("輸出接車老師安排表失敗：", error);
       setErrorMessage(
-        `輸出 PDF 失敗：${
-          error?.message || "請稍後再試"
-        }`
+        `輸出 PDF 失敗：${error?.message || "請稍後再試"}`
       );
     } finally {
       setIsExporting(false);
     }
   }
 
-  function renderPdfWeekdayPage(weekday) {
+  function renderDailyPdfPage(weekday) {
     const periods = ["NOON", "AFTERNOON"];
 
     return (
@@ -770,268 +807,212 @@ function PickupStaffPanel() {
         data-pickup-staff-pdf-page
         style={{
           boxSizing: "border-box",
-          width: "1122px",
-          height: "794px",
-          padding: "24px 32px 20px",
+          width: "794px",
+          height: "1122px",
+          padding: "42px 46px 36px",
           background: "#ffffff",
           color: "#2f2f2f",
           fontFamily:
             '"Iansui", "Noto Sans TC", sans-serif',
-          overflow: "hidden",
         }}
       >
         <div
           style={{
             display: "flex",
-            alignItems: "flex-end",
             justifyContent: "space-between",
-            marginBottom: "16px",
-            paddingBottom: "10px",
-            borderBottom: "1px solid #999999",
+            alignItems: "flex-end",
+            paddingBottom: "14px",
+            borderBottom: "1px solid #777",
+            marginBottom: "22px",
           }}
         >
           <div>
             <div
               style={{
-                fontSize: "10px",
-                letterSpacing: "1.6px",
-                color: "#777777",
-                marginBottom: "4px",
+                fontSize: "11px",
+                letterSpacing: "1.5px",
+                color: "#777",
+                marginBottom: "5px",
               }}
             >
-              BEAST ACADEMY｜WEEKLY PICKUP STAFF
+              BEAST ACADEMY｜PICKUP STAFF
             </div>
-
             <h1
               style={{
                 margin: 0,
-                fontSize: "25px",
-                lineHeight: 1.15,
+                fontSize: "27px",
               }}
             >
-              接車老師週安排表｜{weekday.label}
+              接車老師安排表｜{weekday.label}
             </h1>
           </div>
 
           <div
             style={{
-              fontSize: "10px",
-              color: "#555555",
+              fontSize: "11px",
+              color: "#666",
               textAlign: "right",
               lineHeight: 1.6,
             }}
           >
-            中午：12:20 前後時段｜下午：14:00 後時段
+            中午 12:20｜下午 15:30
             <br />
-            人數依接車規則自動計算
+            人數含學生固定特殊接送規則
           </div>
         </div>
 
-        {periods.map((period) => {
-          const times = getPeriodTimes(
-            weekday.value,
-            period
-          );
-
-          return (
-            <section
-              key={period}
+        {periods.map((period) => (
+          <div
+            key={period}
+            style={{
+              marginBottom: "26px",
+            }}
+          >
+            <div
               style={{
-                marginBottom: "18px",
+                display: "flex",
+                alignItems: "baseline",
+                gap: "10px",
+                marginBottom: "9px",
               }}
             >
-              <div
+              <strong
                 style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: "12px",
-                  marginBottom: "8px",
+                  fontSize: "18px",
                 }}
               >
-                <strong
-                  style={{
-                    fontSize: "16px",
-                  }}
-                >
-                  {getPeriodLabel(period)}
-                </strong>
-
-                <span
-                  style={{
-                    color: "#666666",
-                    fontSize: "11px",
-                  }}
-                >
-                  {times.length > 0
-                    ? times.join("／")
-                    : "無接車時段"}
-                </span>
-              </div>
-
-              <table
+                {getPeriodLabel(period)}
+              </strong>
+              <span
                 style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  tableLayout: "fixed",
-                  fontSize: "11px",
+                  fontSize: "12px",
+                  color: "#777",
                 }}
               >
-                <colgroup>
-                  <col style={{ width: "18%" }} />
-                  <col style={{ width: "14%" }} />
-                  <col style={{ width: "50%" }} />
-                  <col style={{ width: "18%" }} />
-                </colgroup>
+                {period === "NOON" ? "12:20" : "15:30"}
+              </span>
+            </div>
 
-                <thead>
-                  <tr>
-                    {[
-                      "學校",
-                      "時間",
-                      "接車老師",
-                      "人數",
-                    ].map((label) => (
-                      <th
-                        key={label}
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                tableLayout: "fixed",
+                fontSize: "13px",
+              }}
+            >
+              <thead>
+                <tr>
+                  <th
+                    style={{
+                      width: "25%",
+                      border: "1px solid #888",
+                      padding: "8px 7px",
+                      background: "#f2f1ee",
+                    }}
+                  >
+                    學校
+                  </th>
+                  <th
+                    style={{
+                      width: "55%",
+                      border: "1px solid #888",
+                      padding: "8px 7px",
+                      background: "#f2f1ee",
+                    }}
+                  >
+                    接車老師
+                  </th>
+                  <th
+                    style={{
+                      width: "20%",
+                      border: "1px solid #888",
+                      padding: "8px 7px",
+                      background: "#f2f1ee",
+                    }}
+                  >
+                    人數
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {schools.map((school) => {
+                  const cell = getSummaryCell(
+                    weekday.value,
+                    period,
+                    school
+                  );
+
+                  return (
+                    <tr key={`${weekday.value}-${period}-${school}-pdf`}>
+                      <td
                         style={{
-                          border: "1px solid #777777",
-                          padding: "7px 8px",
-                          background: "#f3f3f0",
+                          border: "1px solid #999",
+                          padding: "10px 8px",
                           textAlign: "center",
                           fontWeight: 700,
                         }}
                       >
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
+                        {school}
+                      </td>
 
-                <tbody>
-                  {schools.map((school) => {
-                    const cell = getSummaryCell(
-                      weekday.value,
-                      period,
-                      school
-                    );
+                      <td
+                        style={{
+                          border: "1px solid #999",
+                          padding: "8px 12px",
+                          textAlign: "left",
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        {cell.hasSchedule
+                          ? cell.teacherNames.length > 0
+                            ? cell.teacherNames.join("、")
+                            : "尚未安排"
+                          : "—"}
+                      </td>
 
-                    const cellTimes =
-                      cell.times.length > 0
-                        ? cell.times.join("／")
-                        : "—";
-
-                    return (
-                      <tr key={school}>
-                        <td
-                          style={{
-                            border: "1px solid #999999",
-                            padding: "8px",
-                            textAlign: "center",
-                            fontWeight: 600,
-                            background: cell.hasSchedule
-                              ? "#ffffff"
-                              : "#f7f7f5",
-                          }}
-                        >
-                          {school}
-                        </td>
-
-                        <td
-                          style={{
-                            border: "1px solid #999999",
-                            padding: "8px",
-                            textAlign: "center",
-                            background: cell.hasSchedule
-                              ? "#ffffff"
-                              : "#f7f7f5",
-                          }}
-                        >
-                          {cell.hasSchedule
-                            ? cellTimes
-                            : "—"}
-                        </td>
-
-                        <td
-                          style={{
-                            border: "1px solid #999999",
-                            padding: "7px 10px",
-                            textAlign: "left",
-                            verticalAlign: "middle",
-                            lineHeight: 1.45,
-                            background: cell.hasSchedule
-                              ? "#ffffff"
-                              : "#f7f7f5",
-                          }}
-                        >
-                          {cell.hasSchedule ? (
-                            cell.teacherNames.length > 0 ? (
-                              <div
-                                style={{
-                                  display: "grid",
-                                  gridTemplateColumns:
-                                    "repeat(2, minmax(0, 1fr))",
-                                  columnGap: "16px",
-                                  rowGap: "3px",
-                                }}
-                              >
-                                {cell.teacherNames.map(
-                                  (name) => (
-                                    <span key={name}>
-                                      {name}
-                                    </span>
-                                  )
-                                )}
-                              </div>
-                            ) : (
-                              "尚未安排"
-                            )
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-
-                        <td
-                          style={{
-                            border: "1px solid #999999",
-                            padding: "8px",
-                            textAlign: "center",
-                            fontSize: "14px",
-                            fontWeight: 700,
-                            background: cell.hasSchedule
-                              ? "#ffffff"
-                              : "#f7f7f5",
-                          }}
-                        >
-                          {cell.hasSchedule
-                            ? cell.studentCount
-                            : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </section>
-          );
-        })}
+                      <td
+                        style={{
+                          border: "1px solid #999",
+                          padding: "10px 8px",
+                          textAlign: "center",
+                          fontSize: "15px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {cell.hasSchedule
+                          ? cell.studentCount
+                          : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ))}
 
         <div
           style={{
+            position: "absolute",
+            left: "46px",
+            right: "46px",
+            bottom: "30px",
             display: "flex",
             justifyContent: "space-between",
-            marginTop: "8px",
-            paddingTop: "7px",
-            borderTop: "1px solid #aaaaaa",
-            fontSize: "9px",
-            color: "#666666",
+            paddingTop: "8px",
+            borderTop: "1px solid #bbb",
+            fontSize: "10px",
+            color: "#777",
           }}
         >
           <span>倍思學院｜接車老師週安排表</span>
           <span>
             列印日期：
-            {new Intl.DateTimeFormat(
-              "zh-TW"
-            ).format(new Date())}
+            {new Intl.DateTimeFormat("zh-TW").format(
+              new Date()
+            )}
           </span>
         </div>
       </div>
@@ -1225,6 +1206,7 @@ function PickupStaffPanel() {
                                     key={name}
                                     style={{
                                       lineHeight: 1.45,
+                                      whiteSpace: "nowrap",
                                     }}
                                   >
                                     {name}
@@ -1653,12 +1635,12 @@ function PickupStaffPanel() {
           position: "fixed",
           left: "-20000px",
           top: 0,
-          width: "1122px",
+          width: "794px",
           pointerEvents: "none",
         }}
       >
         {WEEKDAYS.map((weekday) =>
-          renderPdfWeekdayPage(weekday)
+          renderDailyPdfPage(weekday)
         )}
       </div>
     </section>

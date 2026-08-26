@@ -15,6 +15,35 @@ const WEEKDAYS = [
 ];
 
 
+const PICKUP_PERIOD_OPTIONS = [
+  {
+    value: "",
+    label: "照原規則",
+  },
+  {
+    value: "NOON",
+    label: "中午車",
+  },
+  {
+    value: "AFTERNOON",
+    label: "下午車",
+  },
+];
+
+function getPeriodKey(pickupKey) {
+  return pickupKey.replace(
+    "_pickup",
+    "_period"
+  );
+}
+
+function getPeriodLabel(period) {
+  if (period === "NOON") return "中午車";
+  if (period === "AFTERNOON") return "下午車";
+  return "照原規則";
+}
+
+
 const PICKUP_STATUS_OPTIONS = [
   {
     value: "NORMAL",
@@ -92,6 +121,18 @@ function normalizeWeeklyRule(
           ? "NORMAL"
           : LEGACY_NO_PICKUP;
     }
+
+    const periodKey =
+      getPeriodKey(
+        pickupKey
+      );
+
+    if (
+      next[periodKey] !== "NOON" &&
+      next[periodKey] !== "AFTERNOON"
+    ) {
+      next[periodKey] = "";
+    }
   }
 
   return next;
@@ -118,6 +159,11 @@ function defaultWeeklyForm(studentId) {
     wednesday_status: "NORMAL",
     thursday_status: "NORMAL",
     friday_status: "NORMAL",
+    monday_period: "",
+    tuesday_period: "",
+    wednesday_period: "",
+    thursday_period: "",
+    friday_period: "",
     note: "",
     is_active: true,
   };
@@ -136,6 +182,7 @@ function PickupStudentRulesPanel() {
 
   const [exceptionDate, setExceptionDate] = useState("");
   const [exceptionStatus, setExceptionStatus] = useState("NORMAL");
+  const [exceptionPeriod, setExceptionPeriod] = useState("");
   const [exceptionNote, setExceptionNote] = useState("");
 
   const [isLoading, setIsLoading] = useState(true);
@@ -293,6 +340,7 @@ function PickupStudentRulesPanel() {
 
     setExceptionDate("");
     setExceptionStatus("NORMAL");
+    setExceptionPeriod("");
     setExceptionNote("");
     setErrorMessage("");
     setSuccessMessage("");
@@ -338,6 +386,27 @@ function PickupStudentRulesPanel() {
           weeklyForm.thursday_status,
         friday_status:
           weeklyForm.friday_status,
+
+        monday_period:
+          weeklyForm.monday_status === "NORMAL"
+            ? weeklyForm.monday_period || null
+            : null,
+        tuesday_period:
+          weeklyForm.tuesday_status === "NORMAL"
+            ? weeklyForm.tuesday_period || null
+            : null,
+        wednesday_period:
+          weeklyForm.wednesday_status === "NORMAL"
+            ? weeklyForm.wednesday_period || null
+            : null,
+        thursday_period:
+          weeklyForm.thursday_status === "NORMAL"
+            ? weeklyForm.thursday_period || null
+            : null,
+        friday_period:
+          weeklyForm.friday_status === "NORMAL"
+            ? weeklyForm.friday_period || null
+            : null,
 
         // 舊欄位先保留相容：
         // 只有 NORMAL 代表接車，其餘三種都不進接車名單。
@@ -466,6 +535,11 @@ function PickupStudentRulesPanel() {
         attendance_status:
           exceptionStatus,
 
+        pickup_period:
+          exceptionStatus === "NORMAL"
+            ? exceptionPeriod || null
+            : null,
+
         // 舊欄位保留相容：
         // 只有 NORMAL 代表當天要接。
         should_pickup:
@@ -504,6 +578,7 @@ function PickupStudentRulesPanel() {
 
       setExceptionDate("");
       setExceptionStatus("NORMAL");
+      setExceptionPeriod("");
       setExceptionNote("");
       setSuccessMessage("單日例外已儲存。");
     } catch (error) {
@@ -649,6 +724,27 @@ function PickupStudentRulesPanel() {
                   .join("、")
               : "依一般規則";
 
+            const periodOverrides = weekly
+              ? WEEKDAYS
+                  .map(([key, label]) => {
+                    const period =
+                      weekly[
+                        getPeriodKey(key)
+                      ];
+
+                    if (
+                      period !== "NOON" &&
+                      period !== "AFTERNOON"
+                    ) {
+                      return null;
+                    }
+
+                    return `${label}${period === "NOON" ? "午" : "下"}`;
+                  })
+                  .filter(Boolean)
+                  .join("、")
+              : "";
+
             return (
               <button
                 key={student.id}
@@ -707,6 +803,9 @@ function PickupStudentRulesPanel() {
                     {weekly
                       ? `接：${pickupDays || "無"}`
                       : "一般"}
+                    {periodOverrides
+                      ? ` ・ 特殊 ${periodOverrides}`
+                      : ""}
                     {exceptionCount > 0
                       ? ` ・ 例外 ${exceptionCount}`
                       : ""}
@@ -827,6 +926,16 @@ function PickupStudentRulesPanel() {
                       status ===
                       "NORMAL";
 
+                    const periodKey =
+                      getPeriodKey(
+                        pickupKey
+                      );
+
+                    const period =
+                      weeklyForm?.[
+                        periodKey
+                      ] || "";
+
                     return (
                       <label
                         key={pickupKey}
@@ -926,6 +1035,47 @@ function PickupStudentRulesPanel() {
                             )
                           )}
                         </select>
+
+                        {status === "NORMAL" && (
+                          <select
+                            value={period}
+                            onChange={(event) =>
+                              setWeeklyForm(
+                                (current) => ({
+                                  ...current,
+                                  [periodKey]:
+                                    event.target.value,
+                                })
+                              )
+                            }
+                            style={{
+                              width: "100%",
+                              minWidth: 0,
+                              height: "34px",
+                              padding: "0 30px 0 9px",
+                              border: "1px solid #dedad1",
+                              borderRadius: "9px",
+                              background:
+                                period
+                                  ? "#f3f7f2"
+                                  : "#fff",
+                              font: "inherit",
+                              fontSize: "12px",
+                              color: "#373934",
+                            }}
+                          >
+                            {PICKUP_PERIOD_OPTIONS.map(
+                              (option) => (
+                                <option
+                                  key={option.value || "DEFAULT"}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        )}
                       </label>
                     );
                   }
@@ -993,7 +1143,7 @@ function PickupStudentRulesPanel() {
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "170px 150px 1fr auto",
+                    "160px 150px 150px 1fr auto",
                   gap: "10px",
                   alignItems: "end",
                 }}
@@ -1019,12 +1169,20 @@ function PickupStudentRulesPanel() {
                     }
                     onChange={(
                       event
-                    ) =>
+                    ) => {
+                      const nextStatus =
+                        event.target.value;
+
                       setExceptionStatus(
-                        event.target
-                          .value
-                      )
-                    }
+                        nextStatus
+                      );
+
+                      if (
+                        nextStatus !== "NORMAL"
+                      ) {
+                        setExceptionPeriod("");
+                      }
+                    }}
                   >
                     <option value="NORMAL">
                       臨時要接
@@ -1038,6 +1196,32 @@ function PickupStudentRulesPanel() {
                     <option value="PARENT_DROP_OFF">
                       家長自行送
                     </option>
+                  </select>
+                </label>
+
+                <label>
+                  <span>車別</span>
+                  <select
+                    value={exceptionPeriod}
+                    disabled={
+                      exceptionStatus !== "NORMAL"
+                    }
+                    onChange={(event) =>
+                      setExceptionPeriod(
+                        event.target.value
+                      )
+                    }
+                  >
+                    {PICKUP_PERIOD_OPTIONS.map(
+                      (option) => (
+                        <option
+                          key={option.value || "DEFAULT"}
+                          value={option.value}
+                        >
+                          {option.label}
+                        </option>
+                      )
+                    )}
                   </select>
                 </label>
 
@@ -1103,7 +1287,7 @@ function PickupStudentRulesPanel() {
                         style={{
                           display: "grid",
                           gridTemplateColumns:
-                            "130px 120px 1fr auto",
+                            "130px 120px 100px 1fr auto",
                           gap: "12px",
                           alignItems: "center",
                           padding: "11px 12px",
@@ -1124,6 +1308,33 @@ function PickupStudentRulesPanel() {
                               ? "臨時要接"
                               : "舊設定：不接（未分類）"}
                         </span>
+
+                        <span
+                          style={{
+                            color:
+                              item.pickup_period
+                                ? "#5f7464"
+                                : "#8a8e89",
+                            fontWeight:
+                              item.pickup_period
+                                ? 600
+                                : 400,
+                          }}
+                        >
+                          {(
+                            item.attendance_status ||
+                            (
+                              item.should_pickup
+                                ? "NORMAL"
+                                : LEGACY_NO_PICKUP
+                            )
+                          ) === "NORMAL"
+                            ? getPeriodLabel(
+                                item.pickup_period
+                              )
+                            : "—"}
+                        </span>
+
                         <span
                           style={{
                             color: "#787d78",

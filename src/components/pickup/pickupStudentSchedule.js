@@ -14,7 +14,6 @@ export function getDateWeekday(
     return null;
   }
 
-
   const [
     year,
     month,
@@ -23,7 +22,6 @@ export function getDateWeekday(
     .split("-")
     .map(Number);
 
-
   if (
     !year ||
     !month ||
@@ -31,7 +29,6 @@ export function getDateWeekday(
   ) {
     return null;
   }
-
 
   return new Date(
     year,
@@ -51,23 +48,25 @@ export function getStudentPickupDecision({
   dateExceptions = [],
 }) {
   /*
-   * 判斷優先順序：
+   * 優先順序：
    *
-   * 1. 單日例外
-   * 2. 學生每週固定接送設定
-   * 3. 沒有特殊設定 → 沿用原本接車規則
+   * 1. 單日特殊設定
+   * 2. 學生每週固定特殊設定
+   * 3. 一般學校＋年級 pickup_rules
+   *
+   * pickupPeriod：
+   * NOON       → 強制中午車
+   * AFTERNOON  → 強制下午車
+   * null       → 不覆蓋一般接車時間
    */
 
 
   const dateException =
     dateExceptions.find(
       (item) =>
-        item.student_id ===
-          studentId &&
-        item.pickup_date ===
-          dateKey &&
-        item.is_active !==
-          false
+        item.student_id === studentId &&
+        item.pickup_date === dateKey &&
+        item.is_active !== false
     );
 
 
@@ -80,14 +79,19 @@ export function getStudentPickupDecision({
           : "LEGACY_NO_PICKUP"
       );
 
+    const shouldPickup =
+      status === "NORMAL";
+
     return {
-      // 接車表：
-      // 只有 NORMAL 需要接車。
-      // 其餘特殊狀態全部槓掉。
-      shouldPickup:
-        status === "NORMAL",
+      shouldPickup,
 
       status,
+
+      pickupPeriod:
+        shouldPickup
+          ? dateException.pickup_period ||
+            null
+          : null,
 
       source:
         "DATE_EXCEPTION",
@@ -104,7 +108,6 @@ export function getStudentPickupDecision({
       dateKey
     );
 
-
   const weekdayKey =
     WEEKDAY_KEYS[
       weekday
@@ -112,7 +115,8 @@ export function getStudentPickupDecision({
 
 
   /*
-   * 六、日沒有平日固定接車。
+   * 星期六、日：
+   * 沒有平日固定接車。
    */
   if (!weekdayKey) {
     return {
@@ -121,6 +125,9 @@ export function getStudentPickupDecision({
 
       status:
         "WEEKEND",
+
+      pickupPeriod:
+        null,
 
       source:
         "WEEKEND",
@@ -134,16 +141,14 @@ export function getStudentPickupDecision({
   const weeklyRule =
     weeklyRules.find(
       (item) =>
-        item.student_id ===
-          studentId &&
-        item.is_active !==
-          false
+        item.student_id === studentId &&
+        item.is_active !== false
     );
 
 
   /*
-   * 沒有建立學生特殊規則：
-   * 不干涉原本 pickup_rules。
+   * 完全沒有個人特殊設定：
+   * 交回一般 pickup_rules 決定。
    */
   if (!weeklyRule) {
     return {
@@ -152,6 +157,9 @@ export function getStudentPickupDecision({
 
       status:
         "NORMAL",
+
+      pickupPeriod:
+        null,
 
       source:
         "DEFAULT",
@@ -168,6 +176,9 @@ export function getStudentPickupDecision({
   const statusColumnName =
     `${weekdayKey}_status`;
 
+  const periodColumnName =
+    `${weekdayKey}_period`;
+
 
   const status =
     weeklyRule[
@@ -182,16 +193,32 @@ export function getStudentPickupDecision({
     );
 
 
+  const shouldPickup =
+    status === "NORMAL";
+
+
   return {
-    // 接車表：
-    // NORMAL → 正常接車
-    // ABSENT → 不接
-    // LATE_ARRIVAL → 不接
-    // PARENT_DROP_OFF → 不接
-    shouldPickup:
-      status === "NORMAL",
+    /*
+     * NORMAL
+     * → 有接車。
+     *
+     * ABSENT
+     * LATE_ARRIVAL
+     * PARENT_DROP_OFF
+     * LEGACY_NO_PICKUP
+     * → 不列入接車。
+     */
+
+    shouldPickup,
 
     status,
+
+    pickupPeriod:
+      shouldPickup
+        ? weeklyRule[
+            periodColumnName
+          ] || null
+        : null,
 
     source:
       "WEEKLY_RULE",

@@ -26,6 +26,28 @@ function normalizeTime(value) {
   return String(value).slice(0, 5);
 }
 
+function getTimePeriod(value) {
+  const time = normalizeTime(value);
+
+  if (!time) return "";
+
+  return time < "14:00"
+    ? "NOON"
+    : "AFTERNOON";
+}
+
+function getFallbackTimeByPeriod(period) {
+  if (period === "NOON") {
+    return "12:20";
+  }
+
+  if (period === "AFTERNOON") {
+    return "15:30";
+  }
+
+  return "";
+}
+
 function getStudentName(student) {
   return (
     student.chinese_name ||
@@ -292,9 +314,42 @@ function TodayPickupPanel({
           rule.grade_group === gradeGroup
       );
 
-      const pickupTime = normalizeTime(
+      const defaultPickupTime = normalizeTime(
         matchingRule?.[selectedConfig.column]
       );
+
+      const pickupPeriod =
+        pickupDecision.pickupPeriod ||
+        "";
+
+      let pickupTime =
+        defaultPickupTime;
+
+      if (pickupPeriod) {
+        const schoolPeriodTimes = rules
+          .filter(
+            (rule) =>
+              rule.school === school
+          )
+          .map((rule) =>
+            normalizeTime(
+              rule[selectedConfig.column]
+            )
+          )
+          .filter(
+            (time) =>
+              time &&
+              getTimePeriod(time) ===
+                pickupPeriod
+          )
+          .sort();
+
+        pickupTime =
+          schoolPeriodTimes[0] ||
+          getFallbackTimeByPeriod(
+            pickupPeriod
+          );
+      }
 
       if (!pickupTime) return;
 
@@ -321,7 +376,14 @@ function TodayPickupPanel({
         });
       }
 
-      groupMap.get(key).students.push(student);
+      groupMap.get(key).students.push({
+        ...student,
+        pickupDecisionSource:
+          pickupDecision.source,
+        pickupPeriodOverride:
+          pickupDecision.pickupPeriod ||
+          null,
+      });
     });
 
     return Array.from(groupMap.values())
