@@ -103,36 +103,60 @@ function AttendanceSheetModal({ classItem, onClose }) {
         month
       );
 
+      /*
+       * 名單基準：
+       * - 本月／未來月份：使用目前仍在班上的最新名單。
+       * - 過去月份：保留當月曾經在班上的歷史名單。
+       */
+      const today = new Date();
+      const selectedMonthKey =
+        year * 100 + month;
+      const currentMonthKey =
+        today.getFullYear() * 100 +
+        (today.getMonth() + 1);
+      const useCurrentRoster =
+        selectedMonthKey >= currentMonthKey;
+
       const [
         studentsResult,
         overridesResult,
         studentWeeklyResult,
         studentExceptionsResult,
       ] = await Promise.all([
-        supabase
-          .from("class_students")
-          .select(`
-            id,
-            student_id,
-            joined_at,
-            left_at,
-            status,
-            students (*)
-          `)
-          .eq(
-            "class_id",
-            classItem.id
-          )
-          .lte(
-            "joined_at",
-            endDate
-          )
-          .order(
+        (() => {
+          let query = supabase
+            .from("class_students")
+            .select(`
+              id,
+              student_id,
+              joined_at,
+              left_at,
+              status,
+              students (*)
+            `)
+            .eq(
+              "class_id",
+              classItem.id
+            );
+
+          if (useCurrentRoster) {
+            query = query
+              .is("left_at", null)
+              .neq("status", "inactive");
+          } else {
+            query = query.lte(
+              "joined_at",
+              endDate
+            );
+          }
+
+          return query.order(
             "joined_at",
             {
               ascending: true,
             }
-          ),
+          );
+        })(),
 
         supabase
           .from(
@@ -192,12 +216,17 @@ function AttendanceSheetModal({ classItem, onClose }) {
         studentsResult.data ||
         []
       )
-        .filter(
-          (row) =>
+        .filter((row) => {
+          if (useCurrentRoster) {
+            return true;
+          }
+
+          return (
             !row.left_at ||
             row.left_at >=
               startDate
-        )
+          );
+        })
         .forEach((row) => {
           const studentId =
             row.student_id;
@@ -276,10 +305,7 @@ function AttendanceSheetModal({ classItem, onClose }) {
         studentIds.length >
         0
       ) {
-        const {
-          data: englishRows,
-          error: englishError,
-        } = await supabase
+        let englishQuery = supabase
           .from(
             "english_class_students"
           )
@@ -296,17 +322,28 @@ function AttendanceSheetModal({ classItem, onClose }) {
           .in(
             "student_id",
             studentIds
-          )
-          .lte(
+          );
+
+        if (useCurrentRoster) {
+          englishQuery = englishQuery
+            .is("left_at", null)
+            .neq("status", "inactive");
+        } else {
+          englishQuery = englishQuery.lte(
             "joined_at",
             endDate
-          )
-          .order(
-            "joined_at",
-            {
-              ascending: false,
-            }
           );
+        }
+
+        const {
+          data: englishRows,
+          error: englishError,
+        } = await englishQuery.order(
+          "joined_at",
+          {
+            ascending: false,
+          }
+        );
 
         if (englishError) {
           throw englishError;
@@ -316,12 +353,17 @@ function AttendanceSheetModal({ classItem, onClose }) {
           englishRows ||
           []
         )
-          .filter(
-            (row) =>
+          .filter((row) => {
+            if (useCurrentRoster) {
+              return true;
+            }
+
+            return (
               !row.left_at ||
               row.left_at >=
                 startDate
-          )
+            );
+          })
           .forEach(
             (row) => {
               const className =
