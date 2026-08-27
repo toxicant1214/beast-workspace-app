@@ -6970,14 +6970,11 @@ function SnackManagementPage({
                           closed
                             ? `${closed.title}｜不需點心`
                             : readOnly
-                              ? `美語／班外生｜${day.dateString}`
+                              ? `美語／班外生｜${day.dateString}｜點擊查看明細`
                               : `美語／班外生｜${day.dateString}｜點擊管理訂餐名單`
                         }
                         onClick={() => {
-                          if (
-                            !readOnly &&
-                            !closed
-                          ) {
+                          if (!closed) {
                             openExternalOrders(
                               day.dateString
                             );
@@ -6992,10 +6989,9 @@ function SnackManagementPage({
                           color: closed ? "#a8aca7" : count > 0 ? "#725b42" : "#a59a8d",
                           borderBottom: "1px solid #ecefeb",
                           borderRight: "1px solid #ecefeb",
-                          cursor:
-                            closed || readOnly
-                              ? "default"
-                              : "pointer",
+                          cursor: closed
+                            ? "default"
+                            : "pointer",
                         }}
                       >
                         {closed ? "休" : count}
@@ -7315,7 +7311,7 @@ function SnackManagementPage({
         )}
       </section>
 
-      {!readOnly && selectedExternalDate && (
+      {selectedExternalDate && (
         <div
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !savingExternalOrders) {
@@ -7362,14 +7358,17 @@ function SnackManagementPage({
                     getExternalOrdersForDate(selectedExternalDate).map((item) => (
                       <div key={item.id} style={{ minHeight: "42px", padding: "8px 10px 8px 12px", border: "1px solid #e4dfd6", borderRadius: "10px", background: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
                         <strong>{item.person_name}</strong>
-                        <button type="button" onClick={() => deleteExternalOrder(item.id)} disabled={savingExternalOrders}
-                          style={{ border: "none", background: "#f3eee8", width: "30px", height: "30px", borderRadius: "8px", cursor: "pointer", color: "#8d685b", fontSize: "18px" }}>×</button>
+                        {!readOnly && (
+                          <button type="button" onClick={() => deleteExternalOrder(item.id)} disabled={savingExternalOrders}
+                            style={{ border: "none", background: "#f3eee8", width: "30px", height: "30px", borderRadius: "8px", cursor: "pointer", color: "#8d685b", fontSize: "18px" }}>×</button>
+                        )}
                       </div>
                     ))
                   )}
                 </div>
               </section>
 
+              {!readOnly && (
               <section>
                 <h3 style={{ margin: "0 0 10px", fontSize: "16px" }}>新增訂餐人員</h3>
                 <div style={{ display: "flex", gap: "8px" }}>
@@ -7381,6 +7380,7 @@ function SnackManagementPage({
                     style={{ minWidth: "74px", height: "40px", border: "none", borderRadius: "9px", background: "#88a993", color: "#fff", font: "inherit", fontWeight: 700, cursor: "pointer" }}>新增</button>
                 </div>
               </section>
+              )}
 
               <section style={{ padding: "14px 16px", borderRadius: "12px", background: "#f4f6f2", fontSize: "13px" }}>
                 今日共 <strong style={{ margin: "0 5px", fontSize: "20px" }}>{getExternalOrderCount(selectedExternalDate)}</strong> 份
