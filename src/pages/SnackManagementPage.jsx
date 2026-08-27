@@ -149,6 +149,9 @@ function SnackManagementPage() {
   const [preferenceClasses, setPreferenceClasses] = useState([]);
   const [preferenceMemberships, setPreferenceMemberships] = useState([]);
   const [studentSnackChoices, setStudentSnackChoices] = useState([]);
+  const [preferenceClassTeachers, setPreferenceClassTeachers] = useState([]);
+  const [teacherSnackChoices, setTeacherSnackChoices] = useState([]);
+  const [preferenceClassSnackSettings, setPreferenceClassSnackSettings] = useState([]);
   const [selectedPreferenceClassId, setSelectedPreferenceClassId] = useState("");
   const [preferenceLoading, setPreferenceLoading] = useState(false);
   const [savingPreferenceKey, setSavingPreferenceKey] = useState("");
@@ -299,6 +302,9 @@ function SnackManagementPage() {
       if (classIds.length === 0) {
         setPreferenceMemberships([]);
         setStudentSnackChoices([]);
+        setPreferenceClassTeachers([]);
+        setTeacherSnackChoices([]);
+        setPreferenceClassSnackSettings([]);
         setSelectedPreferenceClassId("");
         return;
       }
@@ -378,6 +384,93 @@ function SnackManagementPage() {
         );
       }
 
+      const [
+        classTeacherResult,
+        preferenceSettingResult,
+      ] = await Promise.all([
+        supabase
+          .from("class_teachers")
+          .select(`
+            id,
+            class_id,
+            teacher_id,
+            is_primary,
+            teachers (
+              id,
+              chinese_name,
+              english_name,
+              status
+            )
+          `)
+          .in("class_id", classIds),
+
+        supabase
+          .from("snack_class_settings")
+          .select("*")
+          .eq("semester_id", selectedSemesterId)
+          .in("class_id", classIds),
+      ]);
+
+      if (classTeacherResult.error) {
+        throw classTeacherResult.error;
+      }
+
+      if (preferenceSettingResult.error) {
+        throw preferenceSettingResult.error;
+      }
+
+      const teacherRelations =
+        classTeacherResult.data || [];
+
+      setPreferenceClassTeachers(
+        teacherRelations
+      );
+
+      setPreferenceClassSnackSettings(
+        preferenceSettingResult.data || []
+      );
+
+      const teacherIds = Array.from(
+        new Set(
+          teacherRelations.map(
+            (row) => row.teacher_id
+          )
+        )
+      );
+
+      if (teacherIds.length === 0) {
+        setTeacherSnackChoices([]);
+      } else {
+        const {
+          data: teacherChoiceRows,
+          error: teacherChoiceError,
+        } = await supabase
+          .from("snack_teacher_choices")
+          .select(`
+            id,
+            semester_id,
+            teacher_id,
+            class_id,
+            snack_item_id,
+            snack_item_option_id,
+            quantity,
+            notes,
+            created_at,
+            updated_at
+          `)
+          .eq("semester_id", selectedSemesterId)
+          .in("teacher_id", teacherIds)
+          .in("class_id", classIds);
+
+        if (teacherChoiceError) {
+          throw teacherChoiceError;
+        }
+
+        setTeacherSnackChoices(
+          teacherChoiceRows || []
+        );
+      }
+
       setSelectedPreferenceClassId(
         (current) => {
           if (
@@ -404,6 +497,9 @@ function SnackManagementPage() {
       setPreferenceClasses([]);
       setPreferenceMemberships([]);
       setStudentSnackChoices([]);
+      setPreferenceClassTeachers([]);
+      setTeacherSnackChoices([]);
+      setPreferenceClassSnackSettings([]);
       setSelectedPreferenceClassId("");
     } finally {
       setPreferenceLoading(false);
@@ -550,6 +646,217 @@ function SnackManagementPage() {
       );
       setErrorMessage(
         `儲存點心選擇失敗：${error.message}`
+      );
+    } finally {
+      setSavingPreferenceKey("");
+    }
+  }
+
+  function classTeacherEatsSnackForPreference(
+    classId
+  ) {
+    return Boolean(
+      preferenceClassSnackSettings.find(
+        (item) =>
+          item.class_id === classId
+      )?.teacher_eats_snack
+    );
+  }
+
+  function getPreferenceTeachersForClass(
+    classId
+  ) {
+    if (
+      !classTeacherEatsSnackForPreference(
+        classId
+      )
+    ) {
+      return [];
+    }
+
+    return preferenceClassTeachers
+      .filter(
+        (row) =>
+          row.class_id === classId &&
+          row.teachers?.status !== "inactive"
+      )
+      .map((row) => ({
+        relation_id: row.id,
+        teacher_id: row.teacher_id,
+        name:
+          row.teachers?.chinese_name ||
+          row.teachers?.english_name ||
+          "未命名老師",
+        is_primary: Boolean(
+          row.is_primary
+        ),
+      }))
+      .sort((a, b) => {
+        if (
+          a.is_primary !== b.is_primary
+        ) {
+          return a.is_primary ? -1 : 1;
+        }
+
+        return a.name.localeCompare(
+          b.name,
+          "zh-Hant"
+        );
+      });
+  }
+
+  function getTeacherSnackChoice(
+    teacherId,
+    classId,
+    snackItemId
+  ) {
+    return (
+      teacherSnackChoices.find(
+        (choice) =>
+          choice.teacher_id ===
+            teacherId &&
+          choice.class_id === classId &&
+          choice.snack_item_id ===
+            snackItemId
+      ) || null
+    );
+  }
+
+  async function saveTeacherSnackChoice({
+    teacherId,
+    classId,
+    snackItem,
+    optionId = null,
+    quantity = 1,
+  }) {
+    if (
+      !selectedSemesterId ||
+      !teacherId ||
+      !classId ||
+      !snackItem?.id
+    ) {
+      return;
+    }
+
+    const key =
+      `teacher:${classId}:${teacherId}:${snackItem.id}`;
+
+    try {
+      setSavingPreferenceKey(key);
+      setErrorMessage("");
+
+      const existing =
+        getTeacherSnackChoice(
+          teacherId,
+          classId,
+          snackItem.id
+        );
+
+      const numericQuantity =
+        Number(quantity || 0);
+
+      const shouldDelete =
+        snackItem.requires_option
+          ? !optionId
+          : numericQuantity <= 0;
+
+      if (shouldDelete) {
+        if (existing?.id) {
+          const { error } =
+            await supabase
+              .from(
+                "snack_teacher_choices"
+              )
+              .delete()
+              .eq("id", existing.id);
+
+          if (error) throw error;
+
+          setTeacherSnackChoices(
+            (current) =>
+              current.filter(
+                (choice) =>
+                  choice.id !== existing.id
+              )
+          );
+        }
+
+        return;
+      }
+
+      const payload = {
+        semester_id:
+          selectedSemesterId,
+        teacher_id: teacherId,
+        class_id: classId,
+        snack_item_id:
+          snackItem.id,
+        snack_item_option_id:
+          snackItem.requires_option
+            ? optionId
+            : null,
+        quantity:
+          snackItem.requires_option
+            ? 1
+            : numericQuantity,
+        updated_at:
+          new Date().toISOString(),
+      };
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("snack_teacher_choices")
+        .upsert(
+          payload,
+          {
+            onConflict:
+              "semester_id,teacher_id,class_id,snack_item_id",
+          }
+        )
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setTeacherSnackChoices(
+        (current) => {
+          const exists =
+            current.some(
+              (choice) =>
+                choice.teacher_id ===
+                  teacherId &&
+                choice.class_id ===
+                  classId &&
+                choice.snack_item_id ===
+                  snackItem.id
+            );
+
+          if (exists) {
+            return current.map(
+              (choice) =>
+                choice.teacher_id ===
+                    teacherId &&
+                choice.class_id ===
+                    classId &&
+                choice.snack_item_id ===
+                    snackItem.id
+                  ? data
+                  : choice
+            );
+          }
+
+          return [...current, data];
+        }
+      );
+    } catch (error) {
+      console.error(
+        "儲存老師點心選擇失敗：",
+        error
+      );
+      setErrorMessage(
+        `儲存老師點心選擇失敗：${error.message}`
       );
     } finally {
       setSavingPreferenceKey("");
@@ -2637,6 +2944,221 @@ function SnackManagementPage() {
       };
     }
 
+    function buildPdfTeacherSummary(
+      classId,
+      teacherIds,
+      item
+    ) {
+      const teacherIdSet =
+        new Set(teacherIds);
+
+      const choices =
+        teacherSnackChoices.filter(
+          (choice) =>
+            choice.class_id === classId &&
+            teacherIdSet.has(
+              choice.teacher_id
+            ) &&
+            choice.snack_item_id ===
+              item.id
+        );
+
+      if (item.requires_option) {
+        const options =
+          (item.options || [])
+            .filter(
+              (option) =>
+                option.is_active
+            )
+            .map((option) => ({
+              id: option.id,
+              name:
+                option.name +
+                (
+                  option.is_vegetarian_option
+                    ? "（素）"
+                    : ""
+                ),
+              count:
+                choices.filter(
+                  (choice) =>
+                    choice.snack_item_option_id ===
+                      option.id
+                ).length,
+            }));
+
+        const selectedIds =
+          new Set(
+            choices
+              .filter(
+                (choice) =>
+                  choice.snack_item_option_id
+              )
+              .map(
+                (choice) =>
+                  choice.teacher_id
+              )
+          );
+
+        return {
+          itemName: item.name,
+          options,
+          total:
+            options.reduce(
+              (sum, option) =>
+                sum + option.count,
+              0
+            ),
+          unselected:
+            Math.max(
+              0,
+              teacherIds.length -
+                selectedIds.size
+            ),
+        };
+      }
+
+      const total =
+        choices.reduce(
+          (sum, choice) =>
+            sum +
+            Math.max(
+              0,
+              Number(
+                choice.quantity || 0
+              )
+            ),
+          0
+        );
+
+      const selectedIds =
+        new Set(
+          choices
+            .filter(
+              (choice) =>
+                Number(
+                  choice.quantity || 0
+                ) > 0
+            )
+            .map(
+              (choice) =>
+                choice.teacher_id
+            )
+        );
+
+      return {
+        itemName: item.name,
+        total,
+        unselected:
+          Math.max(
+            0,
+            teacherIds.length -
+              selectedIds.size
+          ),
+      };
+    }
+
+    function mergePdfRows(
+      studentRow,
+      teacherRow,
+      item
+    ) {
+      if (item.requires_option) {
+        const studentParts =
+          (item.options || [])
+            .filter(
+              (option) =>
+                option.is_active
+            )
+            .map((option) => {
+              const teacherOption =
+                teacherRow.options?.find(
+                  (row) =>
+                    row.id === option.id
+                );
+
+              const studentChoiceCount =
+                studentSnackChoices.filter(
+                  (choice) =>
+                    choice.snack_item_id ===
+                      item.id &&
+                    choice.snack_item_option_id ===
+                      option.id
+                );
+
+              return {
+                name:
+                  option.name +
+                  (
+                    option.is_vegetarian_option
+                      ? "（素）"
+                      : ""
+                  ),
+                teacherCount:
+                  teacherOption?.count ||
+                  0,
+              };
+            });
+
+        const studentDetailMap =
+          new Map();
+
+        String(studentRow.detail || "")
+          .split("　")
+          .forEach((part) => {
+            const [name, value] =
+              part.split("：");
+            if (name) {
+              studentDetailMap.set(
+                name,
+                Number(value || 0)
+              );
+            }
+          });
+
+        const detail =
+          studentParts
+            .map((part) => {
+              const studentCount =
+                studentDetailMap.get(
+                  part.name
+                ) || 0;
+
+              return `${part.name}：${
+                studentCount +
+                part.teacherCount
+              }`;
+            })
+            .join("　");
+
+        return {
+          itemName: item.name,
+          detail:
+            detail ||
+            "尚無可用選項",
+          total:
+            studentRow.total +
+            teacherRow.total,
+          unselected:
+            studentRow.unselected +
+            teacherRow.unselected,
+        };
+      }
+
+      const total =
+        studentRow.total +
+        teacherRow.total;
+
+      return {
+        itemName: item.name,
+        detail: `總份數：${total}`,
+        total,
+        unselected:
+          studentRow.unselected +
+          teacherRow.unselected,
+      };
+    }
+
     const classSummaries =
       preferenceClasses.map(
         (classItem) => {
@@ -2645,16 +3167,34 @@ function SnackManagementPage() {
               classItem.id
             );
 
+          const teacherIds =
+            getPreferenceTeachersForClass(
+              classItem.id
+            ).map(
+              (teacher) =>
+                teacher.teacher_id
+            );
+
           return {
             title:
               classItem.class_name,
             studentCount:
               studentIds.length,
+            teacherCount:
+              teacherIds.length,
             rows:
               activeItems.map(
                 (item) =>
-                  buildPdfItemSummary(
-                    studentIds,
+                  mergePdfRows(
+                    buildPdfItemSummary(
+                      studentIds,
+                      item
+                    ),
+                    buildPdfTeacherSummary(
+                      classItem.id,
+                      teacherIds,
+                      item
+                    ),
                     item
                   )
               ),
@@ -2662,27 +3202,121 @@ function SnackManagementPage() {
         }
       );
 
-    const allStudentIds =
-      Array.from(
-        new Set(
-          preferenceMemberships.map(
-            (membership) =>
-              membership.student_id
-          )
-        )
-      );
-
     const overallSummary = {
       title: "全部班級總計",
       studentCount:
-        allStudentIds.length,
+        classSummaries.reduce(
+          (sum, summary) =>
+            sum +
+            summary.studentCount,
+          0
+        ),
+      teacherCount:
+        classSummaries.reduce(
+          (sum, summary) =>
+            sum +
+            summary.teacherCount,
+          0
+        ),
       rows:
         activeItems.map(
-          (item) =>
-            buildPdfItemSummary(
-              allStudentIds,
-              item
-            )
+          (item) => {
+            const rows =
+              classSummaries.map(
+                (summary) =>
+                  summary.rows.find(
+                    (row) =>
+                      row.itemName ===
+                      item.name
+                  )
+              );
+
+            if (
+              item.requires_option
+            ) {
+              const optionTotals =
+                new Map();
+
+              rows.forEach((row) => {
+                String(row?.detail || "")
+                  .split("　")
+                  .forEach((part) => {
+                    const [name, value] =
+                      part.split("：");
+                    if (!name) return;
+                    optionTotals.set(
+                      name,
+                      (optionTotals.get(
+                        name
+                      ) || 0) +
+                        Number(
+                          value || 0
+                        )
+                    );
+                  });
+              });
+
+              return {
+                itemName: item.name,
+                detail:
+                  Array.from(
+                    optionTotals.entries()
+                  )
+                    .map(
+                      ([name, count]) =>
+                        `${name}：${count}`
+                    )
+                    .join("　") ||
+                  "尚無可用選項",
+                total:
+                  rows.reduce(
+                    (sum, row) =>
+                      sum +
+                      Number(
+                        row?.total || 0
+                      ),
+                    0
+                  ),
+                unselected:
+                  rows.reduce(
+                    (sum, row) =>
+                      sum +
+                      Number(
+                        row?.unselected ||
+                          0
+                      ),
+                    0
+                  ),
+              };
+            }
+
+            const total =
+              rows.reduce(
+                (sum, row) =>
+                  sum +
+                  Number(
+                    row?.total || 0
+                  ),
+                0
+              );
+
+            return {
+              itemName: item.name,
+              detail:
+                `總份數：${total}`,
+              total,
+              unselected:
+                rows.reduce(
+                  (sum, row) =>
+                    sum +
+                    Number(
+                      row?.unselected ||
+                        0
+                    ),
+                  0
+                ),
+            };
+          }
         ),
     };
 
@@ -2804,7 +3438,7 @@ function SnackManagementPage() {
         );
 
         pdf.text(
-          `${selectedSemester.name}｜${studentCount} 位在籍學生`,
+          `${selectedSemester.name}｜${studentCount} 位學生`,
           marginX,
           marginTop + 15
         );
@@ -3219,6 +3853,175 @@ function SnackManagementPage() {
       };
     };
 
+    const buildTeacherItemSummary = (
+      classId,
+      teacherIds,
+      item
+    ) => {
+      const teacherIdSet =
+        new Set(teacherIds);
+
+      const choices =
+        teacherSnackChoices.filter(
+          (choice) =>
+            choice.class_id === classId &&
+            teacherIdSet.has(
+              choice.teacher_id
+            ) &&
+            choice.snack_item_id ===
+              item.id
+        );
+
+      if (item.requires_option) {
+        const options =
+          (item.options || [])
+            .filter(
+              (option) =>
+                option.is_active
+            )
+            .map((option) => ({
+              id: option.id,
+              name: option.name,
+              isVegetarian:
+                Boolean(
+                  option.is_vegetarian_option
+                ),
+              count:
+                choices.filter(
+                  (choice) =>
+                    choice.snack_item_option_id ===
+                      option.id
+                ).length,
+            }));
+
+        const selectedIds =
+          new Set(
+            choices
+              .filter(
+                (choice) =>
+                  choice.snack_item_option_id
+              )
+              .map(
+                (choice) =>
+                  choice.teacher_id
+              )
+          );
+
+        return {
+          type: "options",
+          item,
+          options,
+          total:
+            options.reduce(
+              (sum, option) =>
+                sum + option.count,
+              0
+            ),
+          unselected:
+            Math.max(
+              0,
+              teacherIds.length -
+                selectedIds.size
+            ),
+        };
+      }
+
+      const total =
+        choices.reduce(
+          (sum, choice) =>
+            sum +
+            Math.max(
+              0,
+              Number(
+                choice.quantity || 0
+              )
+            ),
+          0
+        );
+
+      const selectedIds =
+        new Set(
+          choices
+            .filter(
+              (choice) =>
+                Number(
+                  choice.quantity || 0
+                ) > 0
+            )
+            .map(
+              (choice) =>
+                choice.teacher_id
+            )
+        );
+
+      return {
+        type: "quantity",
+        item,
+        total,
+        selectedCount:
+          selectedIds.size,
+        unselected:
+          Math.max(
+            0,
+            teacherIds.length -
+              selectedIds.size
+          ),
+      };
+    };
+
+    const mergeSummaries = (
+      studentSummary,
+      teacherSummary
+    ) => {
+      if (
+        studentSummary.type ===
+        "options"
+      ) {
+        return {
+          ...studentSummary,
+          options:
+            studentSummary.options.map(
+              (option) => {
+                const teacherOption =
+                  teacherSummary.options.find(
+                    (row) =>
+                      row.id === option.id
+                  );
+
+                return {
+                  ...option,
+                  count:
+                    option.count +
+                    (teacherOption?.count ||
+                      0),
+                };
+              }
+            ),
+          total:
+            studentSummary.total +
+            teacherSummary.total,
+          unselected:
+            studentSummary.unselected +
+            teacherSummary.unselected,
+        };
+      }
+
+      return {
+        ...studentSummary,
+        total:
+          studentSummary.total +
+          teacherSummary.total,
+        selectedCount:
+          (studentSummary.selectedCount ||
+            0) +
+          (teacherSummary.selectedCount ||
+            0),
+        unselected:
+          studentSummary.unselected +
+          teacherSummary.unselected,
+      };
+    };
+
     const classSummaries =
       preferenceClasses.map(
         (classItem) => {
@@ -3227,38 +4030,60 @@ function SnackManagementPage() {
               classItem.id
             );
 
+          const teacherIds =
+            getPreferenceTeachersForClass(
+              classItem.id
+            ).map(
+              (teacher) =>
+                teacher.teacher_id
+            );
+
           return {
             classItem,
             studentIds,
+            teacherIds,
             itemSummaries:
               activeItems.map(
                 (item) =>
-                  buildItemSummary(
-                    studentIds,
-                    item
+                  mergeSummaries(
+                    buildItemSummary(
+                      studentIds,
+                      item
+                    ),
+                    buildTeacherItemSummary(
+                      classItem.id,
+                      teacherIds,
+                      item
+                    )
                   )
               ),
           };
         }
       );
 
-    const allStudentIds =
-      Array.from(
-        new Set(
-          preferenceMemberships.map(
-            (membership) =>
-              membership.student_id
-          )
-        )
-      );
-
     const overallSummary =
       activeItems.map(
-        (item) =>
-          buildItemSummary(
-            allStudentIds,
-            item
-          )
+        (item) => {
+          const empty =
+            buildItemSummary([], item);
+
+          return classSummaries.reduce(
+            (total, classSummary) => {
+              const current =
+                classSummary.itemSummaries.find(
+                  (row) =>
+                    row.item.id ===
+                    item.id
+                );
+
+              return mergeSummaries(
+                total,
+                current
+              );
+            },
+            empty
+          );
+        }
       );
 
     function renderSummaryTable(
@@ -3888,6 +4713,190 @@ function SnackManagementPage() {
           )
         );
 
+    const teachers =
+      getPreferenceTeachersForClass(
+        selectedPreferenceClassId
+      );
+
+    const teacherEnabled =
+      classTeacherEatsSnackForPreference(
+        selectedPreferenceClassId
+      );
+
+    function renderChoiceCell({
+      personType,
+      personId,
+      item,
+      rowIndex,
+    }) {
+      const isTeacher =
+        personType === "TEACHER";
+
+      const choice = isTeacher
+        ? getTeacherSnackChoice(
+            personId,
+            selectedPreferenceClassId,
+            item.id
+          )
+        : getStudentSnackChoice(
+            personId,
+            item.id
+          );
+
+      const savingKey = isTeacher
+        ? `teacher:${selectedPreferenceClassId}:${personId}:${item.id}`
+        : `${personId}:${item.id}`;
+
+      const saving =
+        savingPreferenceKey ===
+        savingKey;
+
+      const activeOptions =
+        (item.options || []).filter(
+          (option) =>
+            option.is_active
+        );
+
+      const saveChoice = ({
+        optionId = null,
+        quantity = 1,
+      }) => {
+        if (isTeacher) {
+          return saveTeacherSnackChoice({
+            teacherId: personId,
+            classId:
+              selectedPreferenceClassId,
+            snackItem: item,
+            optionId,
+            quantity,
+          });
+        }
+
+        return saveStudentSnackChoice({
+          studentId: personId,
+          snackItem: item,
+          optionId,
+          quantity,
+        });
+      };
+
+      return (
+        <td
+          key={item.id}
+          style={{
+            padding: "7px 8px",
+            textAlign: "center",
+            background:
+              isTeacher
+                ? "#fffaf0"
+                : rowIndex % 2 === 0
+                ? "#fff"
+                : "#fbfcfa",
+            borderBottom:
+              "1px solid #ecefeb",
+            borderRight:
+              "1px solid #ecefeb",
+          }}
+        >
+          {item.requires_option ? (
+            activeOptions.length === 0 ? (
+              <span
+                style={{
+                  color: "#a0968d",
+                  fontSize: "12px",
+                }}
+              >
+                尚無選項
+              </span>
+            ) : (
+              <select
+                value={
+                  choice?.snack_item_option_id ||
+                  ""
+                }
+                onChange={(event) =>
+                  saveChoice({
+                    optionId:
+                      event.target.value ||
+                      null,
+                    quantity: 1,
+                  })
+                }
+                disabled={saving}
+                style={{
+                  width: "100%",
+                  height: "36px",
+                  border:
+                    "1px solid #d9ded8",
+                  borderRadius: "8px",
+                  background: "#fff",
+                  padding: "0 8px",
+                  font: "inherit",
+                }}
+              >
+                <option value="">
+                  未選擇
+                </option>
+                {activeOptions.map(
+                  (option) => (
+                    <option
+                      key={option.id}
+                      value={option.id}
+                    >
+                      {option.name}
+                      {option.is_vegetarian_option
+                        ? "（素）"
+                        : ""}
+                    </option>
+                  )
+                )}
+              </select>
+            )
+          ) : (
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={
+                choice?.quantity ?? ""
+              }
+              onChange={(event) =>
+                saveChoice({
+                  quantity:
+                    event.target.value,
+                })
+              }
+              disabled={saving}
+              placeholder="0"
+              style={{
+                width: "82px",
+                height: "36px",
+                border:
+                  "1px solid #d9ded8",
+                borderRadius: "8px",
+                background: "#fff",
+                padding: "0 8px",
+                textAlign: "center",
+                font: "inherit",
+              }}
+            />
+          )}
+
+          {saving && (
+            <small
+              style={{
+                display: "block",
+                marginTop: "3px",
+                color: "#9a9284",
+              }}
+            >
+              儲存中…
+            </small>
+          )}
+        </td>
+      );
+    }
+
     return (
       <div
         style={{
@@ -3924,7 +4933,7 @@ function SnackManagementPage() {
                 color: "#879088",
               }}
             >
-              班級與學生直接讀取系統目前名單；美語／班外生不在此設定。
+              班級、學生與班級老師直接讀取系統；美語／班外生不在此設定。
             </span>
           </div>
 
@@ -4034,6 +5043,7 @@ function SnackManagementPage() {
                 background: "#f5f7f3",
                 color: "#657068",
                 fontSize: "12px",
+                flexWrap: "wrap",
               }}
             >
               <span>
@@ -4041,12 +5051,35 @@ function SnackManagementPage() {
                   "班級"}
                 {"｜"}
                 {students.length} 位學生
+                {teacherEnabled
+                  ? `｜${teachers.length} 位老師`
+                  : "｜老師點心：不要"}
               </span>
 
               <span>
                 選擇後立即自動儲存
               </span>
             </div>
+
+            {teacherEnabled &&
+              teachers.length === 0 && (
+                <div
+                  style={{
+                    padding:
+                      "10px 12px",
+                    borderRadius:
+                      "10px",
+                    background:
+                      "#fff8e8",
+                    color:
+                      "#806b38",
+                    fontSize:
+                      "12px",
+                  }}
+                >
+                  此班已設定「老師點心：要」，但尚未在班級管理設定班級老師。
+                </div>
+              )}
 
             <div
               style={{
@@ -4088,7 +5121,7 @@ function SnackManagementPage() {
                         color: "#34423a",
                       }}
                     >
-                      學生姓名
+                      姓名
                     </th>
 
                     {activeItems.map(
@@ -4138,7 +5171,66 @@ function SnackManagementPage() {
                 </thead>
 
                 <tbody>
-                  {students.length === 0 ? (
+                  {teachers.map(
+                    (teacher, index) => (
+                      <tr
+                        key={`teacher:${teacher.teacher_id}`}
+                      >
+                        <th
+                          style={{
+                            position:
+                              "sticky",
+                            left: 0,
+                            zIndex: 1,
+                            padding:
+                              "10px 12px",
+                            textAlign:
+                              "left",
+                            background:
+                              "#fffaf0",
+                            borderBottom:
+                              "1px solid #ecefeb",
+                            borderRight:
+                              "1px solid #e1e5df",
+                            color:
+                              "#6f5b35",
+                            whiteSpace:
+                              "nowrap",
+                          }}
+                        >
+                          {teacher.name}
+                          <span
+                            style={{
+                              marginLeft:
+                                "7px",
+                              fontSize:
+                                "11px",
+                              color:
+                                "#9a8154",
+                            }}
+                          >
+                            老師
+                          </span>
+                        </th>
+
+                        {activeItems.map(
+                          (item) =>
+                            renderChoiceCell({
+                              personType:
+                                "TEACHER",
+                              personId:
+                                teacher.teacher_id,
+                              item,
+                              rowIndex:
+                                index,
+                            })
+                        )}
+                      </tr>
+                    )
+                  )}
+
+                  {students.length === 0 &&
+                  teachers.length === 0 ? (
                     <tr>
                       <td
                         colSpan={
@@ -4154,7 +5246,7 @@ function SnackManagementPage() {
                             "#929992",
                         }}
                       >
-                        這個班級目前沒有在籍學生
+                        這個班級目前沒有可設定的人員
                       </td>
                     </tr>
                   ) : (
@@ -4198,195 +5290,16 @@ function SnackManagementPage() {
                           </th>
 
                           {activeItems.map(
-                            (item) => {
-                              const choice =
-                                getStudentSnackChoice(
+                            (item) =>
+                              renderChoiceCell({
+                                personType:
+                                  "STUDENT",
+                                personId:
                                   student.student_id,
-                                  item.id
-                                );
-
-                              const saving =
-                                savingPreferenceKey ===
-                                `${student.student_id}:${item.id}`;
-
-                              const activeOptions =
-                                (
-                                  item.options ||
-                                  []
-                                ).filter(
-                                  (
-                                    option
-                                  ) =>
-                                    option.is_active
-                                );
-
-                              return (
-                                <td
-                                  key={
-                                    item.id
-                                  }
-                                  style={{
-                                    padding:
-                                      "7px 8px",
-                                    textAlign:
-                                      "center",
-                                    background:
-                                      studentIndex %
-                                        2 ===
-                                      0
-                                        ? "#fff"
-                                        : "#fbfcfa",
-                                    borderBottom:
-                                      "1px solid #ecefeb",
-                                    borderRight:
-                                      "1px solid #ecefeb",
-                                  }}
-                                >
-                                  {item.requires_option ? (
-                                    activeOptions.length ===
-                                    0 ? (
-                                      <span
-                                        style={{
-                                          color:
-                                            "#a0968d",
-                                          fontSize:
-                                            "12px",
-                                        }}
-                                      >
-                                        尚無選項
-                                      </span>
-                                    ) : (
-                                      <select
-                                        value={
-                                          choice?.snack_item_option_id ||
-                                          ""
-                                        }
-                                        onChange={(
-                                          event
-                                        ) =>
-                                          saveStudentSnackChoice(
-                                            {
-                                              studentId:
-                                                student.student_id,
-                                              snackItem:
-                                                item,
-                                              optionId:
-                                                event.target.value ||
-                                                null,
-                                              quantity:
-                                                1,
-                                            }
-                                          )
-                                        }
-                                        disabled={
-                                          saving
-                                        }
-                                        style={{
-                                          width:
-                                            "100%",
-                                          height:
-                                            "36px",
-                                          padding:
-                                            "0 9px",
-                                          border:
-                                            "1px solid #d9ded8",
-                                          borderRadius:
-                                            "8px",
-                                          background:
-                                            "#fff",
-                                          font:
-                                            "inherit",
-                                        }}
-                                      >
-                                        <option value="">
-                                          未選擇
-                                        </option>
-
-                                        {activeOptions.map(
-                                          (
-                                            option
-                                          ) => (
-                                            <option
-                                              key={
-                                                option.id
-                                              }
-                                              value={
-                                                option.id
-                                              }
-                                            >
-                                              {option.name}
-                                              {option.is_vegetarian_option
-                                                ? "（素）"
-                                                : ""}
-                                            </option>
-                                          )
-                                        )}
-                                      </select>
-                                    )
-                                  ) : (
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
-                                      value={
-                                        choice?.quantity ??
-                                        0
-                                      }
-                                      onChange={(
-                                        event
-                                      ) =>
-                                        saveStudentSnackChoice(
-                                          {
-                                            studentId:
-                                              student.student_id,
-                                            snackItem:
-                                              item,
-                                            optionId:
-                                              null,
-                                            quantity:
-                                              event.target.value,
-                                          }
-                                        )
-                                      }
-                                      disabled={
-                                        saving
-                                      }
-                                      style={{
-                                        width:
-                                          "78px",
-                                        height:
-                                          "36px",
-                                        padding:
-                                          "0 8px",
-                                        border:
-                                          "1px solid #d9ded8",
-                                        borderRadius:
-                                          "8px",
-                                        textAlign:
-                                          "center",
-                                        font:
-                                          "inherit",
-                                      }}
-                                    />
-                                  )}
-
-                                  {saving && (
-                                    <small
-                                      style={{
-                                        display:
-                                          "block",
-                                        marginTop:
-                                          "3px",
-                                        color:
-                                          "#8b968e",
-                                      }}
-                                    >
-                                      儲存中…
-                                    </small>
-                                  )}
-                                </td>
-                              );
-                            }
+                                item,
+                                rowIndex:
+                                  studentIndex,
+                              })
                           )}
                         </tr>
                       )
@@ -4398,7 +5311,7 @@ function SnackManagementPage() {
 
             <div
               style={{
-                padding: "11px 13px",
+                padding: "10px 12px",
                 borderRadius: "10px",
                 background: "#fff8e8",
                 color: "#806b38",
@@ -4406,8 +5319,7 @@ function SnackManagementPage() {
                 lineHeight: 1.7,
               }}
             >
-              「未選擇」代表目前沒有固定偏好；不需要口味的品項可直接輸入數量。
-              美語／班外生維持每日臨時訂餐，不納入固定點心選擇。
+              老師只有在「月點心表」該班設定為「老師點心：要」時才會出現；老師口味會一起計入該班統計、全部班級總計與 PDF。
             </div>
           </>
         )}

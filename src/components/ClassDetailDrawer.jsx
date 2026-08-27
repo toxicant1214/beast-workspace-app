@@ -26,8 +26,17 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [processingId, setProcessingId] = useState(null);
 
+  const [classTeachers, setClassTeachers] = useState([]);
+  const [teacherOptions, setTeacherOptions] = useState([]);
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [isLoadingTeachers, setIsLoadingTeachers] = useState(true);
+  const [isSavingTeacher, setIsSavingTeacher] = useState(false);
+
   useEffect(() => {
-    if (classItem?.id) loadClassStudents();
+    if (classItem?.id) {
+      loadClassStudents();
+      loadClassTeachers();
+    }
   }, [classItem?.id]);
 
   if (!classItem) return null;
@@ -63,6 +72,127 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
       setClassStudents([]);
     } finally {
       setIsLoadingStudents(false);
+    }
+  }
+
+  async function loadClassTeachers() {
+    try {
+      setIsLoadingTeachers(true);
+
+      const [
+        { data: relationRows, error: relationError },
+        { data: teacherRows, error: teacherError },
+      ] = await Promise.all([
+        supabase
+          .from("class_teachers")
+          .select(`
+            id,
+            class_id,
+            teacher_id,
+            is_primary,
+            teachers (
+              id,
+              chinese_name,
+              english_name,
+              status
+            )
+          `)
+          .eq("class_id", classItem.id)
+          .order("is_primary", { ascending: false })
+          .order("created_at", { ascending: true }),
+
+        supabase
+          .from("teachers")
+          .select(`
+            id,
+            chinese_name,
+            english_name,
+            status
+          `)
+          .eq("status", "active")
+          .order("chinese_name", { ascending: true }),
+      ]);
+
+      if (relationError) throw relationError;
+      if (teacherError) throw teacherError;
+
+      setClassTeachers(relationRows || []);
+      setTeacherOptions(teacherRows || []);
+    } catch (error) {
+      console.error("讀取班級老師失敗：", error);
+      window.alert(`讀取班級老師失敗：${error.message}`);
+      setClassTeachers([]);
+      setTeacherOptions([]);
+    } finally {
+      setIsLoadingTeachers(false);
+    }
+  }
+
+  async function addClassTeacher() {
+    if (!selectedTeacherId) return;
+
+    try {
+      setIsSavingTeacher(true);
+
+      const alreadyExists = classTeachers.some(
+        (item) => item.teacher_id === selectedTeacherId
+      );
+
+      if (alreadyExists) {
+        window.alert("這位老師已經在此班級。");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("class_teachers")
+        .insert([
+          {
+            class_id: classItem.id,
+            teacher_id: selectedTeacherId,
+            is_primary: classTeachers.length === 0,
+          },
+        ]);
+
+      if (error) throw error;
+
+      setSelectedTeacherId("");
+      await loadClassTeachers();
+    } catch (error) {
+      console.error("加入班級老師失敗：", error);
+      window.alert(`加入班級老師失敗：${error.message}`);
+    } finally {
+      setIsSavingTeacher(false);
+    }
+  }
+
+  async function removeClassTeacher(item) {
+    const teacherName =
+      item.teachers?.chinese_name ||
+      item.teachers?.english_name ||
+      "這位老師";
+
+    const confirmed = window.confirm(
+      `確定要將「${teacherName}」從「${classItem.class_name}」的班級老師中移除嗎？\n\n只會解除班級關聯，不會刪除老師帳號。`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsSavingTeacher(true);
+
+      const { error } = await supabase
+        .from("class_teachers")
+        .delete()
+        .eq("id", item.id);
+
+      if (error) throw error;
+
+      await loadClassTeachers();
+    } catch (error) {
+      console.error("移除班級老師失敗：", error);
+      window.alert(`移除班級老師失敗：${error.message}`);
+    } finally {
+      setIsSavingTeacher(false);
     }
   }
 
@@ -393,6 +523,161 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
                   <span>備註</span>
                   <p>{classItem.note}</p>
                 </div>
+              )}
+            </section>
+
+            <section className="classDetailDrawer__section">
+              <div className="classDetailDrawer__studentHeader">
+                <div>
+                  <span>CLASS TEACHERS</span>
+                  <h3>班級老師</h3>
+                  <p>
+                    點心管理會依這裡的老師，自動帶入該班老師口味選擇。
+                  </p>
+                </div>
+              </div>
+
+              {isLoadingTeachers ? (
+                <div className="classDetailDrawer__empty">
+                  <strong>正在讀取班級老師……</strong>
+                </div>
+              ) : (
+                <>
+                  {classTeachers.length === 0 ? (
+                    <div
+                      className="classDetailDrawer__empty"
+                      style={{ marginBottom: "12px" }}
+                    >
+                      <strong>目前尚未設定班級老師</strong>
+                      <p>設定後，點心管理才能自動知道該班要顯示哪些老師。</p>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: "8px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      {classTeachers.map((item) => {
+                        const teacher = item.teachers;
+                        const teacherName =
+                          teacher?.chinese_name ||
+                          teacher?.english_name ||
+                          "未命名老師";
+
+                        return (
+                          <div
+                            key={item.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              padding: "10px 12px",
+                              border: "1px solid #e4e8e3",
+                              borderRadius: "10px",
+                              background: "#fafbf9",
+                            }}
+                          >
+                            <div>
+                              <strong>{teacherName}</strong>
+                              {teacher?.english_name &&
+                                teacher?.english_name !== teacherName && (
+                                  <span
+                                    style={{
+                                      marginLeft: "8px",
+                                      color: "#8a938d",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    {teacher.english_name}
+                                  </span>
+                                )}
+                              {item.is_primary && (
+                                <span
+                                  style={{
+                                    marginLeft: "8px",
+                                    padding: "2px 7px",
+                                    borderRadius: "999px",
+                                    background: "#eef4ef",
+                                    color: "#5d7465",
+                                    fontSize: "11px",
+                                  }}
+                                >
+                                  主要老師
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={isSavingTeacher}
+                              onClick={() => removeClassTeacher(item)}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                color: "#9b6d67",
+                                cursor: "pointer",
+                              }}
+                            >
+                              移除
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <select
+                      value={selectedTeacherId}
+                      onChange={(event) =>
+                        setSelectedTeacherId(event.target.value)
+                      }
+                      disabled={isSavingTeacher}
+                      style={{
+                        minWidth: "210px",
+                        height: "40px",
+                        padding: "0 10px",
+                        border: "1px solid #d9ded8",
+                        borderRadius: "9px",
+                        background: "#fff",
+                      }}
+                    >
+                      <option value="">選擇老師</option>
+                      {teacherOptions
+                        .filter(
+                          (teacher) =>
+                            !classTeachers.some(
+                              (item) => item.teacher_id === teacher.id
+                            )
+                        )
+                        .map((teacher) => (
+                          <option key={teacher.id} value={teacher.id}>
+                            {teacher.chinese_name ||
+                              teacher.english_name ||
+                              "未命名老師"}
+                          </option>
+                        ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={addClassTeacher}
+                      disabled={!selectedTeacherId || isSavingTeacher}
+                    >
+                      {isSavingTeacher ? "儲存中…" : "＋ 加入班級老師"}
+                    </button>
+                  </div>
+                </>
               )}
             </section>
 
