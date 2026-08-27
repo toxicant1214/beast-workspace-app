@@ -1,14 +1,79 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
+import "./ViewerManagementPage.css";
+
+const VIEWER_PAGE_OPTIONS = [
+  {
+    key: "dashboard",
+    label: "首頁",
+    description: "查看 Workspace 首頁與統計資訊。",
+  },
+  {
+    key: "students",
+    label: "學生資料",
+    description: "查看學生基本資料與相關資訊。",
+  },
+  {
+    key: "teacher_assignments",
+    label: "老師任務",
+    description: "查看老師任務與完成狀況。",
+  },
+  {
+    key: "camps",
+    label: "營隊管理",
+    description: "查看營隊資料與安排。",
+  },
+  {
+    key: "calendar",
+    label: "行事曆",
+    description: "查看行事曆與重要日期。",
+  },
+  {
+    key: "pickup",
+    label: "接送管理",
+    description: "查看接送安排與相關資料。",
+  },
+  {
+    key: "snack_management",
+    label: "點心管理",
+    description: "查看月點心表、明細、統計與 PDF。",
+  },
+  {
+    key: "learning_reports",
+    label: "學習報告書",
+    description: "查看學生學習報告資料。",
+  },
+  {
+    key: "score_analysis",
+    label: "成績分析",
+    description: "查看成績統計與分析資料。",
+  },
+];
 
 function ViewerManagementPage() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [selectedPages, setSelectedPages] = useState(["dashboard"]);
 
   const [isCreating, setIsCreating] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  const selectedCount = useMemo(
+    () => selectedPages.length,
+    [selectedPages],
+  );
+
+  function togglePage(pageKey) {
+    setSelectedPages((current) => {
+      if (current.includes(pageKey)) {
+        return current.filter((key) => key !== pageKey);
+      }
+
+      return [...current, pageKey];
+    });
+  }
 
   async function handleCreateViewer(event) {
     event.preventDefault();
@@ -46,6 +111,11 @@ function ViewerManagementPage() {
       return;
     }
 
+    if (selectedPages.length === 0) {
+      setErrorMessage("請至少選擇一個可查看頁面。");
+      return;
+    }
+
     try {
       setIsCreating(true);
       setMessage("");
@@ -61,8 +131,9 @@ function ViewerManagementPage() {
             displayName: cleanDisplayName,
             username: cleanUsername,
             password,
+            permissions: selectedPages,
           },
-        }
+        },
       );
 
       if (error) {
@@ -74,19 +145,19 @@ function ViewerManagementPage() {
       }
 
       setMessage("檢視帳號建立成功。");
-
       setDisplayName("");
       setUsername("");
       setPassword("");
+      setSelectedPages(["dashboard"]);
     } catch (error) {
       console.error(
         "建立檢視帳號失敗：",
-        error
+        error,
       );
 
       setErrorMessage(
         error?.message ||
-          "建立檢視帳號失敗，請稍後再試。"
+          "建立檢視帳號失敗，請稍後再試。",
       );
     } finally {
       setIsCreating(false);
@@ -94,89 +165,182 @@ function ViewerManagementPage() {
   }
 
   return (
-    <section>
-      <div>
-        <h1>檢視帳號管理</h1>
+    <section className="viewer-management-page">
+      <div className="viewer-management-page__header">
+        <div>
+          <p className="viewer-management-page__eyebrow">
+            VIEWER ACCESS
+          </p>
+          <h1>檢視帳號管理</h1>
+          <p>
+            建立僅供查看 Workspace 資料的登入帳號，
+            並設定每一個帳號可查看的頁面。
+          </p>
+        </div>
 
-        <p>
-          建立僅供查看 Workspace
-          資料的登入帳號。
-        </p>
+        <div className="viewer-management-page__summary">
+          <span>目前選擇</span>
+          <strong>{selectedCount}</strong>
+          <span>個可查看頁面</span>
+        </div>
       </div>
 
       <form
         onSubmit={handleCreateViewer}
-        style={{
-          maxWidth: "520px",
-          display: "grid",
-          gap: "16px",
-          marginTop: "24px",
-        }}
+        className="viewer-management-form"
       >
-        <label>
-          <div>顯示名稱</div>
+        <div className="viewer-management-grid">
+          <section className="viewer-card">
+            <div className="viewer-card__heading">
+              <div>
+                <span className="viewer-card__step">01</span>
+                <h2>帳號資料</h2>
+              </div>
+              <p>
+                由管理員直接建立帳號與初始密碼。
+              </p>
+            </div>
 
-          <input
-            type="text"
-            value={displayName}
-            onChange={(event) =>
-              setDisplayName(
-                event.target.value
-              )
-            }
-            placeholder="例如：王董事長"
+            <div className="viewer-field-grid">
+              <label className="viewer-field">
+                <span>顯示名稱</span>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(event) =>
+                    setDisplayName(
+                      event.target.value,
+                    )
+                  }
+                  placeholder="例如：王董事長"
+                  disabled={isCreating}
+                />
+              </label>
+
+              <label className="viewer-field">
+                <span>登入帳號</span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(event) =>
+                    setUsername(
+                      event.target.value,
+                    )
+                  }
+                  placeholder="例如：boss"
+                  disabled={isCreating}
+                  autoCapitalize="none"
+                  spellCheck="false"
+                />
+                <small>
+                  僅限英文、數字、底線，至少 3 個字元。
+                </small>
+              </label>
+
+              <label className="viewer-field">
+                <span>初始密碼</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) =>
+                    setPassword(
+                      event.target.value,
+                    )
+                  }
+                  placeholder="至少 8 個字元"
+                  disabled={isCreating}
+                />
+                <small>
+                  建立後可直接使用這組帳號密碼登入。
+                </small>
+              </label>
+            </div>
+          </section>
+
+          <section className="viewer-card viewer-card--permissions">
+            <div className="viewer-card__heading">
+              <div>
+                <span className="viewer-card__step">02</span>
+                <h2>可查看頁面</h2>
+              </div>
+              <p>
+                僅列出可授權的業務資料頁，不包含後台設定。
+              </p>
+            </div>
+
+            <div className="viewer-permission-list">
+              {VIEWER_PAGE_OPTIONS.map(
+                (page) => {
+                  const checked =
+                    selectedPages.includes(
+                      page.key,
+                    );
+
+                  return (
+                    <button
+                      key={page.key}
+                      type="button"
+                      className={
+                        checked
+                          ? "viewer-permission-card viewer-permission-card--active"
+                          : "viewer-permission-card"
+                      }
+                      onClick={() =>
+                        togglePage(
+                          page.key,
+                        )
+                      }
+                      disabled={
+                        isCreating
+                      }
+                    >
+                      <span className="viewer-permission-card__check">
+                        {checked ? "✓" : ""}
+                      </span>
+
+                      <span className="viewer-permission-card__text">
+                        <strong>
+                          {page.label}
+                        </strong>
+                        <small>
+                          {
+                            page.description
+                          }
+                        </small>
+                      </span>
+                    </button>
+                  );
+                },
+              )}
+            </div>
+          </section>
+        </div>
+
+        <div className="viewer-management-actions">
+          <div>
+            {message && (
+              <p className="viewer-message viewer-message--success">
+                {message}
+              </p>
+            )}
+
+            {errorMessage && (
+              <p className="viewer-message viewer-message--error">
+                {errorMessage}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="viewer-create-button"
             disabled={isCreating}
-          />
-        </label>
-
-        <label>
-          <div>登入帳號</div>
-
-          <input
-            type="text"
-            value={username}
-            onChange={(event) =>
-              setUsername(
-                event.target.value
-              )
-            }
-            placeholder="例如：boss"
-            disabled={isCreating}
-          />
-        </label>
-
-        <label>
-          <div>初始密碼</div>
-
-          <input
-            type="password"
-            value={password}
-            onChange={(event) =>
-              setPassword(
-                event.target.value
-              )
-            }
-            placeholder="至少 8 個字元"
-            disabled={isCreating}
-          />
-        </label>
-
-        <button
-          type="submit"
-          disabled={isCreating}
-        >
-          {isCreating
-            ? "建立中…"
-            : "建立檢視帳號"}
-        </button>
-
-        {message && (
-          <p>{message}</p>
-        )}
-
-        {errorMessage && (
-          <p>{errorMessage}</p>
-        )}
+          >
+            {isCreating
+              ? "建立中…"
+              : "建立檢視帳號"}
+          </button>
+        </div>
       </form>
     </section>
   );
