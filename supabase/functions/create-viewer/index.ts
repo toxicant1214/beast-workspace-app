@@ -7,6 +7,17 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const ALLOWED_VIEWER_MODULES = new Set([
+  "dashboard",
+  "students",
+  "camps",
+  "calendar",
+  "pickup",
+  "snack_management",
+  "learning_reports",
+  "score_analysis",
+]);
+
 function jsonResponse(
   body: Record<string, unknown>,
   status = 200,
@@ -36,6 +47,28 @@ function buildInternalEmail(
   username: string,
 ) {
   return `${username}@viewer.beast.local`;
+}
+
+function cleanPermissions(
+  value: unknown,
+) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .map((item) =>
+          cleanText(item),
+        )
+        .filter((item) =>
+          ALLOWED_VIEWER_MODULES.has(
+            item,
+          ),
+        ),
+    ),
+  );
 }
 
 Deno.serve(async (request: Request) => {
@@ -86,7 +119,9 @@ Deno.serve(async (request: Request) => {
     );
 
   try {
-    // 1. 驗證呼叫者
+    // --------------------------------------------------
+    // 1. 驗證呼叫者本人
+    // --------------------------------------------------
     const authorization =
       request.headers.get(
         "Authorization",
@@ -155,7 +190,9 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    // 2. 讀取建立資料
+    // --------------------------------------------------
+    // 2. 讀取與驗證建立資料
+    // --------------------------------------------------
     const body =
       await request.json();
 
@@ -172,6 +209,11 @@ Deno.serve(async (request: Request) => {
     const password =
       cleanText(
         body?.password,
+      );
+
+    const permissions =
+      cleanPermissions(
+        body?.permissions,
       );
 
     if (!displayName) {
@@ -238,7 +280,19 @@ Deno.serve(async (request: Request) => {
       );
     }
 
+    if (permissions.length === 0) {
+      return jsonResponse(
+        {
+          error:
+            "請至少選擇一個可查看頁面。",
+        },
+        400,
+      );
+    }
+
+    // --------------------------------------------------
     // 3. 檢查 username 是否重複
+    // --------------------------------------------------
     const {
       data: duplicateViewer,
       error: duplicateViewerError,
@@ -272,13 +326,14 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    // 4. 產生 Supabase Auth 內部 Email
+    // --------------------------------------------------
+    // 4. 建立 Supabase Auth
+    // --------------------------------------------------
     const internalEmail =
       buildInternalEmail(
         username,
       );
 
-    // 5. 建立 Supabase Auth
     const {
       data: authCreated,
       error: createAuthError,
@@ -339,7 +394,9 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    // 6. 建立 workspace_viewers
+    // --------------------------------------------------
+    // 5. 建立 workspace_viewers
+    // --------------------------------------------------
     const {
       data: createdViewer,
       error: insertViewerError,
@@ -369,11 +426,57 @@ Deno.serve(async (request: Request) => {
       throw insertViewerError;
     }
 
+    // --------------------------------------------------
+    // 6. 建立 viewer 權限
+    // --------------------------------------------------
+    const permissionRows =
+      permissions.map(
+        (moduleKey) => ({
+          viewer_id:
+            createdViewer.id,
+          module_key:
+            moduleKey,
+          can_view: true,
+          updated_at:
+            new Date().toISOString(),
+        }),
+      );
+
+    const {
+      error: insertPermissionError,
+    } = await adminClient
+      .from(
+        "workspace_viewer_permissions",
+      )
+      .insert(
+        permissionRows,
+      );
+
+    if (insertPermissionError) {
+      // 回滾 viewer 資料與 Auth，
+      // 避免留下只有帳號但沒有權限的半成品。
+      await adminClient
+        .from("workspace_viewers")
+        .delete()
+        .eq(
+          "id",
+          createdViewer.id,
+        );
+
+      await adminClient.auth.admin
+        .deleteUser(
+          authUserId,
+        );
+
+      throw insertPermissionError;
+    }
+
     return jsonResponse({
       message:
-        "檢視帳號已建立，可以直接使用帳號密碼登入。",
+        "檢視帳號與查看權限已建立完成。",
       viewer:
         createdViewer,
+      permissions,
     });
   } catch (error) {
     console.error(
