@@ -156,6 +156,7 @@ function SnackManagementPage() {
   const [preferenceLoading, setPreferenceLoading] = useState(false);
   const [savingPreferenceKey, setSavingPreferenceKey] = useState("");
   const [exportingSummaryPdf, setExportingSummaryPdf] = useState(false);
+  const [exportingPreferencePdf, setExportingPreferencePdf] = useState(false);
 
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedExternalDate, setSelectedExternalDate] = useState(null);
@@ -4679,6 +4680,165 @@ function SnackManagementPage() {
     );
   }
 
+  async function exportSnackPreferencePdf() {
+    const activeItems = snackItems.filter((item) => item.is_active);
+    const selectedClass = preferenceClasses.find(
+      (classItem) => classItem.id === selectedPreferenceClassId
+    );
+
+    if (!selectedClass || activeItems.length === 0 || preferenceLoading || snackItemsLoading) {
+      return;
+    }
+
+    try {
+      setExportingPreferencePdf(true);
+      setErrorMessage("");
+
+      const students = preferenceMemberships
+        .filter((membership) => membership.class_id === selectedPreferenceClassId)
+        .map((membership) => ({
+          type: "STUDENT",
+          id: membership.student_id,
+          name:
+            membership.students?.chinese_name ||
+            membership.students?.english_name ||
+            "未命名學生",
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
+
+      const teachers = getPreferenceTeachersForClass(selectedPreferenceClassId).map(
+        (teacher) => ({
+          type: "TEACHER",
+          id: teacher.teacher_id,
+          name: `${teacher.name}（老師）`,
+        })
+      );
+
+      const people = [...teachers, ...students];
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      const fontResponse = await fetch(
+        "https://cdn.jsdelivr.net/gh/ButTaiwan/iansui@main/fonts/ttf/Iansui-Regular.ttf"
+      );
+      if (!fontResponse.ok) {
+        throw new Error(`芫荽體載入失敗（${fontResponse.status}）`);
+      }
+
+      const fontBytes = new Uint8Array(await fontResponse.arrayBuffer());
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let offset = 0; offset < fontBytes.length; offset += chunkSize) {
+        binary += String.fromCharCode(
+          ...fontBytes.subarray(offset, Math.min(offset + chunkSize, fontBytes.length))
+        );
+      }
+      const fontBase64 = btoa(binary);
+      pdf.addFileToVFS("Iansui-Regular.ttf", fontBase64);
+      pdf.addFont("Iansui-Regular.ttf", "Iansui", "normal");
+      pdf.setFont("Iansui", "normal");
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const nameWidth = 34;
+      const usableWidth = pageWidth - margin * 2;
+      const itemWidth = (usableWidth - nameWidth) / activeItems.length;
+      const headerHeight = 15;
+      const rowHeight = 10;
+
+      const optionNameMap = new Map();
+      activeItems.forEach((item) => {
+        (item.options || []).forEach((option) => optionNameMap.set(option.id, option.name));
+      });
+
+      function choiceText(person, item) {
+        const choice = person.type === "TEACHER"
+          ? getTeacherSnackChoice(person.id, selectedPreferenceClassId, item.id)
+          : getStudentSnackChoice(person.id, item.id);
+
+        if (!choice) return "—";
+        if (item.requires_option) {
+          return optionNameMap.get(choice.snack_item_option_id) || "—";
+        }
+        return String(Number(choice.quantity || 0));
+      }
+
+      function drawPageHeader(pageNumber) {
+        pdf.setFontSize(16);
+        pdf.text(`${selectedClass.class_name}｜點心口味表`, margin, 12);
+        pdf.setFontSize(9);
+        pdf.text(
+          `${selectedSemester?.name || ""}　即時資料　${people.length} 人`,
+          margin,
+          18
+        );
+        pdf.text(`第 ${pageNumber} 頁`, pageWidth - margin, 18, { align: "right" });
+      }
+
+      function drawTableHeader(y) {
+        pdf.setFillColor(244, 246, 242);
+        pdf.setDrawColor(205, 211, 205);
+        pdf.rect(margin, y, nameWidth, headerHeight, "FD");
+        pdf.setFontSize(9);
+        pdf.text("姓名", margin + 2, y + 9);
+
+        activeItems.forEach((item, index) => {
+          const x = margin + nameWidth + itemWidth * index;
+          pdf.rect(x, y, itemWidth, headerHeight, "FD");
+          const lines = pdf.splitTextToSize(item.name, Math.max(8, itemWidth - 3));
+          pdf.text(lines.slice(0, 2), x + itemWidth / 2, y + 6, { align: "center" });
+        });
+        return y + headerHeight;
+      }
+
+      let pageNumber = 1;
+      drawPageHeader(pageNumber);
+      let y = drawTableHeader(23);
+
+      if (people.length === 0) {
+        pdf.setFontSize(11);
+        pdf.text("目前沒有可設定的人員", margin, y + 10);
+      } else {
+        people.forEach((person) => {
+          if (y + rowHeight > pageHeight - margin) {
+            pdf.addPage();
+            pageNumber += 1;
+            drawPageHeader(pageNumber);
+            y = drawTableHeader(23);
+          }
+
+          pdf.setDrawColor(220, 224, 220);
+          pdf.rect(margin, y, nameWidth, rowHeight);
+          pdf.setFontSize(9);
+          pdf.text(person.name, margin + 2, y + 6.5);
+
+          activeItems.forEach((item, index) => {
+            const x = margin + nameWidth + itemWidth * index;
+            pdf.rect(x, y, itemWidth, rowHeight);
+            const text = choiceText(person, item);
+            const lines = pdf.splitTextToSize(text, Math.max(8, itemWidth - 3));
+            pdf.text(lines.slice(0, 2), x + itemWidth / 2, y + 6.5, { align: "center" });
+          });
+
+          y += rowHeight;
+        });
+      }
+
+      const safeClassName = (selectedClass.class_name || "班級").replace(/[\\/:*?\"<>|]/g, "-");
+      pdf.save(`${safeClassName}_點心口味表.pdf`);
+    } catch (error) {
+      console.error("產出點心口味 PDF 失敗：", error);
+      setErrorMessage(`產出點心口味 PDF 失敗：${error.message}`);
+    } finally {
+      setExportingPreferencePdf(false);
+    }
+  }
+
   function renderSnackPreferences() {
     const activeItems = snackItems.filter(
       (item) => item.is_active
@@ -4937,6 +5097,14 @@ function SnackManagementPage() {
             </span>
           </div>
 
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              gap: "10px",
+              flexWrap: "wrap",
+            }}
+          >
           <label
             style={{
               display: "grid",
@@ -4988,6 +5156,32 @@ function SnackManagementPage() {
               )}
             </select>
           </label>
+
+          <button
+            type="button"
+            onClick={exportSnackPreferencePdf}
+            disabled={
+              exportingPreferencePdf ||
+              preferenceLoading ||
+              snackItemsLoading ||
+              !selectedPreferenceClassId
+            }
+            style={{
+              height: "40px",
+              padding: "0 16px",
+              border: "1px solid #cfd6cf",
+              borderRadius: "10px",
+              background: "#fff",
+              color: "#435148",
+              font: "inherit",
+              fontWeight: 600,
+              cursor: exportingPreferencePdf ? "wait" : "pointer",
+              opacity: exportingPreferencePdf ? 0.65 : 1,
+            }}
+          >
+            {exportingPreferencePdf ? "產出 PDF 中…" : "下載口味 PDF"}
+          </button>
+          </div>
         </div>
 
         {preferenceLoading ||
