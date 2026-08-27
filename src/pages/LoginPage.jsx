@@ -14,7 +14,7 @@ function LoginPage({
     mode === "set-password";
 
 
-  const [email, setEmail] =
+  const [loginId, setLoginId] =
     useState("");
 
 
@@ -224,11 +224,11 @@ function LoginPage({
 
 
     if (
-      !email.trim() ||
+      !loginId.trim() ||
       !password
     ) {
       setErrorMessage(
-        "請輸入 Email 與密碼。"
+        "請輸入登入帳號或 Email 與密碼。"
       );
 
       return;
@@ -241,10 +241,23 @@ function LoginPage({
       setSuccessMessage("");
 
 
+      const cleanLoginId =
+        loginId.trim();
+
+      /*
+       * 老師維持原本 Email 登入。
+       * Viewer 則輸入管理員建立的 username，
+       * 前端只在登入時轉成系統內部 Email。
+       */
+      const loginEmail =
+        cleanLoginId.includes("@")
+          ? cleanLoginId
+          : `${cleanLoginId.toLowerCase()}@viewer.beast.local`;
+
       const { error } =
         await supabase.auth
           .signInWithPassword({
-            email: email.trim(),
+            email: loginEmail,
             password,
           });
 
@@ -264,7 +277,7 @@ function LoginPage({
         "Invalid login credentials"
       ) {
         setErrorMessage(
-          "Email 或密碼不正確。"
+          "登入帳號／Email 或密碼不正確。"
         );
       } else {
         setErrorMessage(
@@ -402,22 +415,24 @@ function LoginPage({
           {!isPasswordSetup && (
             <label className="login-form__field">
               <span>
-                Email
+                登入帳號 / Email
               </span>
 
 
               <input
-                type="email"
-                value={email}
+                type="text"
+                value={loginId}
                 onChange={(
                   event
                 ) =>
-                  setEmail(
+                  setLoginId(
                     event.target.value
                   )
                 }
-                placeholder="請輸入登入信箱"
-                autoComplete="email"
+                placeholder="老師輸入 Email；檢視帳號輸入帳號"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck="false"
                 autoFocus
               />
             </label>
