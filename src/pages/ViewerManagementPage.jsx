@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 
 function ViewerManagementPage() {
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   const [isCreating, setIsCreating] = useState(false);
@@ -14,15 +14,25 @@ function ViewerManagementPage() {
     event.preventDefault();
 
     const cleanDisplayName = displayName.trim();
-    const cleanEmail = email.trim();
+    const cleanUsername = username.trim().toLowerCase();
 
     if (!cleanDisplayName) {
       setErrorMessage("請輸入顯示名稱。");
       return;
     }
 
-    if (!cleanEmail) {
-      setErrorMessage("請輸入 Email。");
+    if (!cleanUsername) {
+      setErrorMessage("請輸入登入帳號。");
+      return;
+    }
+
+    if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
+      setErrorMessage("登入帳號只能使用英文字母、數字與底線。");
+      return;
+    }
+
+    if (cleanUsername.length < 3) {
+      setErrorMessage("登入帳號至少需要 3 個字元。");
       return;
     }
 
@@ -31,8 +41,8 @@ function ViewerManagementPage() {
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMessage("初始密碼至少需要 6 個字元。");
+    if (password.length < 8) {
+      setErrorMessage("初始密碼至少需要 8 個字元。");
       return;
     }
 
@@ -49,7 +59,7 @@ function ViewerManagementPage() {
         {
           body: {
             displayName: cleanDisplayName,
-            email: cleanEmail,
+            username: cleanUsername,
             password,
           },
         }
@@ -66,7 +76,7 @@ function ViewerManagementPage() {
       setMessage("檢視帳號建立成功。");
 
       setDisplayName("");
-      setEmail("");
+      setUsername("");
       setPassword("");
     } catch (error) {
       console.error(
@@ -120,17 +130,17 @@ function ViewerManagementPage() {
         </label>
 
         <label>
-          <div>Email</div>
+          <div>登入帳號</div>
 
           <input
-            type="email"
-            value={email}
+            type="text"
+            value={username}
             onChange={(event) =>
-              setEmail(
+              setUsername(
                 event.target.value
               )
             }
-            placeholder="登入用 Email"
+            placeholder="例如：boss"
             disabled={isCreating}
           />
         </label>
@@ -146,7 +156,7 @@ function ViewerManagementPage() {
                 event.target.value
               )
             }
-            placeholder="至少 6 個字元"
+            placeholder="至少 8 個字元"
             disabled={isCreating}
           />
         </label>
