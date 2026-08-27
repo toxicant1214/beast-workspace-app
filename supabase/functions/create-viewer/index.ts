@@ -140,14 +140,25 @@ Deno.serve(async (request: Request) => {
     }
 
     const {
-      data: { user: caller },
-      error: callerError,
+      data: claimsData,
+      error: claimsError,
     } =
-      await adminClient.auth.getUser(
+      await adminClient.auth.getClaims(
         accessToken,
       );
 
-    if (callerError || !caller) {
+    const callerId =
+      claimsData?.claims?.sub;
+
+    if (
+      claimsError ||
+      !callerId
+    ) {
+      console.error(
+        "create-viewer JWT 驗證失敗：",
+        claimsError,
+      );
+
       return jsonResponse(
         {
           error:
@@ -165,7 +176,7 @@ Deno.serve(async (request: Request) => {
       .select("id, role, status")
       .eq(
         "auth_user_id",
-        caller.id,
+        callerId,
       )
       .maybeSingle();
 
