@@ -200,6 +200,35 @@ function buildPermissionObject(
 }
 
 
+
+function buildViewerPermissionObject(
+  permissionRows
+) {
+  const result = {};
+
+  for (
+    const row
+    of permissionRows
+  ) {
+    if (!row.can_view) {
+      continue;
+    }
+
+    result[row.module_key] = {
+      level: "view",
+      view: true,
+      edit: false,
+      create: false,
+      update: false,
+      delete: false,
+      data_scope: "all",
+    };
+  }
+
+  return result;
+}
+
+
 function Workspace() {
   const [
     activePage,
@@ -263,22 +292,34 @@ function Workspace() {
           }
 
           if (
+            currentTeacher?.role ===
+            "viewer"
+          ) {
+            return Boolean(
+              currentTeacher
+                ?.permissions
+                ?.[page.key]
+                ?.view
+            );
+          }
+
+          if (
             page.adminOnly
           ) {
             return false;
           }
 
           if (page.editOnly) {
-  return canEditPage(
-    currentTeacher,
-    page.key
-  );
-}
+            return canEditPage(
+              currentTeacher,
+              page.key
+            );
+          }
 
-return hasPagePermission(
-  currentTeacher,
-  page.key
-);
+          return hasPagePermission(
+            currentTeacher,
+            page.key
+          );
         })
         .map(
           (page) =>
@@ -408,8 +449,8 @@ return hasPagePermission(
 
 
         const {
-          data,
-          error,
+          data: teacherData,
+          error: teacherError,
         } =
           await supabase
             .from("teachers")
@@ -431,8 +472,8 @@ return hasPagePermission(
             .maybeSingle();
 
 
-        if (error) {
-          throw error;
+        if (teacherError) {
+          throw teacherError;
         }
 
 
@@ -441,52 +482,94 @@ return hasPagePermission(
         }
 
 
-        if (!data) {
-          setCurrentTeacher(
-            null
-          );
+        if (teacherData) {
+          if (
+            teacherData.status !==
+            "active"
+          ) {
+            setCurrentTeacher(
+              null
+            );
 
-          setCurrentTeacherError(
-            "找不到這個登入帳號對應的老師資料。"
-          );
+            setCurrentTeacherError(
+              "這個老師帳號目前已停用，請聯絡管理員。"
+            );
 
-          return;
-        }
-
-
-        if (
-          data.status !==
-          "active"
-        ) {
-          setCurrentTeacher(
-            null
-          );
-
-          setCurrentTeacherError(
-            "這個老師帳號目前已停用，請聯絡管理員。"
-          );
-
-          return;
-        }
+            return;
+          }
 
 
-        if (
-          data.role ===
-          "admin"
-        ) {
+          if (
+            teacherData.role ===
+            "admin"
+          ) {
+            setCurrentTeacher({
+              ...teacherData,
+              permissions: {},
+            });
+
+            return;
+          }
+
+
+          const permissionRows =
+            await getTeacherPermissions(
+              teacherData.id
+            );
+
+
+          if (!isMounted) {
+            return;
+          }
+
+
+          const permissions =
+            buildPermissionObject(
+              permissionRows
+            );
+
+
           setCurrentTeacher({
-            ...data,
-            permissions: {},
+            ...teacherData,
+            permissions,
           });
 
           return;
         }
 
 
-        const permissionRows =
-          await getTeacherPermissions(
-            data.id
-          );
+        /*
+         * 找不到 teacher 時，再辨識 viewer。
+         * viewer 與 teachers 完全分離。
+         */
+        const {
+          data: viewerData,
+          error: viewerError,
+        } =
+          await supabase
+            .from(
+              "workspace_viewers"
+            )
+            .select(
+              `
+              id,
+              auth_user_id,
+              display_name,
+              username,
+              email,
+              is_active
+              `
+            )
+            .eq(
+              "auth_user_id",
+              session.user.id
+            )
+            .maybeSingle();
+
+
+        if (viewerError) {
+          throw viewerError;
+        }
 
 
         if (!isMounted) {
@@ -494,15 +577,84 @@ return hasPagePermission(
         }
 
 
-        const permissions =
-          buildPermissionObject(
-            permissionRows
+        if (!viewerData) {
+          setCurrentTeacher(
+            null
+          );
+
+          setCurrentTeacherError(
+            "找不到這個登入帳號對應的 Workspace 使用者資料。"
+          );
+
+          return;
+        }
+
+
+        if (
+          viewerData.is_active !==
+          true
+        ) {
+          setCurrentTeacher(
+            null
+          );
+
+          setCurrentTeacherError(
+            "這個檢視帳號目前已停用，請聯絡管理員。"
+          );
+
+          return;
+        }
+
+
+        const {
+          data: viewerPermissionRows,
+          error:
+            viewerPermissionError,
+        } =
+          await supabase
+            .from(
+              "workspace_viewer_permissions"
+            )
+            .select(
+              `
+              module_key,
+              can_view
+              `
+            )
+            .eq(
+              "viewer_id",
+              viewerData.id
+            )
+            .eq(
+              "can_view",
+              true
+            );
+
+
+        if (
+          viewerPermissionError
+        ) {
+          throw viewerPermissionError;
+        }
+
+
+        if (!isMounted) {
+          return;
+        }
+
+
+        const viewerPermissions =
+          buildViewerPermissionObject(
+            viewerPermissionRows || []
           );
 
 
         setCurrentTeacher({
-          ...data,
-          permissions,
+          ...viewerData,
+          role: "viewer",
+          status: "active",
+          permissions:
+            viewerPermissions,
         });
       } catch (error) {
         console.error(
@@ -528,7 +680,6 @@ return hasPagePermission(
         }
       }
     }
-
 
     loadCurrentTeacher();
 
@@ -643,6 +794,12 @@ return hasPagePermission(
       return "老師";
     }
 
+    if (
+      role === "viewer"
+    ) {
+      return "檢視帳號";
+    }
+
     return "使用者";
   }
 
@@ -667,6 +824,14 @@ return hasPagePermission(
     ) {
       return (
         currentTeacher.english_name
+      );
+    }
+
+    if (
+      currentTeacher?.display_name
+    ) {
+      return (
+        currentTeacher.display_name
       );
     }
 
