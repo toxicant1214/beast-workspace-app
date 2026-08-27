@@ -22,6 +22,7 @@ function ClassTable({
   onOpen,
   onEdit,
   onToggleStatus,
+  readOnly = false,
 }) {
   if (isLoading) {
     return (
@@ -39,7 +40,9 @@ function ClassTable({
         <strong>目前沒有符合條件的班級</strong>
 
         <p>
-          可以新增第一個班級，或調整搜尋及篩選條件。
+          {readOnly
+            ? "請調整搜尋或篩選條件。"
+            : "可以新增第一個班級，或調整搜尋及篩選條件。"}
         </p>
       </div>
     );
@@ -54,7 +57,9 @@ function ClassTable({
             <th>學年度／學期</th>
             <th>班級期間</th>
             <th>狀態</th>
-            <th aria-label="操作" />
+            {!readOnly && (
+              <th aria-label="操作" />
+            )}
           </tr>
         </thead>
 
@@ -119,32 +124,34 @@ function ClassTable({
                 </span>
               </td>
 
-              <td>
-                <div className="classTable__actions">
-                  <button
-                    type="button"
-                    onClick={() => onEdit(classItem)}
-                  >
-                    編輯
-                  </button>
+              {!readOnly && (
+                <td>
+                  <div className="classTable__actions">
+                    <button
+                      type="button"
+                      onClick={() => onEdit(classItem)}
+                    >
+                      編輯
+                    </button>
 
-                  <button
-                    type="button"
-                    className={
-                      classItem.is_active
-                        ? "classTable__statusButton classTable__statusButton--disable"
-                        : "classTable__statusButton classTable__statusButton--enable"
-                    }
-                    onClick={() =>
-                      onToggleStatus(classItem)
-                    }
-                  >
-                    {classItem.is_active
-                      ? "停用"
-                      : "啟用"}
-                  </button>
-                </div>
-              </td>
+                    <button
+                      type="button"
+                      className={
+                        classItem.is_active
+                          ? "classTable__statusButton classTable__statusButton--disable"
+                          : "classTable__statusButton classTable__statusButton--enable"
+                      }
+                      onClick={() =>
+                        onToggleStatus(classItem)
+                      }
+                    >
+                      {classItem.is_active
+                        ? "停用"
+                        : "啟用"}
+                    </button>
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

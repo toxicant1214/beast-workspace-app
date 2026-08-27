@@ -18,7 +18,12 @@ function getTodayString() {
   return `${year}-${month}-${day}`;
 }
 
-function ClassDetailDrawer({ classItem, onClose, onEdit }) {
+function ClassDetailDrawer({
+  classItem,
+  onClose,
+  onEdit,
+  readOnly = false,
+}) {
   const [isAddStudentsOpen, setIsAddStudentsOpen] = useState(false);
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
   const [classStudents, setClassStudents] = useState([]);
@@ -476,9 +481,14 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
                     產出點名表
                   </button>
 
-                  <button type="button" onClick={() => onEdit(classItem)}>
-                    編輯
-                  </button>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => onEdit(classItem)}
+                    >
+                      編輯
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -610,25 +620,28 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
                               )}
                             </div>
 
-                            <button
-                              type="button"
-                              disabled={isSavingTeacher}
-                              onClick={() => removeClassTeacher(item)}
-                              style={{
-                                border: "none",
-                                background: "transparent",
-                                color: "#9b6d67",
-                                cursor: "pointer",
-                              }}
-                            >
-                              移除
-                            </button>
+                            {!readOnly && (
+                              <button
+                                type="button"
+                                disabled={isSavingTeacher}
+                                onClick={() => removeClassTeacher(item)}
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  color: "#9b6d67",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                移除
+                              </button>
+                            )}
                           </div>
                         );
                       })}
                     </div>
                   )}
 
+                  {!readOnly && (
                   <div
                     style={{
                       display: "flex",
@@ -677,6 +690,7 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
                       {isSavingTeacher ? "儲存中…" : "＋ 加入班級老師"}
                     </button>
                   </div>
+                  )}
                 </>
               )}
             </section>
@@ -689,13 +703,15 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
                   <p>目前 {classStudents.length} 位學生</p>
                 </div>
 
-                <button
-                  type="button"
-                  className="classDetailDrawer__addStudent"
-                  onClick={openAddStudents}
-                >
-                  ＋ 加入學生
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="classDetailDrawer__addStudent"
+                    onClick={openAddStudents}
+                  >
+                    ＋ 加入學生
+                  </button>
+                )}
               </div>
 
               {isLoadingStudents ? (
@@ -739,6 +755,7 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
                             加入於 {formatDate(item.joined_at)}
                           </small>
 
+                          {!readOnly && (
                           <div className="classDetailDrawer__studentMenuWrap">
                             <button
                               type="button"
@@ -776,6 +793,7 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
                               </div>
                             )}
                           </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -787,7 +805,7 @@ function ClassDetailDrawer({ classItem, onClose, onEdit }) {
         </aside>
       </div>
 
-      {isAddStudentsOpen && (
+      {!readOnly && isAddStudentsOpen && (
         <AddStudentsToClassDrawer
           classItem={classItem}
           onClose={closeAddStudents}

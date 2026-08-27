@@ -25,7 +25,8 @@ function getTodayString() {
   return `${year}-${month}-${day}`;
 }
 
-function ClassPage() {
+function ClassPage({ currentTeacher }) {
+  const isViewer = currentTeacher?.role === "viewer";
   const [classes, setClasses] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("ACTIVE");
@@ -491,13 +492,15 @@ function ClassPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="classPage__primaryButton"
-          onClick={openNewClassDrawer}
-        >
-          ＋ 新增班級
-        </button>
+        {!isViewer && (
+          <button
+            type="button"
+            className="classPage__primaryButton"
+            onClick={openNewClassDrawer}
+          >
+            ＋ 新增班級
+          </button>
+        )}
       </header>
 
       <section className="classPage__stats">
@@ -575,6 +578,7 @@ function ClassPage() {
           onOpen={openClassDetail}
           onEdit={openEditClassDrawer}
           onToggleStatus={toggleClassStatus}
+          readOnly={isViewer}
         />
       </section>
 
@@ -583,10 +587,11 @@ function ClassPage() {
           classItem={detailClass}
           onClose={closeClassDetail}
           onEdit={openEditClassDrawer}
+          readOnly={isViewer}
         />
       )}
 
-      {isDrawerOpen && (
+      {!isViewer && isDrawerOpen && (
         <ClassDrawer
           selectedClass={selectedClass}
           form={form}
