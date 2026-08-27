@@ -6872,14 +6872,11 @@ function SnackManagementPage({
                             closed
                               ? `${closed.title}｜不需點心`
                               : readOnly
-                                ? `${classItem.class_name}｜${cell.dateString}`
+                                ? `${classItem.class_name}｜${cell.dateString}｜點擊查看細節`
                                 : `${classItem.class_name}｜${cell.dateString}｜點擊調整`
                           }
                           onClick={() => {
-                            if (
-                              !readOnly &&
-                              !closed
-                            ) {
+                            if (!closed) {
                               openDailyCell(
                                 classItem,
                                 cell.dateString
@@ -6901,10 +6898,9 @@ function SnackManagementPage({
                               "1px solid #ecefeb",
                             borderRight:
                               "1px solid #ecefeb",
-                            cursor:
-                              closed || readOnly
-                                ? "default"
-                                : "pointer",
+                            cursor: closed
+                              ? "default"
+                              : "pointer",
                             position: "relative",
                           }}
                         >
@@ -7399,7 +7395,7 @@ function SnackManagementPage({
         </div>
       )}
 
-      {!readOnly && selectedCell && (
+      {selectedCell && (
         <div
           onMouseDown={(event) => {
             if (
@@ -7595,123 +7591,172 @@ function SnackManagementPage({
                             gap: "8px",
                           }}
                         >
-                          <label
-                            style={{
-                              display:
-                                "flex",
-                              alignItems:
-                                "center",
-                              gap: "8px",
-                              cursor:
-                                "pointer",
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={
-                                checked
-                              }
-                              onChange={(
-                                event
-                              ) => {
-                                const nextChecked =
-                                  event
-                                    .target
-                                    .checked;
-
-                                setSelectedCell(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-                                    excludedStudentIds:
-                                      nextChecked
-                                        ? [
-                                            ...current
-                                              .excludedStudentIds,
-                                            student
-                                              .student_id,
-                                          ]
-                                        : current
-                                            .excludedStudentIds
-                                            .filter(
-                                              (
-                                                id
-                                              ) =>
-                                                id !==
-                                                student
-                                                  .student_id
-                                            ),
-                                  })
-                                );
-                              }}
-                            />
-
-                            <strong>
-                              {
-                                student.name
-                              }
-                            </strong>
-
-                            {checked && (
-                              <span
+                          {readOnly ? (
+                            <>
+                              <div
                                 style={{
-                                  marginLeft:
-                                    "auto",
-                                  fontSize:
-                                    "11px",
-                                  color:
-                                    "#9a6658",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
                                 }}
                               >
-                                不計點心
-                              </span>
-                            )}
-                          </label>
+                                <strong>
+                                  {student.name}
+                                </strong>
 
-                          {checked && (
-                            <input
-                              type="text"
-                              value={
-                                selectedCell
-                                  .studentReasons[
-                                  student
-                                    .student_id
-                                ] || ""
-                              }
-                              onChange={(
-                                event
-                              ) =>
-                                setSelectedCell(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-                                    studentReasons:
-                                      {
-                                        ...current.studentReasons,
-                                        [student.student_id]:
-                                          event
-                                            .target
-                                            .value,
-                                      },
-                                  })
-                                )
-                              }
-                              placeholder="原因，例如：臨時請假、家長交代不吃"
-                              style={{
-                                height:
-                                  "36px",
-                                padding:
-                                  "0 10px",
-                                border:
-                                  "1px solid #ddd8cf",
-                                borderRadius:
-                                  "8px",
-                                font:
-                                  "inherit",
-                              }}
-                            />
+                                <span
+                                  style={{
+                                    marginLeft: "auto",
+                                    fontSize: "11px",
+                                    color: checked
+                                      ? "#9a6658"
+                                      : "#6f7a72",
+                                  }}
+                                >
+                                  {checked
+                                    ? "不計點心"
+                                    : "計入點心"}
+                                </span>
+                              </div>
+
+                              {checked && (
+                                <div
+                                  style={{
+                                    padding: "8px 10px",
+                                    borderRadius: "8px",
+                                    background: "#faf6f2",
+                                    color: "#7d6f65",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  原因：
+                                  {selectedCell.studentReasons[
+                                    student.student_id
+                                  ] || "未填寫"}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <label
+                                style={{
+                                  display:
+                                    "flex",
+                                  alignItems:
+                                    "center",
+                                  gap: "8px",
+                                  cursor:
+                                    "pointer",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    checked
+                                  }
+                                  onChange={(
+                                    event
+                                  ) => {
+                                    const nextChecked =
+                                      event
+                                        .target
+                                        .checked;
+
+                                    setSelectedCell(
+                                      (
+                                        current
+                                      ) => ({
+                                        ...current,
+                                        excludedStudentIds:
+                                          nextChecked
+                                            ? [
+                                                ...current
+                                                  .excludedStudentIds,
+                                                student
+                                                  .student_id,
+                                              ]
+                                            : current
+                                                .excludedStudentIds
+                                                .filter(
+                                                  (
+                                                    id
+                                                  ) =>
+                                                    id !==
+                                                    student
+                                                      .student_id
+                                                ),
+                                      })
+                                    );
+                                  }}
+                                />
+
+                                <strong>
+                                  {
+                                    student.name
+                                  }
+                                </strong>
+
+                                {checked && (
+                                  <span
+                                    style={{
+                                      marginLeft:
+                                        "auto",
+                                      fontSize:
+                                        "11px",
+                                      color:
+                                        "#9a6658",
+                                    }}
+                                  >
+                                    不計點心
+                                  </span>
+                                )}
+                              </label>
+
+                              {checked && (
+                                <input
+                                  type="text"
+                                  value={
+                                    selectedCell
+                                      .studentReasons[
+                                      student
+                                        .student_id
+                                    ] || ""
+                                  }
+                                  onChange={(
+                                    event
+                                  ) =>
+                                    setSelectedCell(
+                                      (
+                                        current
+                                      ) => ({
+                                        ...current,
+                                        studentReasons:
+                                          {
+                                            ...current.studentReasons,
+                                            [student.student_id]:
+                                              event
+                                                .target
+                                                .value,
+                                          },
+                                      })
+                                    )
+                                  }
+                                  placeholder="原因，例如：臨時請假、家長交代不吃"
+                                  style={{
+                                    height:
+                                      "36px",
+                                    padding:
+                                      "0 10px",
+                                    border:
+                                      "1px solid #ddd8cf",
+                                    borderRadius:
+                                      "8px",
+                                    font:
+                                      "inherit",
+                                  }}
+                                />
+                              )}
+                            </>
                           )}
                         </div>
                       );
@@ -7730,81 +7775,119 @@ function SnackManagementPage({
                   手動數量調整
                 </h3>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "120px 1fr",
-                    gap: "10px",
-                    alignItems: "center",
-                  }}
-                >
-                  <label>
-                    增減數量
-                  </label>
-
-                  <input
-                    type="number"
-                    value={
-                      selectedCell
-                        .adjustment
-                    }
-                    onChange={(event) =>
-                      setSelectedCell(
-                        (current) => ({
-                          ...current,
-                          adjustment:
-                            Number(
-                              event
-                                .target
-                                .value
-                            ),
-                        })
-                      )
-                    }
+                {readOnly ? (
+                  <div
                     style={{
-                      height: "38px",
-                      padding: "0 10px",
-                      border:
-                        "1px solid #ddd8cf",
-                      borderRadius:
-                        "8px",
-                      font: "inherit",
+                      display: "grid",
+                      gridTemplateColumns:
+                        "120px 1fr",
+                      gap: "10px",
+                      alignItems: "center",
+                      fontSize: "13px",
                     }}
-                  />
+                  >
+                    <span>增減數量</span>
+                    <strong>
+                      {Number(
+                        selectedCell.adjustment ||
+                          0
+                      ) > 0
+                        ? `+${Number(
+                            selectedCell.adjustment
+                          )}`
+                        : Number(
+                            selectedCell.adjustment ||
+                              0
+                          )}
+                    </strong>
 
-                  <label>
-                    備註
-                  </label>
-
-                  <input
-                    type="text"
-                    value={
-                      selectedCell
-                        .adjustmentNote
-                    }
-                    onChange={(event) =>
-                      setSelectedCell(
-                        (current) => ({
-                          ...current,
-                          adjustmentNote:
-                            event.target
-                              .value,
-                        })
-                      )
-                    }
-                    placeholder="例如：臨時多一位、老師外出"
+                    <span>備註</span>
+                    <span
+                      style={{
+                        color: "#777168",
+                      }}
+                    >
+                      {selectedCell.adjustmentNote ||
+                        "—"}
+                    </span>
+                  </div>
+                ) : (
+                  <div
                     style={{
-                      height: "38px",
-                      padding: "0 10px",
-                      border:
-                        "1px solid #ddd8cf",
-                      borderRadius:
-                        "8px",
-                      font: "inherit",
+                      display: "grid",
+                      gridTemplateColumns:
+                        "120px 1fr",
+                      gap: "10px",
+                      alignItems: "center",
                     }}
-                  />
-                </div>
+                  >
+                    <label>
+                      增減數量
+                    </label>
+
+                    <input
+                      type="number"
+                      value={
+                        selectedCell
+                          .adjustment
+                      }
+                      onChange={(event) =>
+                        setSelectedCell(
+                          (current) => ({
+                            ...current,
+                            adjustment:
+                              Number(
+                                event
+                                  .target
+                                  .value
+                              ),
+                          })
+                        )
+                      }
+                      style={{
+                        height: "38px",
+                        padding: "0 10px",
+                        border:
+                          "1px solid #ddd8cf",
+                        borderRadius:
+                          "8px",
+                        font: "inherit",
+                      }}
+                    />
+
+                    <label>
+                      備註
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        selectedCell
+                          .adjustmentNote
+                      }
+                      onChange={(event) =>
+                        setSelectedCell(
+                          (current) => ({
+                            ...current,
+                            adjustmentNote:
+                              event.target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="例如：臨時多一位、老師外出"
+                      style={{
+                        height: "38px",
+                        padding: "0 10px",
+                        border:
+                          "1px solid #ddd8cf",
+                        borderRadius:
+                          "8px",
+                        font: "inherit",
+                      }}
+                    />
+                  </div>
+                )}
               </section>
 
               <section
@@ -7883,32 +7966,36 @@ function SnackManagementPage({
                   cursor: "pointer",
                 }}
               >
-                取消
+                {readOnly
+                  ? "關閉"
+                  : "取消"}
               </button>
 
-              <button
-                type="button"
-                onClick={
-                  saveDailyCell
-                }
-                disabled={savingCell}
-                style={{
-                  minWidth: "110px",
-                  height: "40px",
-                  border: "none",
-                  borderRadius:
-                    "10px",
-                  background: "#88a993",
-                  color: "#fff",
-                  font: "inherit",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                {savingCell
-                  ? "儲存中…"
-                  : "儲存調整"}
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={
+                    saveDailyCell
+                  }
+                  disabled={savingCell}
+                  style={{
+                    minWidth: "110px",
+                    height: "40px",
+                    border: "none",
+                    borderRadius:
+                      "10px",
+                    background: "#88a993",
+                    color: "#fff",
+                    font: "inherit",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {savingCell
+                    ? "儲存中…"
+                    : "儲存調整"}
+                </button>
+              )}
             </footer>
           </aside>
         </div>
