@@ -138,6 +138,14 @@ function SnackManagementPage() {
   const [dailyAdjustments, setDailyAdjustments] = useState([]);
   const [externalOrders, setExternalOrders] = useState([]);
 
+  const [snackItems, setSnackItems] = useState([]);
+  const [snackItemsLoading, setSnackItemsLoading] = useState(false);
+  const [savingSnackSetting, setSavingSnackSetting] = useState(false);
+  const [newSnackItemName, setNewSnackItemName] = useState("");
+  const [newSnackItemNotes, setNewSnackItemNotes] = useState("");
+  const [newSnackItemRequiresOption, setNewSnackItemRequiresOption] = useState(true);
+  const [newOptionNames, setNewOptionNames] = useState({});
+
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedExternalDate, setSelectedExternalDate] = useState(null);
   const [externalNameInput, setExternalNameInput] = useState("");
@@ -198,6 +206,474 @@ function SnackManagementPage() {
       ) || null,
     [semesters, selectedSemesterId]
   );
+
+  useEffect(() => {
+    if (
+      activeTab !== "SETTINGS" ||
+      !selectedSemesterId
+    ) {
+      return;
+    }
+
+    loadSnackSettings();
+  }, [
+    activeTab,
+    selectedSemesterId,
+  ]);
+
+  async function loadSnackSettings() {
+    try {
+      setSnackItemsLoading(true);
+      setErrorMessage("");
+
+      const {
+        data: itemRows,
+        error: itemError,
+      } = await supabase
+        .from("snack_items")
+        .select(`
+          id,
+          semester_id,
+          name,
+          requires_option,
+          is_active,
+          sort_order,
+          notes,
+          created_at,
+          updated_at
+        `)
+        .eq(
+          "semester_id",
+          selectedSemesterId
+        )
+        .order(
+          "sort_order",
+          { ascending: true }
+        )
+        .order(
+          "created_at",
+          { ascending: true }
+        );
+
+      if (itemError) throw itemError;
+
+      const ids = (itemRows || [])
+        .map((item) => item.id);
+
+      let optionRows = [];
+
+      if (ids.length > 0) {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from("snack_item_options")
+          .select(`
+            id,
+            snack_item_id,
+            name,
+            is_vegetarian_option,
+            is_active,
+            sort_order,
+            created_at,
+            updated_at
+          `)
+          .in(
+            "snack_item_id",
+            ids
+          )
+          .order(
+            "sort_order",
+            { ascending: true }
+          )
+          .order(
+            "created_at",
+            { ascending: true }
+          );
+
+        if (error) throw error;
+        optionRows = data || [];
+      }
+
+      setSnackItems(
+        (itemRows || []).map((item) => ({
+          ...item,
+          options: optionRows.filter(
+            (option) =>
+              option.snack_item_id === item.id
+          ),
+        }))
+      );
+    } catch (error) {
+      console.error(
+        "讀取點心設定失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `讀取點心設定失敗：${error.message}`
+      );
+      setSnackItems([]);
+    } finally {
+      setSnackItemsLoading(false);
+    }
+  }
+
+  async function createSnackItem() {
+    const name = newSnackItemName.trim();
+
+    if (
+      !selectedSemesterId ||
+      !name
+    ) {
+      return;
+    }
+
+    try {
+      setSavingSnackSetting(true);
+      setErrorMessage("");
+
+      const nextSortOrder =
+        snackItems.length > 0
+          ? Math.max(
+              ...snackItems.map(
+                (item) =>
+                  Number(item.sort_order || 0)
+              )
+            ) + 1
+          : 0;
+
+      const { error } = await supabase
+        .from("snack_items")
+        .insert({
+          semester_id:
+            selectedSemesterId,
+          name,
+          requires_option:
+            newSnackItemRequiresOption,
+          is_active: true,
+          sort_order: nextSortOrder,
+          notes:
+            newSnackItemNotes.trim() ||
+            null,
+          updated_at:
+            new Date().toISOString(),
+        });
+
+      if (error) throw error;
+
+      setNewSnackItemName("");
+      setNewSnackItemNotes("");
+      setNewSnackItemRequiresOption(true);
+
+      await loadSnackSettings();
+    } catch (error) {
+      console.error(
+        "新增點心品項失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `新增點心品項失敗：${error.message}`
+      );
+    } finally {
+      setSavingSnackSetting(false);
+    }
+  }
+
+  async function updateSnackItem(
+    itemId,
+    patch
+  ) {
+    try {
+      setSavingSnackSetting(true);
+      setErrorMessage("");
+
+      const { error } = await supabase
+        .from("snack_items")
+        .update({
+          ...patch,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", itemId);
+
+      if (error) throw error;
+
+      await loadSnackSettings();
+    } catch (error) {
+      console.error(
+        "更新點心品項失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `更新點心品項失敗：${error.message}`
+      );
+    } finally {
+      setSavingSnackSetting(false);
+    }
+  }
+
+  async function addSnackOption(
+    item
+  ) {
+    const optionName =
+      (
+        newOptionNames[item.id] ||
+        ""
+      ).trim();
+
+    if (!optionName) {
+      return;
+    }
+
+    try {
+      setSavingSnackSetting(true);
+      setErrorMessage("");
+
+      const nextSortOrder =
+        item.options.length > 0
+          ? Math.max(
+              ...item.options.map(
+                (option) =>
+                  Number(
+                    option.sort_order ||
+                    0
+                  )
+              )
+            ) + 1
+          : 0;
+
+      const { error } = await supabase
+        .from("snack_item_options")
+        .insert({
+          snack_item_id: item.id,
+          name: optionName,
+          is_vegetarian_option: false,
+          is_active: true,
+          sort_order: nextSortOrder,
+          updated_at:
+            new Date().toISOString(),
+        });
+
+      if (error) throw error;
+
+      setNewOptionNames(
+        (current) => ({
+          ...current,
+          [item.id]: "",
+        })
+      );
+
+      await loadSnackSettings();
+    } catch (error) {
+      console.error(
+        "新增點心選項失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `新增點心選項失敗：${error.message}`
+      );
+    } finally {
+      setSavingSnackSetting(false);
+    }
+  }
+
+  async function updateSnackOption(
+    optionId,
+    patch
+  ) {
+    try {
+      setSavingSnackSetting(true);
+      setErrorMessage("");
+
+      const { error } = await supabase
+        .from("snack_item_options")
+        .update({
+          ...patch,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", optionId);
+
+      if (error) throw error;
+
+      await loadSnackSettings();
+    } catch (error) {
+      console.error(
+        "更新點心選項失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `更新點心選項失敗：${error.message}`
+      );
+    } finally {
+      setSavingSnackSetting(false);
+    }
+  }
+
+  async function moveSnackItem(
+    item,
+    direction
+  ) {
+    const index = snackItems.findIndex(
+      (row) => row.id === item.id
+    );
+    const targetIndex =
+      index + direction;
+
+    if (
+      index < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= snackItems.length
+    ) {
+      return;
+    }
+
+    const target =
+      snackItems[targetIndex];
+
+    try {
+      setSavingSnackSetting(true);
+      setErrorMessage("");
+
+      const {
+        error: firstError,
+      } = await supabase
+        .from("snack_items")
+        .update({
+          sort_order:
+            Number(
+              target.sort_order ||
+              targetIndex
+            ),
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", item.id);
+
+      if (firstError) {
+        throw firstError;
+      }
+
+      const {
+        error: secondError,
+      } = await supabase
+        .from("snack_items")
+        .update({
+          sort_order:
+            Number(
+              item.sort_order ||
+              index
+            ),
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", target.id);
+
+      if (secondError) {
+        throw secondError;
+      }
+
+      await loadSnackSettings();
+    } catch (error) {
+      console.error(
+        "調整點心品項順序失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `調整順序失敗：${error.message}`
+      );
+    } finally {
+      setSavingSnackSetting(false);
+    }
+  }
+
+  async function moveSnackOption(
+    item,
+    option,
+    direction
+  ) {
+    const index =
+      item.options.findIndex(
+        (row) =>
+          row.id === option.id
+      );
+    const targetIndex =
+      index + direction;
+
+    if (
+      index < 0 ||
+      targetIndex < 0 ||
+      targetIndex >=
+        item.options.length
+    ) {
+      return;
+    }
+
+    const target =
+      item.options[targetIndex];
+
+    try {
+      setSavingSnackSetting(true);
+      setErrorMessage("");
+
+      const {
+        error: firstError,
+      } = await supabase
+        .from("snack_item_options")
+        .update({
+          sort_order:
+            Number(
+              target.sort_order ||
+              targetIndex
+            ),
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", option.id);
+
+      if (firstError) {
+        throw firstError;
+      }
+
+      const {
+        error: secondError,
+      } = await supabase
+        .from("snack_item_options")
+        .update({
+          sort_order:
+            Number(
+              option.sort_order ||
+              index
+            ),
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", target.id);
+
+      if (secondError) {
+        throw secondError;
+      }
+
+      await loadSnackSettings();
+    } catch (error) {
+      console.error(
+        "調整點心選項順序失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `調整選項順序失敗：${error.message}`
+      );
+    } finally {
+      setSavingSnackSetting(false);
+    }
+  }
 
   useEffect(() => {
     if (!selectedSemester) {
@@ -1676,6 +2152,964 @@ function SnackManagementPage() {
     }
   }
 
+  function renderSnackSettings() {
+    return (
+      <div
+        style={{
+          marginTop: "22px",
+          display: "grid",
+          gap: "18px",
+        }}
+      >
+        <section
+          style={{
+            padding: "18px",
+            border:
+              "1px solid #e1e5df",
+            borderRadius: "14px",
+            background: "#fafbf8",
+            display: "grid",
+            gap: "14px",
+          }}
+        >
+          <div>
+            <strong
+              style={{
+                display: "block",
+                fontSize: "16px",
+                color: "#34423a",
+              }}
+            >
+              新增點心品項
+            </strong>
+
+            <span
+              style={{
+                display: "block",
+                marginTop: "4px",
+                color: "#7d867f",
+                fontSize: "12px",
+              }}
+            >
+              本學期有哪些點心由這裡自行建立，不會寫死在系統裡。
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "minmax(180px, 1.2fr) minmax(180px, 1fr) auto auto",
+              gap: "10px",
+              alignItems: "center",
+            }}
+          >
+            <input
+              type="text"
+              value={newSnackItemName}
+              onChange={(event) =>
+                setNewSnackItemName(
+                  event.target.value
+                )
+              }
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter"
+                ) {
+                  event.preventDefault();
+                  createSnackItem();
+                }
+              }}
+              placeholder="點心名稱，例如：車輪餅"
+              disabled={savingSnackSetting}
+              style={{
+                height: "40px",
+                padding: "0 11px",
+                border:
+                  "1px solid #d9ded8",
+                borderRadius: "9px",
+                font: "inherit",
+                background: "#fff",
+              }}
+            />
+
+            <input
+              type="text"
+              value={newSnackItemNotes}
+              onChange={(event) =>
+                setNewSnackItemNotes(
+                  event.target.value
+                )
+              }
+              placeholder="備註（可留空）"
+              disabled={savingSnackSetting}
+              style={{
+                height: "40px",
+                padding: "0 11px",
+                border:
+                  "1px solid #d9ded8",
+                borderRadius: "9px",
+                font: "inherit",
+                background: "#fff",
+              }}
+            />
+
+            <label
+              style={{
+                height: "40px",
+                padding: "0 12px",
+                border:
+                  "1px solid #d9ded8",
+                borderRadius: "9px",
+                background: "#fff",
+                display: "flex",
+                alignItems: "center",
+                gap: "7px",
+                whiteSpace: "nowrap",
+                fontSize: "13px",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={
+                  newSnackItemRequiresOption
+                }
+                onChange={(event) =>
+                  setNewSnackItemRequiresOption(
+                    event.target.checked
+                  )
+                }
+              />
+              需要選口味
+            </label>
+
+            <button
+              type="button"
+              onClick={createSnackItem}
+              disabled={
+                savingSnackSetting ||
+                !newSnackItemName.trim()
+              }
+              style={{
+                height: "40px",
+                padding: "0 16px",
+                border: "none",
+                borderRadius: "9px",
+                background: "#88a993",
+                color: "#fff",
+                font: "inherit",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              新增品項
+            </button>
+          </div>
+        </section>
+
+        {snackItemsLoading ? (
+          <div
+            style={{
+              padding: "44px 20px",
+              textAlign: "center",
+              color: "#879088",
+            }}
+          >
+            正在讀取點心設定…
+          </div>
+        ) : snackItems.length === 0 ? (
+          <div
+            style={{
+              padding: "44px 20px",
+              textAlign: "center",
+              border:
+                "1px dashed #d6ddd6",
+              borderRadius: "14px",
+              color: "#89918c",
+              background: "#fafbf9",
+            }}
+          >
+            這個學期還沒有設定點心品項
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gap: "14px",
+            }}
+          >
+            {snackItems.map(
+              (item, itemIndex) => (
+                <article
+                  key={item.id}
+                  style={{
+                    border:
+                      "1px solid #e1e5df",
+                    borderRadius: "14px",
+                    background: item.is_active
+                      ? "#fff"
+                      : "#f7f7f4",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding:
+                        "14px 16px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent:
+                        "space-between",
+                      gap: "12px",
+                      borderBottom:
+                        item.requires_option
+                          ? "1px solid #ecefeb"
+                          : "none",
+                    }}
+                  >
+                    <div
+                      style={{
+                        minWidth: 0,
+                        flex: 1,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems:
+                            "center",
+                          gap: "9px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          defaultValue={
+                            item.name
+                          }
+                          key={`${item.id}-${item.name}`}
+                          onBlur={(event) => {
+                            const name =
+                              event.target.value.trim();
+
+                            if (
+                              name &&
+                              name !==
+                                item.name
+                            ) {
+                              updateSnackItem(
+                                item.id,
+                                { name }
+                              );
+                            } else {
+                              event.target.value =
+                                item.name;
+                            }
+                          }}
+                          disabled={
+                            savingSnackSetting
+                          }
+                          style={{
+                            minWidth:
+                              "180px",
+                            maxWidth:
+                              "360px",
+                            height: "36px",
+                            padding:
+                              "0 9px",
+                            border:
+                              "1px solid #dddeda",
+                            borderRadius:
+                              "8px",
+                            font: "inherit",
+                            fontWeight:
+                              700,
+                            color:
+                              "#34423a",
+                            background:
+                              "#fff",
+                          }}
+                        />
+
+                        <span
+                          style={{
+                            padding:
+                              "4px 8px",
+                            borderRadius:
+                              "999px",
+                            background:
+                              item.requires_option
+                                ? "#edf4ef"
+                                : "#f3f1ec",
+                            color:
+                              item.requires_option
+                                ? "#587363"
+                                : "#817b73",
+                            fontSize:
+                              "11px",
+                          }}
+                        >
+                          {item.requires_option
+                            ? "需要選口味"
+                            : "固定品項"}
+                        </span>
+
+                        {!item.is_active && (
+                          <span
+                            style={{
+                              padding:
+                                "4px 8px",
+                              borderRadius:
+                                "999px",
+                              background:
+                                "#f4ece8",
+                              color:
+                                "#9a6555",
+                              fontSize:
+                                "11px",
+                            }}
+                          >
+                            已停用
+                          </span>
+                        )}
+                      </div>
+
+                      <input
+                        type="text"
+                        defaultValue={
+                          item.notes ||
+                          ""
+                        }
+                        key={`${item.id}-${item.notes || "no-note"}`}
+                        onBlur={(event) => {
+                          const notes =
+                            event.target.value.trim();
+
+                          if (
+                            notes !==
+                            (
+                              item.notes ||
+                              ""
+                            )
+                          ) {
+                            updateSnackItem(
+                              item.id,
+                              {
+                                notes:
+                                  notes ||
+                                  null,
+                              }
+                            );
+                          }
+                        }}
+                        placeholder="備註（可留空）"
+                        disabled={
+                          savingSnackSetting
+                        }
+                        style={{
+                          marginTop:
+                            "8px",
+                          width:
+                            "min(520px, 100%)",
+                          height: "34px",
+                          padding:
+                            "0 9px",
+                          border:
+                            "1px solid #e3e4e0",
+                          borderRadius:
+                            "8px",
+                          font: "inherit",
+                          fontSize:
+                            "12px",
+                          color:
+                            "#6f786f",
+                          background:
+                            "#fff",
+                        }}
+                      />
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems:
+                          "center",
+                        gap: "6px",
+                        flexWrap: "wrap",
+                        justifyContent:
+                          "flex-end",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          moveSnackItem(
+                            item,
+                            -1
+                          )
+                        }
+                        disabled={
+                          savingSnackSetting ||
+                          itemIndex === 0
+                        }
+                        title="往上移"
+                        style={{
+                          width: "34px",
+                          height: "34px",
+                          border:
+                            "1px solid #d9ded8",
+                          borderRadius:
+                            "8px",
+                          background:
+                            "#fff",
+                          cursor:
+                            "pointer",
+                        }}
+                      >
+                        ↑
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          moveSnackItem(
+                            item,
+                            1
+                          )
+                        }
+                        disabled={
+                          savingSnackSetting ||
+                          itemIndex ===
+                            snackItems.length -
+                              1
+                        }
+                        title="往下移"
+                        style={{
+                          width: "34px",
+                          height: "34px",
+                          border:
+                            "1px solid #d9ded8",
+                          borderRadius:
+                            "8px",
+                          background:
+                            "#fff",
+                          cursor:
+                            "pointer",
+                        }}
+                      >
+                        ↓
+                      </button>
+
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems:
+                            "center",
+                          gap: "6px",
+                          height: "34px",
+                          padding:
+                            "0 9px",
+                          border:
+                            "1px solid #d9ded8",
+                          borderRadius:
+                            "8px",
+                          background:
+                            "#fff",
+                          fontSize:
+                            "12px",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={
+                            Boolean(
+                              item.requires_option
+                            )
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            updateSnackItem(
+                              item.id,
+                              {
+                                requires_option:
+                                  event
+                                    .target
+                                    .checked,
+                              }
+                            )
+                          }
+                          disabled={
+                            savingSnackSetting
+                          }
+                        />
+                        口味
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateSnackItem(
+                            item.id,
+                            {
+                              is_active:
+                                !item.is_active,
+                            }
+                          )
+                        }
+                        disabled={
+                          savingSnackSetting
+                        }
+                        style={{
+                          height: "34px",
+                          padding:
+                            "0 11px",
+                          border:
+                            "1px solid #d9ded8",
+                          borderRadius:
+                            "8px",
+                          background:
+                            item.is_active
+                              ? "#fff"
+                              : "#edf4ef",
+                          color:
+                            item.is_active
+                              ? "#8d6255"
+                              : "#587363",
+                          font: "inherit",
+                          fontSize:
+                            "12px",
+                          cursor:
+                            "pointer",
+                        }}
+                      >
+                        {item.is_active
+                          ? "停用"
+                          : "啟用"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {item.requires_option && (
+                    <div
+                      style={{
+                        padding:
+                          "14px 16px 16px",
+                        display:
+                          "grid",
+                        gap: "10px",
+                        background:
+                          "#fcfcfa",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems:
+                            "center",
+                          justifyContent:
+                            "space-between",
+                          gap: "10px",
+                          flexWrap:
+                            "wrap",
+                        }}
+                      >
+                        <strong
+                          style={{
+                            fontSize:
+                              "13px",
+                            color:
+                              "#566159",
+                          }}
+                        >
+                          可選口味
+                        </strong>
+
+                        <div
+                          style={{
+                            display:
+                              "flex",
+                            gap: "7px",
+                            flex:
+                              "1 1 320px",
+                            justifyContent:
+                              "flex-end",
+                          }}
+                        >
+                          <input
+                            type="text"
+                            value={
+                              newOptionNames[
+                                item.id
+                              ] || ""
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setNewOptionNames(
+                                (
+                                  current
+                                ) => ({
+                                  ...current,
+                                  [item.id]:
+                                    event
+                                      .target
+                                      .value,
+                                })
+                              )
+                            }
+                            onKeyDown={(
+                              event
+                            ) => {
+                              if (
+                                event.key ===
+                                "Enter"
+                              ) {
+                                event.preventDefault();
+                                addSnackOption(
+                                  item
+                                );
+                              }
+                            }}
+                            placeholder="新增口味，例如：奶油"
+                            disabled={
+                              savingSnackSetting
+                            }
+                            style={{
+                              width:
+                                "min(300px, 100%)",
+                              height:
+                                "36px",
+                              padding:
+                                "0 9px",
+                              border:
+                                "1px solid #d9ded8",
+                              borderRadius:
+                                "8px",
+                              font:
+                                "inherit",
+                            }}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              addSnackOption(
+                                item
+                              )
+                            }
+                            disabled={
+                              savingSnackSetting ||
+                              !(
+                                newOptionNames[
+                                  item.id
+                                ] ||
+                                ""
+                              ).trim()
+                            }
+                            style={{
+                              height:
+                                "36px",
+                              padding:
+                                "0 12px",
+                              border:
+                                "none",
+                              borderRadius:
+                                "8px",
+                              background:
+                                "#88a993",
+                              color:
+                                "#fff",
+                              font:
+                                "inherit",
+                              fontWeight:
+                                700,
+                              cursor:
+                                "pointer",
+                            }}
+                          >
+                            新增口味
+                          </button>
+                        </div>
+                      </div>
+
+                      {item.options.length ===
+                      0 ? (
+                        <div
+                          style={{
+                            padding:
+                              "12px",
+                            border:
+                              "1px dashed #dedfdc",
+                            borderRadius:
+                              "9px",
+                            color:
+                              "#979d98",
+                            fontSize:
+                              "12px",
+                            textAlign:
+                              "center",
+                          }}
+                        >
+                          尚未建立口味選項
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            display:
+                              "grid",
+                            gap: "7px",
+                          }}
+                        >
+                          {item.options.map(
+                            (
+                              option,
+                              optionIndex
+                            ) => (
+                              <div
+                                key={
+                                  option.id
+                                }
+                                style={{
+                                  minHeight:
+                                    "40px",
+                                  padding:
+                                    "6px 8px",
+                                  border:
+                                    "1px solid #e2e4e0",
+                                  borderRadius:
+                                    "9px",
+                                  background:
+                                    option.is_active
+                                      ? "#fff"
+                                      : "#f5f5f2",
+                                  display:
+                                    "flex",
+                                  alignItems:
+                                    "center",
+                                  gap:
+                                    "8px",
+                                }}
+                              >
+                                <input
+                                  type="text"
+                                  defaultValue={
+                                    option.name
+                                  }
+                                  key={`${option.id}-${option.name}`}
+                                  onBlur={(
+                                    event
+                                  ) => {
+                                    const name =
+                                      event.target.value.trim();
+
+                                    if (
+                                      name &&
+                                      name !==
+                                        option.name
+                                    ) {
+                                      updateSnackOption(
+                                        option.id,
+                                        {
+                                          name,
+                                        }
+                                      );
+                                    } else {
+                                      event.target.value =
+                                        option.name;
+                                    }
+                                  }}
+                                  disabled={
+                                    savingSnackSetting
+                                  }
+                                  style={{
+                                    flex:
+                                      1,
+                                    minWidth:
+                                      0,
+                                    height:
+                                      "32px",
+                                    padding:
+                                      "0 8px",
+                                    border:
+                                      "1px solid #e1e2df",
+                                    borderRadius:
+                                      "7px",
+                                    font:
+                                      "inherit",
+                                    background:
+                                      "#fff",
+                                  }}
+                                />
+
+                                <label
+                                  style={{
+                                    display:
+                                      "flex",
+                                    alignItems:
+                                      "center",
+                                    gap:
+                                      "5px",
+                                    fontSize:
+                                      "11px",
+                                    color:
+                                      "#6f786f",
+                                    whiteSpace:
+                                      "nowrap",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(
+                                      option.is_vegetarian_option
+                                    )}
+                                    onChange={(
+                                      event
+                                    ) =>
+                                      updateSnackOption(
+                                        option.id,
+                                        {
+                                          is_vegetarian_option:
+                                            event
+                                              .target
+                                              .checked,
+                                        }
+                                      )
+                                    }
+                                    disabled={
+                                      savingSnackSetting
+                                    }
+                                  />
+                                  素食
+                                </label>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    moveSnackOption(
+                                      item,
+                                      option,
+                                      -1
+                                    )
+                                  }
+                                  disabled={
+                                    savingSnackSetting ||
+                                    optionIndex ===
+                                      0
+                                  }
+                                  style={{
+                                    width:
+                                      "30px",
+                                    height:
+                                      "30px",
+                                    border:
+                                      "1px solid #d9ded8",
+                                    borderRadius:
+                                      "7px",
+                                    background:
+                                      "#fff",
+                                    cursor:
+                                      "pointer",
+                                  }}
+                                >
+                                  ↑
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    moveSnackOption(
+                                      item,
+                                      option,
+                                      1
+                                    )
+                                  }
+                                  disabled={
+                                    savingSnackSetting ||
+                                    optionIndex ===
+                                      item.options
+                                        .length -
+                                        1
+                                  }
+                                  style={{
+                                    width:
+                                      "30px",
+                                    height:
+                                      "30px",
+                                    border:
+                                      "1px solid #d9ded8",
+                                    borderRadius:
+                                      "7px",
+                                    background:
+                                      "#fff",
+                                    cursor:
+                                      "pointer",
+                                  }}
+                                >
+                                  ↓
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateSnackOption(
+                                      option.id,
+                                      {
+                                        is_active:
+                                          !option.is_active,
+                                      }
+                                    )
+                                  }
+                                  disabled={
+                                    savingSnackSetting
+                                  }
+                                  style={{
+                                    minWidth:
+                                      "54px",
+                                    height:
+                                      "30px",
+                                    padding:
+                                      "0 8px",
+                                    border:
+                                      "1px solid #d9ded8",
+                                    borderRadius:
+                                      "7px",
+                                    background:
+                                      option.is_active
+                                        ? "#fff"
+                                        : "#edf4ef",
+                                    color:
+                                      option.is_active
+                                        ? "#8d6255"
+                                        : "#587363",
+                                    font:
+                                      "inherit",
+                                    fontSize:
+                                      "11px",
+                                    cursor:
+                                      "pointer",
+                                  }}
+                                >
+                                  {option.is_active
+                                    ? "停用"
+                                    : "啟用"}
+                                </button>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </article>
+              )
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderMonthlyTable() {
     return (
       <div
@@ -2380,6 +3814,8 @@ function SnackManagementPage() {
 
         {activeTab === "MONTHLY" ? (
           renderMonthlyTable()
+        ) : activeTab === "SETTINGS" ? (
+          renderSnackSettings()
         ) : (
           <div
             style={{
