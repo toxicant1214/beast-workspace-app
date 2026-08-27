@@ -14,11 +14,6 @@ const VIEWER_PAGE_OPTIONS = [
     description: "查看學生基本資料與相關資訊。",
   },
   {
-    key: "teacher_assignments",
-    label: "老師任務",
-    description: "查看老師任務與完成狀況。",
-  },
-  {
     key: "camps",
     label: "營隊管理",
     description: "查看營隊資料與安排。",
