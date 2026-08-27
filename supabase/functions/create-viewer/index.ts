@@ -17,7 +17,8 @@ function jsonResponse(
       status,
       headers: {
         ...corsHeaders,
-        "Content-Type": "application/json; charset=utf-8",
+        "Content-Type":
+          "application/json; charset=utf-8",
       },
     },
   );
@@ -27,8 +28,14 @@ function cleanText(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function cleanEmail(value: unknown) {
+function cleanUsername(value: unknown) {
   return cleanText(value).toLowerCase();
+}
+
+function buildInternalEmail(
+  username: string,
+) {
+  return `${username}@viewer.beast.local`;
 }
 
 Deno.serve(async (request: Request) => {
@@ -40,7 +47,9 @@ Deno.serve(async (request: Request) => {
 
   if (request.method !== "POST") {
     return jsonResponse(
-      { error: "Method not allowed" },
+      {
+        error: "Method not allowed",
+      },
       405,
     );
   }
@@ -63,22 +72,21 @@ Deno.serve(async (request: Request) => {
     );
   }
 
-  const adminClient = createClient(
-    supabaseUrl,
-    serviceRoleKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
+  const adminClient =
+    createClient(
+      supabaseUrl,
+      serviceRoleKey,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false,
+        },
       },
-    },
-  );
+    );
 
   try {
-    // --------------------------------------------------
-    // 1. 驗證呼叫者本人
-    // --------------------------------------------------
+    // 1. 驗證呼叫者
     const authorization =
       request.headers.get(
         "Authorization",
@@ -92,7 +100,9 @@ Deno.serve(async (request: Request) => {
 
     if (!accessToken) {
       return jsonResponse(
-        { error: "缺少登入憑證。" },
+        {
+          error: "缺少登入憑證。",
+        },
         401,
       );
     }
@@ -115,8 +125,6 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    // 檢視帳號只能由在職 admin 建立。
-    // 沿用你目前 invite-teacher 的管理員判斷方式。
     const {
       data: callerTeacher,
       error: callerTeacherError,
@@ -147,20 +155,24 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    // --------------------------------------------------
     // 2. 讀取建立資料
-    // --------------------------------------------------
     const body =
       await request.json();
 
     const displayName =
-      cleanText(body?.displayName);
+      cleanText(
+        body?.displayName,
+      );
 
-    const email =
-      cleanEmail(body?.email);
+    const username =
+      cleanUsername(
+        body?.username,
+      );
 
     const password =
-      cleanText(body?.password);
+      cleanText(
+        body?.password,
+      );
 
     if (!displayName) {
       return jsonResponse(
@@ -172,23 +184,35 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    if (!email) {
+    if (!username) {
       return jsonResponse(
         {
           error:
-            "請輸入登入 Email。",
+            "請輸入登入帳號。",
         },
         400,
       );
     }
 
     if (
-      !email.includes("@")
+      !/^[a-z0-9_]+$/.test(
+        username,
+      )
     ) {
       return jsonResponse(
         {
           error:
-            "登入 Email 格式不正確。",
+            "登入帳號只能使用英文字母、數字與底線。",
+        },
+        400,
+      );
+    }
+
+    if (username.length < 3) {
+      return jsonResponse(
+        {
+          error:
+            "登入帳號至少需要 3 個字元。",
         },
         400,
       );
@@ -214,20 +238,23 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    // --------------------------------------------------
-    // 3. 防止資料表重複
-    // --------------------------------------------------
+    // 3. 檢查 username 是否重複
     const {
       data: duplicateViewer,
       error: duplicateViewerError,
     } = await adminClient
       .from("workspace_viewers")
       .select(
-        "id, display_name, email, auth_user_id",
+        `
+        id,
+        display_name,
+        username,
+        auth_user_id
+        `,
       )
       .ilike(
-        "email",
-        email,
+        "username",
+        username,
       )
       .maybeSingle();
 
@@ -239,23 +266,27 @@ Deno.serve(async (request: Request) => {
       return jsonResponse(
         {
           error:
-            `這個 Email 已經建立檢視帳號「${duplicateViewer.display_name}」。`,
+            `這個登入帳號已經被「${duplicateViewer.display_name}」使用。`,
         },
         409,
       );
     }
 
-    // --------------------------------------------------
-    // 4. 直接建立 Supabase Auth 帳號
-    //    不寄邀請信、不要求首次設定密碼
-    // --------------------------------------------------
+    // 4. 產生 Supabase Auth 內部 Email
+    const internalEmail =
+      buildInternalEmail(
+        username,
+      );
+
+    // 5. 建立 Supabase Auth
     const {
       data: authCreated,
       error: createAuthError,
     } =
       await adminClient.auth.admin
         .createUser({
-          email,
+          email:
+            internalEmail,
           password,
           email_confirm: true,
           user_metadata: {
@@ -263,12 +294,14 @@ Deno.serve(async (request: Request) => {
               displayName,
             workspace_role:
               "viewer",
+            username,
           },
         });
 
     if (createAuthError) {
       const message =
-        createAuthError.message || "";
+        createAuthError.message ||
+        "";
 
       if (
         message
@@ -284,7 +317,7 @@ Deno.serve(async (request: Request) => {
         return jsonResponse(
           {
             error:
-              "這個 Email 已經存在 Supabase Auth，請改用其他 Email。",
+              "這個登入帳號已經存在，請改用其他帳號。",
           },
           409,
         );
@@ -306,9 +339,7 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    // --------------------------------------------------
-    // 5. 建立 workspace_viewers
-    // --------------------------------------------------
+    // 6. 建立 workspace_viewers
     const {
       data: createdViewer,
       error: insertViewerError,
@@ -319,7 +350,9 @@ Deno.serve(async (request: Request) => {
           authUserId,
         display_name:
           displayName,
-        email,
+        username,
+        email:
+          internalEmail,
         is_active: true,
         updated_at:
           new Date().toISOString(),
@@ -328,9 +361,10 @@ Deno.serve(async (request: Request) => {
       .single();
 
     if (insertViewerError) {
-      // 避免留下孤兒 Auth 帳號
       await adminClient.auth.admin
-        .deleteUser(authUserId);
+        .deleteUser(
+          authUserId,
+        );
 
       throw insertViewerError;
     }
