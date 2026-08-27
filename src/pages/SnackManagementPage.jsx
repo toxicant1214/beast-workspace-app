@@ -1487,25 +1487,18 @@ function SnackManagementPage() {
       drawCell({
         x: externalX,
         y: externalRowY,
-        width: fixedWidths.className,
+        width:
+          fixedWidths.className +
+          fixedWidths.teacher,
         height: rowHeight,
         textValue: "美語／班外生",
         fontSize: 6.9,
         fill: [249, 247, 242],
         align: "left",
       });
-      externalX += fixedWidths.className;
-
-      drawCell({
-        x: externalX,
-        y: externalRowY,
-        width: fixedWidths.teacher,
-        height: rowHeight,
-        textValue: "—",
-        fontSize: 7.2,
-        fill: [249, 247, 242],
-      });
-      externalX += fixedWidths.teacher;
+      externalX +=
+        fixedWidths.className +
+        fixedWidths.teacher;
 
       monthDays.forEach((day) => {
         const closed = closedDateMap.get(day.dateString);
@@ -2059,9 +2052,10 @@ function SnackManagementPage() {
 
                 <tr>
                   <th
+                    colSpan={2}
                     style={{
-                      width: "58px",
-                      padding: "10px 4px",
+                      width: "128px",
+                      padding: "10px 8px",
                       textAlign: "left",
                       background: "#fffaf2",
                       color: "#6f5a43",
@@ -2071,20 +2065,6 @@ function SnackManagementPage() {
                   >
                     美語／班外生
                   </th>
-
-                  <td
-                    style={{
-                      padding: "8px 2px",
-                      textAlign: "center",
-                      fontWeight: 700,
-                      background: "#fffaf2",
-                      color: "#8b765f",
-                      borderBottom: "1px solid #ecefeb",
-                      borderRight: "1px solid #e1e5df",
-                    }}
-                  >
-                    —
-                  </td>
 
                   {monthDays.map((day) => {
                     const closed = closedDateMap.get(day.dateString);
