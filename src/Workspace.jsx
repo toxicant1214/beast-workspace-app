@@ -17,6 +17,7 @@ import CampPage from "./pages/CampPage";
 import CalendarPage from "./pages/CalendarPage";
 import PickupPage from "./pages/PickupPage";
 import SnackManagementPage from "./pages/SnackManagementPage";
+import ViewerManagementPage from "./pages/ViewerManagementPage";
 import LearningReportPage from "./pages/LearningReportPage";
 import CleaningPage from "./pages/CleaningPage";
 import LineReminderPage from "./pages/LineReminderPage";
@@ -55,6 +56,11 @@ const PAGE_OPTIONS = [
   {
     label: "老師管理",
     key: "teachers",
+    adminOnly: true,
+  },
+  {
+    label: "檢視帳號管理",
+    key: "viewer_management",
     adminOnly: true,
   },
   {
@@ -725,6 +731,16 @@ return hasPagePermission(
     ) {
       return (
         <TeacherPage />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "檢視帳號管理"
+    ) {
+      return (
+        <ViewerManagementPage />
       );
     }
 
