@@ -136,9 +136,13 @@ function SnackManagementPage() {
   const [classSnackSettings, setClassSnackSettings] = useState([]);
   const [dailySnackExceptions, setDailySnackExceptions] = useState([]);
   const [dailyAdjustments, setDailyAdjustments] = useState([]);
+  const [externalOrders, setExternalOrders] = useState([]);
 
   const [selectedCell, setSelectedCell] = useState(null);
+  const [selectedExternalDate, setSelectedExternalDate] = useState(null);
+  const [externalNameInput, setExternalNameInput] = useState("");
   const [savingCell, setSavingCell] = useState(false);
+  const [savingExternalOrders, setSavingExternalOrders] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
@@ -308,6 +312,7 @@ function SnackManagementPage() {
         classSnackSettingsResult,
         dailySnackExceptionsResult,
         dailyAdjustmentsResult,
+        externalOrdersResult,
       ] = await Promise.all([
         supabase
           .from("class_students")
@@ -363,6 +368,15 @@ function SnackManagementPage() {
           .eq("semester_id", selectedSemesterId)
           .gte("service_date", monthStart)
           .lte("service_date", monthEnd),
+
+        supabase
+          .from("snack_external_orders")
+          .select("*")
+          .eq("semester_id", selectedSemesterId)
+          .gte("service_date", monthStart)
+          .lte("service_date", monthEnd)
+          .order("service_date", { ascending: true })
+          .order("created_at", { ascending: true }),
       ]);
 
       if (membershipResult.error) {
@@ -391,6 +405,10 @@ function SnackManagementPage() {
 
       if (dailyAdjustmentsResult.error) {
         throw dailyAdjustmentsResult.error;
+      }
+
+      if (externalOrdersResult.error) {
+        throw externalOrdersResult.error;
       }
 
       setMemberships(
@@ -422,6 +440,10 @@ function SnackManagementPage() {
       setDailyAdjustments(
         dailyAdjustmentsResult.data || []
       );
+
+      setExternalOrders(
+        externalOrdersResult.data || []
+      );
     } catch (error) {
       console.error("讀取月點心表資料失敗：", error);
       setErrorMessage(
@@ -435,6 +457,7 @@ function SnackManagementPage() {
       setClassSnackSettings([]);
       setDailySnackExceptions([]);
       setDailyAdjustments([]);
+      setExternalOrders([]);
     } finally {
       setMonthlyLoading(false);
     }
@@ -538,6 +561,16 @@ function SnackManagementPage() {
           item.service_date === dateString
       ) || null
     );
+  }
+
+  function getExternalOrdersForDate(dateString) {
+    return externalOrders.filter(
+      (item) => item.service_date === dateString
+    );
+  }
+
+  function getExternalOrderCount(dateString) {
+    return getExternalOrdersForDate(dateString).length;
   }
 
   function getClassStudentsForDate(classId, dateString) {
@@ -705,7 +738,7 @@ function SnackManagementPage() {
           return null;
         }
 
-        return classRows.reduce(
+        const classTotal = classRows.reduce(
           (sum, classItem) => {
             const cell = classItem.counts.find(
               (item) =>
@@ -716,8 +749,18 @@ function SnackManagementPage() {
           },
           0
         );
+
+        return (
+          classTotal +
+          getExternalOrderCount(day.dateString)
+        );
       }),
-    [monthDays, classRows, closedDateMap]
+    [
+      monthDays,
+      classRows,
+      closedDateMap,
+      externalOrders,
+    ]
   );
 
   const availableMonths = useMemo(() => {
@@ -1077,6 +1120,66 @@ function SnackManagementPage() {
     });
   }
 
+  function openExternalOrders(dateString) {
+    setSelectedExternalDate(dateString);
+    setExternalNameInput("");
+  }
+
+  async function addExternalOrder() {
+    const personName = externalNameInput.trim();
+
+    if (!personName || !selectedExternalDate || !selectedSemesterId) return;
+
+    try {
+      setSavingExternalOrders(true);
+      setErrorMessage("");
+
+      const { data, error } = await supabase
+        .from("snack_external_orders")
+        .insert({
+          semester_id: selectedSemesterId,
+          service_date: selectedExternalDate,
+          person_name: personName,
+          updated_at: new Date().toISOString(),
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setExternalOrders((current) => [...current, data]);
+      setExternalNameInput("");
+    } catch (error) {
+      console.error("新增美語／班外生點心失敗：", error);
+      setErrorMessage(`新增美語／班外生點心失敗：${error.message}`);
+    } finally {
+      setSavingExternalOrders(false);
+    }
+  }
+
+  async function deleteExternalOrder(id) {
+    try {
+      setSavingExternalOrders(true);
+      setErrorMessage("");
+
+      const { error } = await supabase
+        .from("snack_external_orders")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setExternalOrders((current) =>
+        current.filter((item) => item.id !== id)
+      );
+    } catch (error) {
+      console.error("刪除美語／班外生點心失敗：", error);
+      setErrorMessage(`刪除美語／班外生點心失敗：${error.message}`);
+    } finally {
+      setSavingExternalOrders(false);
+    }
+  }
+
   async function exportMonthlySnackPdf() {
     if (
       !selectedSemester ||
@@ -1374,10 +1477,55 @@ function SnackManagementPage() {
         }
       );
 
-      const totalY =
+      const externalRowY =
         headerTop +
         headerHeight +
         classRows.length * rowHeight;
+
+      let externalX = marginX;
+
+      drawCell({
+        x: externalX,
+        y: externalRowY,
+        width: fixedWidths.className,
+        height: rowHeight,
+        textValue: "美語／班外生",
+        fontSize: 6.9,
+        fill: [249, 247, 242],
+        align: "left",
+      });
+      externalX += fixedWidths.className;
+
+      drawCell({
+        x: externalX,
+        y: externalRowY,
+        width: fixedWidths.teacher,
+        height: rowHeight,
+        textValue: "—",
+        fontSize: 7.2,
+        fill: [249, 247, 242],
+      });
+      externalX += fixedWidths.teacher;
+
+      monthDays.forEach((day) => {
+        const closed = closedDateMap.get(day.dateString);
+        drawCell({
+          x: externalX,
+          y: externalRowY,
+          width: dateWidth,
+          height: rowHeight,
+          textValue: closed ? "休" : getExternalOrderCount(day.dateString),
+          fontSize: 7.2,
+          fill: closed ? [247,245,242] : [249,247,242],
+          textColor: closed ? [153,145,138] : [31,42,36],
+        });
+        externalX += dateWidth;
+      });
+
+      const totalY =
+        headerTop +
+        headerHeight +
+        (classRows.length + 1) * rowHeight;
 
       let totalX = marginX;
 
@@ -1915,6 +2063,61 @@ function SnackManagementPage() {
                       width: "58px",
                       padding: "10px 4px",
                       textAlign: "left",
+                      background: "#fffaf2",
+                      color: "#6f5a43",
+                      borderBottom: "1px solid #ecefeb",
+                      borderRight: "1px solid #e1e5df",
+                    }}
+                  >
+                    美語／班外生
+                  </th>
+
+                  <td
+                    style={{
+                      padding: "8px 2px",
+                      textAlign: "center",
+                      fontWeight: 700,
+                      background: "#fffaf2",
+                      color: "#8b765f",
+                      borderBottom: "1px solid #ecefeb",
+                      borderRight: "1px solid #e1e5df",
+                    }}
+                  >
+                    —
+                  </td>
+
+                  {monthDays.map((day) => {
+                    const closed = closedDateMap.get(day.dateString);
+                    const count = getExternalOrderCount(day.dateString);
+                    return (
+                      <td
+                        key={day.dateString}
+                        title={closed ? `${closed.title}｜不需點心` : `美語／班外生｜${day.dateString}｜點擊管理訂餐名單`}
+                        onClick={() => { if (!closed) openExternalOrders(day.dateString); }}
+                        style={{
+                          height: "44px",
+                          padding: "4px 1px",
+                          textAlign: "center",
+                          fontWeight: 800,
+                          background: closed ? "#f4f4f1" : "#fffaf2",
+                          color: closed ? "#a8aca7" : count > 0 ? "#725b42" : "#a59a8d",
+                          borderBottom: "1px solid #ecefeb",
+                          borderRight: "1px solid #ecefeb",
+                          cursor: closed ? "default" : "pointer",
+                        }}
+                      >
+                        {closed ? "休" : count}
+                      </td>
+                    );
+                  })}
+                </tr>
+
+                <tr>
+                  <th
+                    style={{
+                      width: "58px",
+                      padding: "10px 4px",
+                      textAlign: "left",
                       background: "#f4f6f2",
                       color: "#34423a",
                       borderRight:
@@ -2213,6 +2416,86 @@ function SnackManagementPage() {
           </div>
         )}
       </section>
+
+      {selectedExternalDate && (
+        <div
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !savingExternalOrders) {
+              setSelectedExternalDate(null);
+            }
+          }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(30,35,32,.28)",
+            display: "flex", justifyContent: "flex-end",
+          }}
+        >
+          <aside
+            style={{
+              width: "min(480px, 92vw)", height: "100%",
+              background: "#fffdf9",
+              boxShadow: "-12px 0 32px rgba(30,35,32,.12)",
+              display: "flex", flexDirection: "column",
+            }}
+          >
+            <header
+              style={{
+                padding: "22px 24px", borderBottom: "1px solid #e7e2d9",
+                display: "flex", justifyContent: "space-between", gap: "16px",
+                alignItems: "flex-start",
+              }}
+            >
+              <div>
+                <p style={{ margin: 0, fontSize: "11px", letterSpacing: ".14em", color: "#9a9388" }}>SPECIAL SNACK</p>
+                <h2 style={{ margin: "6px 0 2px", fontSize: "22px" }}>美語／班外生｜{selectedExternalDate}</h2>
+                <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#7d766d" }}>有需要才新增姓名；姓名筆數就是當日點心份數。</p>
+              </div>
+              <button type="button" onClick={() => setSelectedExternalDate(null)} disabled={savingExternalOrders}
+                style={{ border: "none", background: "#f1eee8", width: "38px", height: "38px", borderRadius: "50%", cursor: "pointer", fontSize: "22px" }}>×</button>
+            </header>
+
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "grid", gap: "18px" }}>
+              <section>
+                <h3 style={{ margin: "0 0 10px", fontSize: "16px" }}>當日訂餐名單</h3>
+                <div style={{ display: "grid", gap: "8px" }}>
+                  {getExternalOrdersForDate(selectedExternalDate).length === 0 ? (
+                    <div style={{ padding: "16px", border: "1px dashed #ddd7ce", borderRadius: "10px", color: "#9a9388", background: "#faf8f4", textAlign: "center", fontSize: "13px" }}>今天尚未新增訂餐人員</div>
+                  ) : (
+                    getExternalOrdersForDate(selectedExternalDate).map((item) => (
+                      <div key={item.id} style={{ minHeight: "42px", padding: "8px 10px 8px 12px", border: "1px solid #e4dfd6", borderRadius: "10px", background: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                        <strong>{item.person_name}</strong>
+                        <button type="button" onClick={() => deleteExternalOrder(item.id)} disabled={savingExternalOrders}
+                          style={{ border: "none", background: "#f3eee8", width: "30px", height: "30px", borderRadius: "8px", cursor: "pointer", color: "#8d685b", fontSize: "18px" }}>×</button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section>
+                <h3 style={{ margin: "0 0 10px", fontSize: "16px" }}>新增訂餐人員</h3>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input type="text" value={externalNameInput} onChange={(e) => setExternalNameInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addExternalOrder(); } }}
+                    placeholder="輸入姓名" disabled={savingExternalOrders}
+                    style={{ flex: 1, height: "40px", padding: "0 11px", border: "1px solid #ddd8cf", borderRadius: "9px", font: "inherit" }} />
+                  <button type="button" onClick={addExternalOrder} disabled={savingExternalOrders || !externalNameInput.trim()}
+                    style={{ minWidth: "74px", height: "40px", border: "none", borderRadius: "9px", background: "#88a993", color: "#fff", font: "inherit", fontWeight: 700, cursor: "pointer" }}>新增</button>
+                </div>
+              </section>
+
+              <section style={{ padding: "14px 16px", borderRadius: "12px", background: "#f4f6f2", fontSize: "13px" }}>
+                今日共 <strong style={{ margin: "0 5px", fontSize: "20px" }}>{getExternalOrderCount(selectedExternalDate)}</strong> 份
+              </section>
+            </div>
+
+            <footer style={{ padding: "16px 24px", borderTop: "1px solid #e7e2d9", display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setSelectedExternalDate(null)} disabled={savingExternalOrders}
+                style={{ minWidth: "92px", height: "40px", border: "1px solid #d9d4cb", borderRadius: "10px", background: "#fff", font: "inherit", cursor: "pointer" }}>完成</button>
+            </footer>
+          </aside>
+        </div>
+      )}
 
       {selectedCell && (
         <div
