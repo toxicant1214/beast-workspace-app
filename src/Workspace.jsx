@@ -861,7 +861,11 @@ function Workspace() {
       }
 
       return (
-        <DashboardPage />
+        <DashboardPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
       );
     }
 
@@ -1078,7 +1082,11 @@ function Workspace() {
 
 
     return (
-      <DashboardPage />
+      <DashboardPage
+        currentTeacher={
+          currentTeacher
+        }
+      />
     );
   }
 

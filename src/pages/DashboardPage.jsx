@@ -4,7 +4,7 @@ import {
   getDashboardEnrollmentStats,
 } from "../services/dashboardService";
 
-function DashboardPage() {
+function DashboardPage({ currentTeacher }) {
   const [weather, setWeather] = useState(null);
 
   const [enrollmentStats, setEnrollmentStats] = useState({
@@ -195,33 +195,35 @@ function DashboardPage() {
       </section>
 
 
-      <section className="dashboardCard">
-        <p className="eyebrow">
-          TODAY
-        </p>
+      {currentTeacher?.role !== "viewer" && (
+        <section className="dashboardCard">
+          <p className="eyebrow">
+            TODAY
+          </p>
 
-        <h2>
-          今日概況
-        </h2>
+          <h2>
+            今日概況
+          </h2>
 
-        <div className="todoList">
-          <div>
-            🚌 接送提醒
+          <div className="todoList">
+            <div>
+              🚌 接送提醒
+            </div>
+
+            <div>
+              🎂 今日生日
+            </div>
+
+            <div>
+              🎒 今日補課
+            </div>
+
+            <div>
+              📅 今日行程
+            </div>
           </div>
-
-          <div>
-            🎂 今日生日
-          </div>
-
-          <div>
-            🎒 今日補課
-          </div>
-
-          <div>
-            📅 今日行程
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
     </div>
   );
