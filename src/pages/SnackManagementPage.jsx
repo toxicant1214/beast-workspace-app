@@ -120,10 +120,12 @@ function isMembershipActiveOnDate(membership, dateString) {
   return true;
 }
 
-function SnackManagementPage() {
+function SnackManagementPage({ teacherMode = false }) {
   const [semesters, setSemesters] = useState([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
-  const [activeTab, setActiveTab] = useState("MONTHLY");
+  const [activeTab, setActiveTab] = useState(
+    teacherMode ? "PREFERENCES" : "MONTHLY"
+  );
 
   const [selectedMonth, setSelectedMonth] = useState("");
 
@@ -171,6 +173,12 @@ function SnackManagementPage() {
   useEffect(() => {
     loadSemesters();
   }, []);
+
+  useEffect(() => {
+    if (teacherMode) {
+      setActiveTab("PREFERENCES");
+    }
+  }, [teacherMode]);
 
   async function loadSemesters() {
     try {
@@ -1912,7 +1920,13 @@ function SnackManagementPage() {
     return result;
   }, [selectedSemester]);
 
-  const activeTabItem = TABS.find(
+  const visibleTabs = teacherMode
+    ? TABS.filter(
+        (tab) => tab.key === "PREFERENCES"
+      )
+    : TABS;
+
+  const activeTabItem = visibleTabs.find(
     (tab) => tab.key === activeTab
   );
 
@@ -4061,6 +4075,15 @@ function SnackManagementPage() {
           };
         }
       );
+
+    const allStudentIds = Array.from(
+      new Set(
+        preferenceMemberships.map(
+          (membership) =>
+            membership.student_id
+        )
+      )
+    );
 
     const overallSummary =
       activeItems.map(
@@ -7137,7 +7160,7 @@ function SnackManagementPage() {
           background: "#eef0eb",
         }}
       >
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const active = activeTab === tab.key;
 
           return (

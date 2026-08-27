@@ -55,6 +55,11 @@ const PERMISSION_MODULES = [
     description: "學生接送與路隊資料",
   },
   {
+    key: "snack_preferences",
+    label: "點心選擇",
+    description: "查看並設定學生與班級老師的點心口味",
+  },
+  {
     key: "learning_reports",
     label: "學習報告書",
     description: "學生學習報告與相關資料",
@@ -70,15 +75,10 @@ const PERMISSION_MODULES = [
     description: "僅查看月清潔表與今日清潔",
     viewOnly: true,
   },
-    {
+  {
     key: "score_analysis",
     label: "成績分析",
     description: "學生成績與分析資料",
-  },
-  {
-    key: "snack_management",
-    label: "點心管理",
-    description: "查看與管理每日點心安排",
   },
 ];
 

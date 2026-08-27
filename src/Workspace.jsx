@@ -86,6 +86,12 @@ const PAGE_OPTIONS = [
   {
     label: "點心管理",
     key: "snack_management",
+    adminOnly: true,
+  },
+  {
+    label: "點心選擇",
+    key: "snack_preferences",
+    teacherOnly: true,
   },
   {
     label: "學習報告書",
@@ -242,7 +248,7 @@ function Workspace() {
             currentTeacher?.role ===
             "admin"
           ) {
-            return true;
+            return !page.teacherOnly;
           }
 
           if (
@@ -807,10 +813,17 @@ return hasPagePermission(
       "點心管理"
     ) {
       return (
+        <SnackManagementPage />
+      );
+    }
+
+    if (
+      activePage ===
+      "點心選擇"
+    ) {
+      return (
         <SnackManagementPage
-          currentTeacher={
-            currentTeacher
-          }
+          teacherMode
         />
       );
     }
