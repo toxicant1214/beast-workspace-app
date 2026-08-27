@@ -4781,18 +4781,43 @@ function SnackManagementPage() {
       }
 
       function drawTableHeader(y) {
-        pdf.setFillColor(244, 246, 242);
         pdf.setDrawColor(205, 211, 205);
-        pdf.rect(margin, y, nameWidth, headerHeight, "FD");
+        pdf.setLineWidth(0.15);
+        pdf.setFont("Iansui", "normal");
         pdf.setFontSize(9);
+
+        // 姓名欄：每一格都明確重新指定填色與文字色，
+        // 避免 jsPDF 在前一個繪圖操作後沿用錯誤狀態。
+        pdf.setFillColor(244, 246, 242);
+        pdf.rect(margin, y, nameWidth, headerHeight, "FD");
+        pdf.setTextColor(52, 66, 58);
         pdf.text("姓名", margin + 2, y + 9);
 
         activeItems.forEach((item, index) => {
           const x = margin + nameWidth + itemWidth * index;
+
+          // 每一個點心表頭格都重新指定顏色，不能只在迴圈外設定一次。
+          pdf.setFillColor(244, 246, 242);
+          pdf.setDrawColor(205, 211, 205);
           pdf.rect(x, y, itemWidth, headerHeight, "FD");
-          const lines = pdf.splitTextToSize(item.name, Math.max(8, itemWidth - 3));
-          pdf.text(lines.slice(0, 2), x + itemWidth / 2, y + 6, { align: "center" });
+
+          pdf.setTextColor(52, 66, 58);
+          pdf.setFont("Iansui", "normal");
+          pdf.setFontSize(9);
+
+          const lines = pdf.splitTextToSize(
+            item.name,
+            Math.max(8, itemWidth - 3)
+          );
+
+          pdf.text(
+            lines.slice(0, 2),
+            x + itemWidth / 2,
+            y + 6,
+            { align: "center" }
+          );
         });
+
         return y + headerHeight;
       }
 
@@ -4813,6 +4838,8 @@ function SnackManagementPage() {
           }
 
           pdf.setDrawColor(220, 224, 220);
+          pdf.setTextColor(31, 42, 36);
+          pdf.setFont("Iansui", "normal");
           pdf.rect(margin, y, nameWidth, rowHeight);
           pdf.setFontSize(9);
           pdf.text(person.name, margin + 2, y + 6.5);
