@@ -63,7 +63,7 @@ function getGradeGroupDescription(value) {
   );
 }
 
-function PickupRulesPanel() {
+function PickupRulesPanel({ readOnly = false }) {
   const [rules, setRules] = useState([]);
   const [form, setForm] = useState(createEmptyForm());
 
@@ -270,11 +270,12 @@ function PickupRulesPanel() {
 
   return (
     <section className="pickupPanel pickupRulesPanel">
-      <div className="pickupRulesLayout">
-        <form
-          className="pickupRuleForm"
-          onSubmit={saveRule}
-        >
+      <div className="pickupRulesLayout" style={readOnly ? { gridTemplateColumns: "1fr" } : undefined}>
+        {!readOnly && (
+          <form
+            className="pickupRuleForm"
+            onSubmit={saveRule}
+          >
           <div className="pickupRuleForm__header">
             <p className="eyebrow">
               {editingRule ? "EDIT RULE" : "NEW RULE"}
@@ -421,7 +422,8 @@ function PickupRulesPanel() {
                   : "新增規則"}
             </button>
           </div>
-        </form>
+          </form>
+        )}
 
         <div className="pickupRuleList">
           <div className="pickupRuleList__header">
@@ -484,26 +486,28 @@ function PickupRulesPanel() {
                               </span>
                             </div>
 
-                            <div className="pickupRuleRow__actions">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  startEdit(rule)
-                                }
-                              >
-                                編輯
-                              </button>
+                            {!readOnly && (
+                              <div className="pickupRuleRow__actions">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    startEdit(rule)
+                                  }
+                                >
+                                  編輯
+                                </button>
 
-                              <button
-                                type="button"
-                                className="danger"
-                                onClick={() =>
-                                  deleteRule(rule)
-                                }
-                              >
-                                刪除
-                              </button>
-                            </div>
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() =>
+                                    deleteRule(rule)
+                                  }
+                                >
+                                  刪除
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           <div className="pickupRuleWeekGrid">

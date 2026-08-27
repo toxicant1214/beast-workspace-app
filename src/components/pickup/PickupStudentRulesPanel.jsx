@@ -169,7 +169,7 @@ function defaultWeeklyForm(studentId) {
   };
 }
 
-function PickupStudentRulesPanel() {
+function PickupStudentRulesPanel({ readOnly = false }) {
   const [students, setStudents] = useState([]);
   const [weeklyRules, setWeeklyRules] = useState([]);
   const [dateExceptions, setDateExceptions] = useState([]);
@@ -824,7 +824,7 @@ function PickupStudentRulesPanel() {
           </div>
         )}
 
-        {successMessage && (
+        {!readOnly && successMessage && (
           <div
             style={{
               marginBottom: "14px",
@@ -891,14 +891,16 @@ function PickupStudentRulesPanel() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  className="secondaryButton"
-                  onClick={resetWeeklyRule}
-                  disabled={isSaving}
-                >
-                  恢復一般規則
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="secondaryButton"
+                    onClick={resetWeeklyRule}
+                    disabled={isSaving}
+                  >
+                    恢復一般規則
+                  </button>
+                )}
               </div>
 
               <div
@@ -988,6 +990,20 @@ function PickupStudentRulesPanel() {
                           </span>
                         </div>
 
+                        {readOnly ? (
+                          <div
+                            style={{
+                              padding: "8px 9px",
+                              border: "1px solid #e5e1d8",
+                              borderRadius: "9px",
+                              background: "#faf9f6",
+                              fontSize: "12px",
+                              color: "#4f514d",
+                            }}
+                          >
+                            {getStatusLabel(status)}
+                          </div>
+                        ) : (
                         <select
                           value={status}
                           onChange={(event) =>
@@ -1035,46 +1051,62 @@ function PickupStudentRulesPanel() {
                             )
                           )}
                         </select>
+                        )}
 
                         {status === "NORMAL" && (
-                          <select
-                            value={period}
-                            onChange={(event) =>
-                              setWeeklyForm(
-                                (current) => ({
-                                  ...current,
-                                  [periodKey]:
-                                    event.target.value,
-                                })
-                              )
-                            }
-                            style={{
-                              width: "100%",
-                              minWidth: 0,
-                              height: "34px",
-                              padding: "0 30px 0 9px",
-                              border: "1px solid #dedad1",
-                              borderRadius: "9px",
-                              background:
-                                period
-                                  ? "#f3f7f2"
-                                  : "#fff",
-                              font: "inherit",
-                              fontSize: "12px",
-                              color: "#373934",
-                            }}
-                          >
-                            {PICKUP_PERIOD_OPTIONS.map(
-                              (option) => (
-                                <option
-                                  key={option.value || "DEFAULT"}
-                                  value={option.value}
-                                >
-                                  {option.label}
-                                </option>
-                              )
-                            )}
-                          </select>
+                          readOnly ? (
+                            <div
+                              style={{
+                                padding: "8px 9px",
+                                border: "1px solid #e5e1d8",
+                                borderRadius: "9px",
+                                background: "#faf9f6",
+                                fontSize: "12px",
+                                color: "#4f514d",
+                              }}
+                            >
+                              {getPeriodLabel(period)}
+                            </div>
+                          ) : (
+                            <select
+                              value={period}
+                              onChange={(event) =>
+                                setWeeklyForm(
+                                  (current) => ({
+                                    ...current,
+                                    [periodKey]:
+                                      event.target.value,
+                                  })
+                                )
+                              }
+                              style={{
+                                width: "100%",
+                                minWidth: 0,
+                                height: "34px",
+                                padding: "0 30px 0 9px",
+                                border: "1px solid #dedad1",
+                                borderRadius: "9px",
+                                background:
+                                  period
+                                    ? "#f3f7f2"
+                                    : "#fff",
+                                font: "inherit",
+                                fontSize: "12px",
+                                color: "#373934",
+                              }}
+                            >
+                              {PICKUP_PERIOD_OPTIONS.map(
+                                (option) => (
+                                  <option
+                                    key={option.value || "DEFAULT"}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </option>
+                                )
+                              )}
+                            </select>
+                          )
                         )}
                       </label>
                     );
@@ -1082,6 +1114,27 @@ function PickupStudentRulesPanel() {
                 )}
               </div>
 
+              {readOnly ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "7px",
+                  }}
+                >
+                  <span>固定規則備註</span>
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      border: "1px solid #e5e1d8",
+                      borderRadius: "10px",
+                      background: "#faf9f6",
+                      color: "#656863",
+                    }}
+                  >
+                    {weeklyForm?.note || "—"}
+                  </div>
+                </div>
+              ) : (
               <label
                 style={{
                   display: "grid",
@@ -1103,7 +1156,9 @@ function PickupStudentRulesPanel() {
                   placeholder="例如：週二固定外出上課"
                 />
               </label>
+              )}
 
+              {!readOnly && (
               <div
                 style={{
                   display: "flex",
@@ -1122,6 +1177,7 @@ function PickupStudentRulesPanel() {
                     : "儲存每週接送設定"}
                 </button>
               </div>
+              )}
             </article>
 
             <article
@@ -1139,6 +1195,7 @@ function PickupStudentRulesPanel() {
                 單日例外
               </h2>
 
+              {!readOnly && (
               <div
                 style={{
                   display: "grid",
@@ -1249,6 +1306,8 @@ function PickupStudentRulesPanel() {
                 </button>
               </div>
 
+              )}
+
               <div
                 style={{
                   marginTop: "18px",
@@ -1342,16 +1401,18 @@ function PickupStudentRulesPanel() {
                         >
                           {item.note || "—"}
                         </span>
-                        <button
-                          type="button"
-                          className="secondaryButton"
-                          onClick={() =>
-                            deleteException(item)
-                          }
-                          disabled={isSaving}
-                        >
-                          刪除
-                        </button>
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            className="secondaryButton"
+                            onClick={() =>
+                              deleteException(item)
+                            }
+                            disabled={isSaving}
+                          >
+                            刪除
+                          </button>
+                        )}
                       </div>
                     ))
                 )}

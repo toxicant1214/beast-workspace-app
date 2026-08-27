@@ -131,6 +131,7 @@ function TeacherTags({
   onInputChange,
   onAdd,
   onRemove,
+  readOnly = false,
 }) {
   function handleKeyDown(event) {
     if (
@@ -152,18 +153,22 @@ function TeacherTags({
           >
             {name}
 
-            <button
-              type="button"
-              aria-label={`移除 ${name}`}
-              disabled={disabled}
-              onClick={() => onRemove(name)}
-            >
-              ×
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                aria-label={`移除 ${name}`}
+                disabled={disabled}
+                onClick={() => onRemove(name)}
+              >
+                ×
+              </button>
+            )}
           </span>
         ))}
       </div>
 
+      {!readOnly && (
+        <>
       <div className="pickupStaffInputRow">
         <input
           type="text"
@@ -195,11 +200,13 @@ function TeacherTags({
       <small>
         輸入姓名後按 Enter，也可以一次加入多位老師。
       </small>
+        </>
+      )}
     </div>
   );
 }
 
-function PickupStaffPanel() {
+function PickupStaffPanel({ readOnly = false }) {
   const [students, setStudents] = useState([]);
   const [rules, setRules] = useState([]);
   const [staffRules, setStaffRules] =
@@ -1530,15 +1537,21 @@ function PickupStaffPanel() {
                                       name
                                     )
                                   }
+                                  readOnly={
+                                    readOnly
+                                  }
                                 />
 
                                 <div className="pickupStaffSaveStatus">
-                                  {isSaving
-                                    ? "儲存中…"
-                                    : names.length >
-                                        0
-                                      ? "已儲存"
-                                      : "尚未安排"}
+                                  {readOnly
+                                    ? names.length > 0
+                                      ? "已安排"
+                                      : "尚未安排"
+                                    : isSaving
+                                      ? "儲存中…"
+                                      : names.length > 0
+                                        ? "已儲存"
+                                        : "尚未安排"}
                                 </div>
                               </div>
                             );

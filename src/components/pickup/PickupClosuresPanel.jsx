@@ -65,7 +65,7 @@ function createEmptyForm() {
   };
 }
 
-function PickupClosuresPanel() {
+function PickupClosuresPanel({ readOnly = false }) {
   const [schools, setSchools] = useState([]);
   const [closures, setClosures] = useState([]);
   const [form, setForm] = useState(createEmptyForm());
@@ -299,11 +299,12 @@ function PickupClosuresPanel() {
 
   return (
     <section className="pickupPanel pickupClosuresPanel">
-      <div className="pickupClosuresLayout">
-        <form
-          className="pickupClosureForm"
-          onSubmit={saveClosure}
-        >
+      <div className="pickupClosuresLayout" style={readOnly ? { gridTemplateColumns: "1fr" } : undefined}>
+        {!readOnly && (
+          <form
+            className="pickupClosureForm"
+            onSubmit={saveClosure}
+          >
           <div className="pickupClosureForm__header">
             <p className="eyebrow">
               {editingClosure
@@ -451,7 +452,8 @@ function PickupClosuresPanel() {
                   : "新增停接"}
             </button>
           </div>
-        </form>
+          </form>
+        )}
 
         <div className="pickupClosureList">
           <div className="pickupRuleList__header">
@@ -545,26 +547,28 @@ function PickupClosuresPanel() {
                               </span>
                             </div>
 
-                            <div className="pickupRuleRow__actions">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  startEdit(closure)
-                                }
-                              >
-                                編輯
-                              </button>
+                            {!readOnly && (
+                              <div className="pickupRuleRow__actions">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    startEdit(closure)
+                                  }
+                                >
+                                  編輯
+                                </button>
 
-                              <button
-                                type="button"
-                                className="danger"
-                                onClick={() =>
-                                  deleteClosure(closure)
-                                }
-                              >
-                                刪除
-                              </button>
-                            </div>
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() =>
+                                    deleteClosure(closure)
+                                  }
+                                >
+                                  刪除
+                                </button>
+                              </div>
+                            )}
                           </article>
                         );
                       })}

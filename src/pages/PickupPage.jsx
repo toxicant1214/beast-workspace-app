@@ -178,6 +178,10 @@ function PickupPage({
     useMemo(() => {
       return PICKUP_TABS.filter(
         (tab) => {
+          if (isViewOnly) {
+            return true;
+          }
+
           if (
             tab.adminOnly
           ) {
@@ -366,7 +370,7 @@ function PickupPage({
     if (
       activeTab ===
         "monthly" &&
-      canEdit
+      (canEdit || isViewOnly)
     ) {
       return (
         <MonthlyPickupPanel />
@@ -377,10 +381,12 @@ function PickupPage({
     if (
       activeTab ===
         "studentRules" &&
-      canEdit
+      (canEdit || isViewOnly)
     ) {
       return (
-        <PickupStudentRulesPanel />
+        <PickupStudentRulesPanel
+          readOnly={isViewOnly}
+        />
       );
     }
 
@@ -388,10 +394,12 @@ function PickupPage({
     if (
       activeTab ===
         "rules" &&
-      isAdmin
+      (isAdmin || isViewOnly)
     ) {
       return (
-        <PickupRulesPanel />
+        <PickupRulesPanel
+          readOnly={isViewOnly}
+        />
       );
     }
 
@@ -399,10 +407,12 @@ function PickupPage({
     if (
       activeTab ===
         "staff" &&
-      isAdmin
+      (isAdmin || isViewOnly)
     ) {
       return (
-        <PickupStaffPanel />
+        <PickupStaffPanel
+          readOnly={isViewOnly}
+        />
       );
     }
 
@@ -410,10 +420,12 @@ function PickupPage({
     if (
       activeTab ===
         "exceptions" &&
-      canEdit
+      (canEdit || isViewOnly)
     ) {
       return (
-        <PickupClosuresPanel />
+        <PickupClosuresPanel
+          readOnly={isViewOnly}
+        />
       );
     }
 
