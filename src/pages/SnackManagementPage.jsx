@@ -146,6 +146,14 @@ function SnackManagementPage() {
   const [newSnackItemRequiresOption, setNewSnackItemRequiresOption] = useState(true);
   const [newOptionNames, setNewOptionNames] = useState({});
 
+  const [preferenceClasses, setPreferenceClasses] = useState([]);
+  const [preferenceMemberships, setPreferenceMemberships] = useState([]);
+  const [studentSnackChoices, setStudentSnackChoices] = useState([]);
+  const [selectedPreferenceClassId, setSelectedPreferenceClassId] = useState("");
+  const [preferenceLoading, setPreferenceLoading] = useState(false);
+  const [savingPreferenceKey, setSavingPreferenceKey] = useState("");
+  const [exportingSummaryPdf, setExportingSummaryPdf] = useState(false);
+
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedExternalDate, setSelectedExternalDate] = useState(null);
   const [externalNameInput, setExternalNameInput] = useState("");
@@ -209,7 +217,7 @@ function SnackManagementPage() {
 
   useEffect(() => {
     if (
-      activeTab !== "SETTINGS" ||
+      !["SETTINGS", "PREFERENCES", "SUMMARY"].includes(activeTab) ||
       !selectedSemesterId
     ) {
       return;
@@ -220,6 +228,333 @@ function SnackManagementPage() {
     activeTab,
     selectedSemesterId,
   ]);
+
+  useEffect(() => {
+    if (
+      !["PREFERENCES", "SUMMARY"].includes(activeTab) ||
+      !selectedSemesterId ||
+      !selectedSemester
+    ) {
+      return;
+    }
+
+    loadPreferenceData();
+  }, [
+    activeTab,
+    selectedSemesterId,
+    selectedSemester,
+  ]);
+
+  async function loadPreferenceData() {
+    try {
+      setPreferenceLoading(true);
+      setErrorMessage("");
+
+      const {
+        data: classRows,
+        error: classError,
+      } = await supabase
+        .from("classes")
+        .select(`
+          id,
+          class_name,
+          start_date,
+          end_date,
+          is_active,
+          course_type
+        `)
+        .eq("course_type", "AFTER_SCHOOL")
+        .order("class_name", { ascending: true });
+
+      if (classError) throw classError;
+
+      const relevantClasses = (classRows || []).filter(
+        (classItem) => {
+          if (
+            classItem.start_date &&
+            selectedSemester?.end_date &&
+            classItem.start_date > selectedSemester.end_date
+          ) {
+            return false;
+          }
+
+          if (
+            classItem.end_date &&
+            selectedSemester?.start_date &&
+            classItem.end_date < selectedSemester.start_date
+          ) {
+            return false;
+          }
+
+          return true;
+        }
+      );
+
+      setPreferenceClasses(relevantClasses);
+
+      const classIds = relevantClasses.map(
+        (classItem) => classItem.id
+      );
+
+      if (classIds.length === 0) {
+        setPreferenceMemberships([]);
+        setStudentSnackChoices([]);
+        setSelectedPreferenceClassId("");
+        return;
+      }
+
+      const {
+        data: membershipRows,
+        error: membershipError,
+      } = await supabase
+        .from("class_students")
+        .select(`
+          id,
+          class_id,
+          student_id,
+          joined_at,
+          left_at,
+          status,
+          students (
+            id,
+            chinese_name,
+            english_name
+          )
+        `)
+        .in("class_id", classIds)
+        .is("left_at", null)
+        .neq("status", "inactive");
+
+      if (membershipError) {
+        throw membershipError;
+      }
+
+      const dedupedMemberships = [];
+      const seen = new Set();
+
+      (membershipRows || []).forEach((row) => {
+        const key = `${row.class_id}:${row.student_id}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        dedupedMemberships.push(row);
+      });
+
+      setPreferenceMemberships(dedupedMemberships);
+
+      const studentIds = Array.from(
+        new Set(
+          dedupedMemberships.map(
+            (row) => row.student_id
+          )
+        )
+      );
+
+      if (studentIds.length === 0) {
+        setStudentSnackChoices([]);
+      } else {
+        const {
+          data: choiceRows,
+          error: choiceError,
+        } = await supabase
+          .from("snack_student_choices")
+          .select(`
+            id,
+            semester_id,
+            student_id,
+            snack_item_id,
+            snack_item_option_id,
+            quantity,
+            notes,
+            created_at,
+            updated_at
+          `)
+          .eq("semester_id", selectedSemesterId)
+          .in("student_id", studentIds);
+
+        if (choiceError) throw choiceError;
+
+        setStudentSnackChoices(
+          choiceRows || []
+        );
+      }
+
+      setSelectedPreferenceClassId(
+        (current) => {
+          if (
+            current &&
+            relevantClasses.some(
+              (classItem) =>
+                classItem.id === current
+            )
+          ) {
+            return current;
+          }
+
+          return relevantClasses[0]?.id || "";
+        }
+      );
+    } catch (error) {
+      console.error(
+        "讀取點心選擇資料失敗：",
+        error
+      );
+      setErrorMessage(
+        `讀取點心選擇失敗：${error.message}`
+      );
+      setPreferenceClasses([]);
+      setPreferenceMemberships([]);
+      setStudentSnackChoices([]);
+      setSelectedPreferenceClassId("");
+    } finally {
+      setPreferenceLoading(false);
+    }
+  }
+
+  function getStudentSnackChoice(
+    studentId,
+    snackItemId
+  ) {
+    return (
+      studentSnackChoices.find(
+        (choice) =>
+          choice.student_id === studentId &&
+          choice.snack_item_id === snackItemId
+      ) || null
+    );
+  }
+
+  async function saveStudentSnackChoice({
+    studentId,
+    snackItem,
+    optionId = null,
+    quantity = 1,
+  }) {
+    if (
+      !selectedSemesterId ||
+      !studentId ||
+      !snackItem?.id
+    ) {
+      return;
+    }
+
+    const key =
+      `${studentId}:${snackItem.id}`;
+
+    try {
+      setSavingPreferenceKey(key);
+      setErrorMessage("");
+
+      const existing =
+        getStudentSnackChoice(
+          studentId,
+          snackItem.id
+        );
+
+      const numericQuantity =
+        Number(quantity || 0);
+
+      const shouldDelete =
+        snackItem.requires_option
+          ? !optionId
+          : numericQuantity <= 0;
+
+      if (shouldDelete) {
+        if (existing?.id) {
+          const { error } = await supabase
+            .from("snack_student_choices")
+            .delete()
+            .eq("id", existing.id);
+
+          if (error) throw error;
+
+          setStudentSnackChoices(
+            (current) =>
+              current.filter(
+                (choice) =>
+                  choice.id !== existing.id
+              )
+          );
+        }
+
+        return;
+      }
+
+      const payload = {
+        semester_id:
+          selectedSemesterId,
+        student_id: studentId,
+        snack_item_id:
+          snackItem.id,
+        snack_item_option_id:
+          snackItem.requires_option
+            ? optionId
+            : null,
+        quantity:
+          snackItem.requires_option
+            ? 1
+            : numericQuantity,
+        updated_at:
+          new Date().toISOString(),
+      };
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("snack_student_choices")
+        .upsert(
+          payload,
+          {
+            onConflict:
+              "semester_id,student_id,snack_item_id",
+          }
+        )
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setStudentSnackChoices(
+        (current) => {
+          const exists =
+            current.some(
+              (choice) =>
+                choice.student_id ===
+                  studentId &&
+                choice.snack_item_id ===
+                  snackItem.id
+            );
+
+          if (exists) {
+            return current.map(
+              (choice) =>
+                choice.student_id ===
+                    studentId &&
+                choice.snack_item_id ===
+                    snackItem.id
+                  ? data
+                  : choice
+            );
+          }
+
+          return [
+            ...current,
+            data,
+          ];
+        }
+      );
+    } catch (error) {
+      console.error(
+        "儲存學生點心選擇失敗：",
+        error
+      );
+      setErrorMessage(
+        `儲存點心選擇失敗：${error.message}`
+      );
+    } finally {
+      setSavingPreferenceKey("");
+    }
+  }
 
   async function loadSnackSettings() {
     try {
@@ -2152,6 +2487,1934 @@ function SnackManagementPage() {
     }
   }
 
+  async function exportSnackSummaryPdf() {
+    if (
+      !selectedSemester ||
+      preferenceLoading ||
+      snackItemsLoading
+    ) {
+      return;
+    }
+
+    const activeItems = snackItems.filter(
+      (item) => item.is_active
+    );
+
+    if (activeItems.length === 0) {
+      setErrorMessage(
+        "目前沒有啟用中的點心品項，無法產出統計 PDF。"
+      );
+      return;
+    }
+
+    function getStudentIdsForClass(
+      classId
+    ) {
+      return Array.from(
+        new Set(
+          preferenceMemberships
+            .filter(
+              (membership) =>
+                membership.class_id === classId
+            )
+            .map(
+              (membership) =>
+                membership.student_id
+            )
+        )
+      );
+    }
+
+    function buildPdfItemSummary(
+      studentIds,
+      item
+    ) {
+      const studentIdSet =
+        new Set(studentIds);
+
+      const choices =
+        studentSnackChoices.filter(
+          (choice) =>
+            studentIdSet.has(
+              choice.student_id
+            ) &&
+            choice.snack_item_id ===
+              item.id
+        );
+
+      if (item.requires_option) {
+        const options =
+          (item.options || [])
+            .filter(
+              (option) =>
+                option.is_active
+            )
+            .map((option) => ({
+              name:
+                option.name +
+                (
+                  option.is_vegetarian_option
+                    ? "（素）"
+                    : ""
+                ),
+              count:
+                choices.filter(
+                  (choice) =>
+                    choice.snack_item_option_id ===
+                      option.id
+                ).length,
+            }));
+
+        const selectedStudentIds =
+          new Set(
+            choices
+              .filter(
+                (choice) =>
+                  choice.snack_item_option_id
+              )
+              .map(
+                (choice) =>
+                  choice.student_id
+              )
+          );
+
+        return {
+          itemName: item.name,
+          detail:
+            options
+              .map(
+                (option) =>
+                  `${option.name}：${option.count}`
+              )
+              .join("　") ||
+            "尚無可用選項",
+          total:
+            options.reduce(
+              (sum, option) =>
+                sum + option.count,
+              0
+            ),
+          unselected:
+            Math.max(
+              0,
+              studentIds.length -
+                selectedStudentIds.size
+            ),
+        };
+      }
+
+      const total =
+        choices.reduce(
+          (sum, choice) =>
+            sum +
+            Math.max(
+              0,
+              Number(
+                choice.quantity || 0
+              )
+            ),
+          0
+        );
+
+      const selectedCount =
+        choices.filter(
+          (choice) =>
+            Number(
+              choice.quantity || 0
+            ) > 0
+        ).length;
+
+      return {
+        itemName: item.name,
+        detail: `總份數：${total}`,
+        total,
+        unselected:
+          Math.max(
+            0,
+            studentIds.length -
+              selectedCount
+          ),
+      };
+    }
+
+    const classSummaries =
+      preferenceClasses.map(
+        (classItem) => {
+          const studentIds =
+            getStudentIdsForClass(
+              classItem.id
+            );
+
+          return {
+            title:
+              classItem.class_name,
+            studentCount:
+              studentIds.length,
+            rows:
+              activeItems.map(
+                (item) =>
+                  buildPdfItemSummary(
+                    studentIds,
+                    item
+                  )
+              ),
+          };
+        }
+      );
+
+    const allStudentIds =
+      Array.from(
+        new Set(
+          preferenceMemberships.map(
+            (membership) =>
+              membership.student_id
+          )
+        )
+      );
+
+    const overallSummary = {
+      title: "全部班級總計",
+      studentCount:
+        allStudentIds.length,
+      rows:
+        activeItems.map(
+          (item) =>
+            buildPdfItemSummary(
+              allStudentIds,
+              item
+            )
+        ),
+    };
+
+    try {
+      setExportingSummaryPdf(true);
+      setErrorMessage("");
+
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      const fontResponse = await fetch(
+        "https://cdn.jsdelivr.net/gh/ButTaiwan/iansui@main/fonts/ttf/Iansui-Regular.ttf"
+      );
+
+      if (!fontResponse.ok) {
+        throw new Error(
+          `芫荽體載入失敗（${fontResponse.status}）`
+        );
+      }
+
+      const fontBytes =
+        new Uint8Array(
+          await fontResponse.arrayBuffer()
+        );
+
+      let binary = "";
+      const chunkSize = 0x8000;
+
+      for (
+        let offset = 0;
+        offset < fontBytes.length;
+        offset += chunkSize
+      ) {
+        binary +=
+          String.fromCharCode(
+            ...fontBytes.subarray(
+              offset,
+              Math.min(
+                offset + chunkSize,
+                fontBytes.length
+              )
+            )
+          );
+      }
+
+      pdf.addFileToVFS(
+        "Iansui-Regular.ttf",
+        btoa(binary)
+      );
+
+      pdf.addFont(
+        "Iansui-Regular.ttf",
+        "Iansui",
+        "normal"
+      );
+
+      pdf.setFont(
+        "Iansui",
+        "normal"
+      );
+
+      const pageWidth =
+        pdf.internal.pageSize.getWidth();
+      const pageHeight =
+        pdf.internal.pageSize.getHeight();
+
+      const marginX = 13;
+      const marginTop = 12;
+      const contentWidth =
+        pageWidth -
+        marginX * 2;
+
+      const colWidths = {
+        item: 42,
+        total: 24,
+      };
+
+      const detailWidth =
+        contentWidth -
+        colWidths.item -
+        colWidths.total;
+
+      function drawPageHeader(
+        title,
+        studentCount,
+        isContinuation = false
+      ) {
+        pdf.setTextColor(
+          43,
+          54,
+          47
+        );
+
+        pdf.setFontSize(9);
+        pdf.text(
+          "倍思學院｜點心訂購統計",
+          marginX,
+          marginTop
+        );
+
+        pdf.setFontSize(17);
+        pdf.text(
+          isContinuation
+            ? `${title}（續）`
+            : title,
+          marginX,
+          marginTop + 9
+        );
+
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(
+          104,
+          116,
+          108
+        );
+
+        pdf.text(
+          `${selectedSemester.name}｜${studentCount} 位在籍學生`,
+          marginX,
+          marginTop + 15
+        );
+
+        pdf.text(
+          `列印日期：${new Intl.DateTimeFormat(
+            "zh-TW"
+          ).format(new Date())}`,
+          pageWidth - marginX,
+          marginTop + 15,
+          { align: "right" }
+        );
+
+        return marginTop + 21;
+      }
+
+      function drawTableHeader(y) {
+        const height = 9;
+
+        pdf.setFillColor(
+          242,
+          244,
+          240
+        );
+        pdf.setDrawColor(
+          201,
+          207,
+          202
+        );
+        pdf.setTextColor(
+          52,
+          66,
+          58
+        );
+        pdf.setFontSize(8);
+
+        let x = marginX;
+
+        [
+          {
+            text: "點心",
+            width:
+              colWidths.item,
+            align: "left",
+          },
+          {
+            text:
+              "選項／數量",
+            width:
+              detailWidth,
+            align: "left",
+          },
+          {
+            text: "合計",
+            width:
+              colWidths.total,
+            align: "center",
+          },
+        ].forEach((cell) => {
+          pdf.rect(
+            x,
+            y,
+            cell.width,
+            height,
+            "FD"
+          );
+
+          pdf.text(
+            cell.text,
+            cell.align === "center"
+              ? x +
+                  cell.width /
+                    2
+              : x + 2,
+            y + 5.8,
+            {
+              align:
+                cell.align,
+            }
+          );
+
+          x += cell.width;
+        });
+
+        return y + height;
+      }
+
+      function drawSummaryPage(
+        summary,
+        addNewPage
+      ) {
+        if (addNewPage) {
+          pdf.addPage(
+            "a4",
+            "portrait"
+          );
+        }
+
+        let y =
+          drawPageHeader(
+            summary.title,
+            summary.studentCount
+          );
+
+        y =
+          drawTableHeader(y);
+
+        summary.rows.forEach(
+          (row) => {
+            const detailText =
+              row.unselected > 0
+                ? `${row.detail}　｜　未設定：${row.unselected}`
+                : row.detail;
+
+            const detailLines =
+              pdf.splitTextToSize(
+                detailText,
+                detailWidth - 4
+              );
+
+            const itemLines =
+              pdf.splitTextToSize(
+                row.itemName,
+                colWidths.item - 4
+              );
+
+            const lineCount =
+              Math.max(
+                detailLines.length,
+                itemLines.length,
+                1
+              );
+
+            const rowHeight =
+              Math.max(
+                11,
+                lineCount *
+                  4.5 +
+                  5
+              );
+
+            if (
+              y + rowHeight >
+              pageHeight - 15
+            ) {
+              pdf.addPage(
+                "a4",
+                "portrait"
+              );
+
+              y =
+                drawPageHeader(
+                  summary.title,
+                  summary.studentCount,
+                  true
+                );
+
+              y =
+                drawTableHeader(
+                  y
+                );
+            }
+
+            pdf.setDrawColor(
+              220,
+              224,
+              220
+            );
+            pdf.setTextColor(
+              48,
+              60,
+              53
+            );
+            pdf.setFontSize(
+              8.5
+            );
+
+            let x = marginX;
+
+            pdf.rect(
+              x,
+              y,
+              colWidths.item,
+              rowHeight
+            );
+
+            pdf.text(
+              itemLines,
+              x + 2,
+              y + 5,
+              {
+                baseline: "top",
+              }
+            );
+
+            x +=
+              colWidths.item;
+
+            pdf.rect(
+              x,
+              y,
+              detailWidth,
+              rowHeight
+            );
+
+            pdf.text(
+              detailLines,
+              x + 2,
+              y + 5,
+              {
+                baseline: "top",
+              }
+            );
+
+            x +=
+              detailWidth;
+
+            pdf.rect(
+              x,
+              y,
+              colWidths.total,
+              rowHeight
+            );
+
+            pdf.setFontSize(
+              11
+            );
+            pdf.text(
+              String(
+                row.total
+              ),
+              x +
+                colWidths.total /
+                  2,
+              y +
+                rowHeight /
+                  2 +
+                1.2,
+              {
+                align:
+                  "center",
+              }
+            );
+
+            y += rowHeight;
+          }
+        );
+      }
+
+      drawSummaryPage(
+        overallSummary,
+        false
+      );
+
+      classSummaries.forEach(
+        (summary) =>
+          drawSummaryPage(
+            summary,
+            true
+          )
+      );
+
+      const safeSemester =
+        String(
+          selectedSemester.name ||
+          "學期"
+        ).replace(
+          /[\\/:*?"<>|]/g,
+          "_"
+        );
+
+      pdf.save(
+        `${safeSemester}_點心訂購統計.pdf`
+      );
+    } catch (error) {
+      console.error(
+        "產出點心訂購統計 PDF 失敗：",
+        error
+      );
+
+      setErrorMessage(
+        `產出統計 PDF 失敗：${error.message}`
+      );
+    } finally {
+      setExportingSummaryPdf(false);
+    }
+  }
+
+  function renderSnackSummary() {
+    const activeItems = snackItems.filter(
+      (item) => item.is_active
+    );
+
+    const getClassStudentIds = (classId) =>
+      Array.from(
+        new Set(
+          preferenceMemberships
+            .filter(
+              (membership) =>
+                membership.class_id === classId
+            )
+            .map(
+              (membership) =>
+                membership.student_id
+            )
+        )
+      );
+
+    const buildItemSummary = (
+      studentIds,
+      item
+    ) => {
+      const studentIdSet =
+        new Set(studentIds);
+
+      const choices =
+        studentSnackChoices.filter(
+          (choice) =>
+            studentIdSet.has(
+              choice.student_id
+            ) &&
+            choice.snack_item_id ===
+              item.id
+        );
+
+      if (item.requires_option) {
+        const options =
+          (item.options || [])
+            .filter(
+              (option) =>
+                option.is_active
+            )
+            .map((option) => ({
+              id: option.id,
+              name: option.name,
+              isVegetarian:
+                Boolean(
+                  option.is_vegetarian_option
+                ),
+              count:
+                choices.filter(
+                  (choice) =>
+                    choice.snack_item_option_id ===
+                      option.id
+                ).length,
+            }));
+
+        const selectedStudentIds =
+          new Set(
+            choices
+              .filter(
+                (choice) =>
+                  choice.snack_item_option_id
+              )
+              .map(
+                (choice) =>
+                  choice.student_id
+              )
+          );
+
+        return {
+          type: "options",
+          item,
+          options,
+          total:
+            options.reduce(
+              (sum, option) =>
+                sum + option.count,
+              0
+            ),
+          unselected:
+            Math.max(
+              0,
+              studentIds.length -
+                selectedStudentIds.size
+            ),
+        };
+      }
+
+      const quantity =
+        choices.reduce(
+          (sum, choice) =>
+            sum +
+            Math.max(
+              0,
+              Number(
+                choice.quantity || 0
+              )
+            ),
+          0
+        );
+
+      const selectedCount =
+        choices.filter(
+          (choice) =>
+            Number(
+              choice.quantity || 0
+            ) > 0
+        ).length;
+
+      return {
+        type: "quantity",
+        item,
+        total: quantity,
+        selectedCount,
+        unselected:
+          Math.max(
+            0,
+            studentIds.length -
+              selectedCount
+          ),
+      };
+    };
+
+    const classSummaries =
+      preferenceClasses.map(
+        (classItem) => {
+          const studentIds =
+            getClassStudentIds(
+              classItem.id
+            );
+
+          return {
+            classItem,
+            studentIds,
+            itemSummaries:
+              activeItems.map(
+                (item) =>
+                  buildItemSummary(
+                    studentIds,
+                    item
+                  )
+              ),
+          };
+        }
+      );
+
+    const allStudentIds =
+      Array.from(
+        new Set(
+          preferenceMemberships.map(
+            (membership) =>
+              membership.student_id
+          )
+        )
+      );
+
+    const overallSummary =
+      activeItems.map(
+        (item) =>
+          buildItemSummary(
+            allStudentIds,
+            item
+          )
+      );
+
+    function renderSummaryTable(
+      itemSummaries
+    ) {
+      if (
+        itemSummaries.length === 0
+      ) {
+        return (
+          <div
+            style={{
+              padding: "28px 18px",
+              textAlign: "center",
+              color: "#929992",
+            }}
+          >
+            尚未建立啟用中的點心品項
+          </div>
+        );
+      }
+
+      return (
+        <div
+          style={{
+            overflowX: "auto",
+          }}
+        >
+          <table
+            style={{
+              width: "100%",
+              borderCollapse:
+                "separate",
+              borderSpacing: 0,
+              fontSize: "13px",
+            }}
+          >
+            <thead>
+              <tr>
+                <th
+                  style={{
+                    width: "32%",
+                    padding:
+                      "10px 12px",
+                    textAlign: "left",
+                    background:
+                      "#f4f6f2",
+                    color: "#34423a",
+                    borderBottom:
+                      "1px solid #e1e5df",
+                  }}
+                >
+                  點心
+                </th>
+
+                <th
+                  style={{
+                    padding:
+                      "10px 12px",
+                    textAlign: "left",
+                    background:
+                      "#f4f6f2",
+                    color: "#34423a",
+                    borderBottom:
+                      "1px solid #e1e5df",
+                  }}
+                >
+                  選項／數量
+                </th>
+
+                <th
+                  style={{
+                    width: "88px",
+                    padding:
+                      "10px 12px",
+                    textAlign: "center",
+                    background:
+                      "#f4f6f2",
+                    color: "#34423a",
+                    borderBottom:
+                      "1px solid #e1e5df",
+                  }}
+                >
+                  合計
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {itemSummaries.map(
+                (summary) => (
+                  <tr
+                    key={
+                      summary.item.id
+                    }
+                  >
+                    <th
+                      style={{
+                        padding:
+                          "12px",
+                        textAlign: "left",
+                        verticalAlign:
+                          "top",
+                        background:
+                          "#fff",
+                        color:
+                          "#34423a",
+                        borderBottom:
+                          "1px solid #ecefeb",
+                      }}
+                    >
+                      <div>
+                        {
+                          summary.item
+                            .name
+                        }
+                      </div>
+
+                      <small
+                        style={{
+                          display:
+                            "block",
+                          marginTop:
+                            "4px",
+                          color:
+                            "#929992",
+                          fontWeight:
+                            400,
+                        }}
+                      >
+                        {summary.type ===
+                        "options"
+                          ? "口味統計"
+                          : "數量統計"}
+                      </small>
+                    </th>
+
+                    <td
+                      style={{
+                        padding:
+                          "10px 12px",
+                        verticalAlign:
+                          "top",
+                        borderBottom:
+                          "1px solid #ecefeb",
+                      }}
+                    >
+                      {summary.type ===
+                      "options" ? (
+                        <div
+                          style={{
+                            display:
+                              "flex",
+                            gap: "7px",
+                            flexWrap:
+                              "wrap",
+                          }}
+                        >
+                          {summary.options.map(
+                            (
+                              option
+                            ) => (
+                              <span
+                                key={
+                                  option.id
+                                }
+                                style={{
+                                  padding:
+                                    "6px 9px",
+                                  border:
+                                    "1px solid #e0e4de",
+                                  borderRadius:
+                                    "999px",
+                                  background:
+                                    option.count >
+                                    0
+                                      ? "#f1f6f2"
+                                      : "#fafafa",
+                                  color:
+                                    option.count >
+                                    0
+                                      ? "#4f6758"
+                                      : "#9a9f9b",
+                                  whiteSpace:
+                                    "nowrap",
+                                }}
+                              >
+                                {
+                                  option.name
+                                }
+                                {option.isVegetarian
+                                  ? "（素）"
+                                  : ""}
+                                {" "}
+                                <strong>
+                                  {
+                                    option.count
+                                  }
+                                </strong>
+                              </span>
+                            )
+                          )}
+
+                          {summary.unselected >
+                            0 && (
+                            <span
+                              style={{
+                                padding:
+                                  "6px 9px",
+                                border:
+                                  "1px dashed #ddd8cf",
+                                borderRadius:
+                                  "999px",
+                                color:
+                                  "#9a765e",
+                                background:
+                                  "#fffaf3",
+                                whiteSpace:
+                                  "nowrap",
+                              }}
+                            >
+                              未選擇{" "}
+                              <strong>
+                                {
+                                  summary.unselected
+                                }
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            display:
+                              "flex",
+                            gap: "8px",
+                            flexWrap:
+                              "wrap",
+                          }}
+                        >
+                          <span
+                            style={{
+                              padding:
+                                "6px 9px",
+                              border:
+                                "1px solid #e0e4de",
+                              borderRadius:
+                                "999px",
+                              background:
+                                "#f1f6f2",
+                              color:
+                                "#4f6758",
+                            }}
+                          >
+                            總份數{" "}
+                            <strong>
+                              {
+                                summary.total
+                              }
+                            </strong>
+                          </span>
+
+                          {summary.unselected >
+                            0 && (
+                            <span
+                              style={{
+                                padding:
+                                  "6px 9px",
+                                border:
+                                  "1px dashed #ddd8cf",
+                                borderRadius:
+                                  "999px",
+                                background:
+                                  "#fffaf3",
+                                color:
+                                  "#9a765e",
+                              }}
+                            >
+                              未設定{" "}
+                              <strong>
+                                {
+                                  summary.unselected
+                                }
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    <td
+                      style={{
+                        padding:
+                          "10px 12px",
+                        textAlign:
+                          "center",
+                        verticalAlign:
+                          "top",
+                        borderBottom:
+                          "1px solid #ecefeb",
+                        fontSize:
+                          "18px",
+                        fontWeight:
+                          800,
+                        color:
+                          "#34423a",
+                      }}
+                    >
+                      {summary.total}
+                    </td>
+                  </tr>
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        style={{
+          marginTop: "22px",
+          display: "grid",
+          gap: "18px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <strong
+              style={{
+                display: "block",
+                color: "#34423a",
+                fontSize: "16px",
+              }}
+            >
+              各班與全校訂購統計
+            </strong>
+
+            <span
+              style={{
+                display: "block",
+                marginTop: "4px",
+                color: "#879088",
+                fontSize: "12px",
+              }}
+            >
+              PDF 第一頁為全部班級總計，後續每個班級各一頁。
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={
+              exportSnackSummaryPdf
+            }
+            disabled={
+              exportingSummaryPdf ||
+              preferenceLoading ||
+              snackItemsLoading ||
+              activeItems.length === 0
+            }
+            style={{
+              height: "40px",
+              padding: "0 15px",
+              border:
+                "1px solid #cfd7d0",
+              borderRadius: "10px",
+              background: "#fff",
+              color: "#445149",
+              font: "inherit",
+              fontWeight: 700,
+              cursor:
+                exportingSummaryPdf
+                  ? "wait"
+                  : "pointer",
+            }}
+          >
+            {exportingSummaryPdf
+              ? "產出 PDF 中…"
+              : "下載統計 PDF"}
+          </button>
+        </div>
+
+        {preferenceLoading ||
+        snackItemsLoading ? (
+          <div
+            style={{
+              padding: "44px 20px",
+              textAlign: "center",
+              color: "#879088",
+            }}
+          >
+            正在整理訂購統計…
+          </div>
+        ) : (
+          <>
+            <section
+              style={{
+                border:
+                  "1px solid #d9e0da",
+                borderRadius:
+                  "14px",
+                overflow: "hidden",
+                background: "#fff",
+                boxShadow:
+                  "0 4px 14px rgba(45,60,50,.05)",
+              }}
+            >
+              <div
+                style={{
+                  padding:
+                    "15px 18px",
+                  display: "flex",
+                  alignItems:
+                    "center",
+                  justifyContent:
+                    "space-between",
+                  gap: "12px",
+                  flexWrap:
+                    "wrap",
+                  background:
+                    "#eef4ef",
+                  borderBottom:
+                    "1px solid #d9e0da",
+                }}
+              >
+                <div>
+                  <strong
+                    style={{
+                      display:
+                        "block",
+                      fontSize:
+                        "17px",
+                      color:
+                        "#34423a",
+                    }}
+                  >
+                    全部班級總計
+                  </strong>
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "3px",
+                      color:
+                        "#718078",
+                      fontSize:
+                        "12px",
+                    }}
+                  >
+                    {
+                      allStudentIds.length
+                    }{" "}
+                    位在籍學生
+                  </span>
+                </div>
+
+                <span
+                  style={{
+                    padding:
+                      "5px 9px",
+                    borderRadius:
+                      "999px",
+                    background:
+                      "#fff",
+                    color:
+                      "#587363",
+                    fontSize:
+                      "11px",
+                    fontWeight:
+                      700,
+                  }}
+                >
+                  ALL CLASSES
+                </span>
+              </div>
+
+              {renderSummaryTable(
+                overallSummary
+              )}
+            </section>
+
+            <div
+              style={{
+                display: "grid",
+                gap: "14px",
+              }}
+            >
+              {classSummaries.map(
+                ({
+                  classItem,
+                  studentIds,
+                  itemSummaries,
+                }) => (
+                  <section
+                    key={
+                      classItem.id
+                    }
+                    style={{
+                      border:
+                        "1px solid #e1e5df",
+                      borderRadius:
+                        "14px",
+                      overflow:
+                        "hidden",
+                      background:
+                        "#fff",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding:
+                          "13px 16px",
+                        display:
+                          "flex",
+                        alignItems:
+                          "center",
+                        justifyContent:
+                          "space-between",
+                        gap:
+                          "10px",
+                        background:
+                          "#fafbf8",
+                        borderBottom:
+                          "1px solid #e1e5df",
+                      }}
+                    >
+                      <strong
+                        style={{
+                          color:
+                            "#34423a",
+                          fontSize:
+                            "15px",
+                        }}
+                      >
+                        {
+                          classItem.class_name
+                        }
+                      </strong>
+
+                      <span
+                        style={{
+                          color:
+                            "#879088",
+                          fontSize:
+                            "12px",
+                        }}
+                      >
+                        {
+                          studentIds.length
+                        }{" "}
+                        位學生
+                      </span>
+                    </div>
+
+                    {renderSummaryTable(
+                      itemSummaries
+                    )}
+                  </section>
+                )
+              )}
+            </div>
+
+            <div
+              style={{
+                padding:
+                  "11px 13px",
+                borderRadius:
+                  "10px",
+                background:
+                  "#fff8e8",
+                color: "#806b38",
+                fontSize:
+                  "12px",
+                lineHeight: 1.7,
+              }}
+            >
+              統計只計入系統目前在籍的安親班學生；美語／班外生維持每日臨時訂餐，不納入固定口味統計。
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function renderSnackPreferences() {
+    const activeItems = snackItems.filter(
+      (item) => item.is_active
+    );
+
+    const selectedClass =
+      preferenceClasses.find(
+        (classItem) =>
+          classItem.id ===
+          selectedPreferenceClassId
+      ) || null;
+
+    const students =
+      preferenceMemberships
+        .filter(
+          (membership) =>
+            membership.class_id ===
+            selectedPreferenceClassId
+        )
+        .map((membership) => ({
+          student_id:
+            membership.student_id,
+          name:
+            membership.students?.chinese_name ||
+            membership.students?.english_name ||
+            "未命名學生",
+        }))
+        .sort((a, b) =>
+          a.name.localeCompare(
+            b.name,
+            "zh-Hant"
+          )
+        );
+
+    return (
+      <div
+        style={{
+          marginTop: "22px",
+          display: "grid",
+          gap: "16px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <strong
+              style={{
+                display: "block",
+                color: "#34423a",
+                fontSize: "16px",
+              }}
+            >
+              班級點心選擇
+            </strong>
+
+            <span
+              style={{
+                display: "block",
+                marginTop: "4px",
+                fontSize: "12px",
+                color: "#879088",
+              }}
+            >
+              班級與學生直接讀取系統目前名單；美語／班外生不在此設定。
+            </span>
+          </div>
+
+          <label
+            style={{
+              display: "grid",
+              gap: "5px",
+              minWidth: "220px",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "11px",
+                color: "#7b857e",
+              }}
+            >
+              班級
+            </span>
+
+            <select
+              value={
+                selectedPreferenceClassId
+              }
+              onChange={(event) =>
+                setSelectedPreferenceClassId(
+                  event.target.value
+                )
+              }
+              disabled={
+                preferenceLoading ||
+                preferenceClasses.length === 0
+              }
+              style={{
+                height: "40px",
+                padding: "0 12px",
+                border:
+                  "1px solid #d9ded8",
+                borderRadius: "10px",
+                background: "#fff",
+                font: "inherit",
+              }}
+            >
+              {preferenceClasses.map(
+                (classItem) => (
+                  <option
+                    key={classItem.id}
+                    value={classItem.id}
+                  >
+                    {classItem.class_name}
+                  </option>
+                )
+              )}
+            </select>
+          </label>
+        </div>
+
+        {preferenceLoading ||
+        snackItemsLoading ? (
+          <div
+            style={{
+              padding: "44px 20px",
+              textAlign: "center",
+              color: "#879088",
+            }}
+          >
+            正在讀取班級與點心選擇…
+          </div>
+        ) : preferenceClasses.length === 0 ? (
+          <div
+            style={{
+              padding: "44px 20px",
+              textAlign: "center",
+              border:
+                "1px dashed #d6ddd6",
+              borderRadius: "14px",
+              color: "#89918c",
+              background: "#fafbf9",
+            }}
+          >
+            目前沒有可用的安親班級
+          </div>
+        ) : activeItems.length === 0 ? (
+          <div
+            style={{
+              padding: "44px 20px",
+              textAlign: "center",
+              border:
+                "1px dashed #d6ddd6",
+              borderRadius: "14px",
+              color: "#89918c",
+              background: "#fafbf9",
+            }}
+          >
+            這個學期尚未建立啟用中的點心品項，請先到「點心設定」新增。
+          </div>
+        ) : (
+          <>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent:
+                  "space-between",
+                gap: "10px",
+                padding: "10px 12px",
+                borderRadius: "10px",
+                background: "#f5f7f3",
+                color: "#657068",
+                fontSize: "12px",
+              }}
+            >
+              <span>
+                {selectedClass?.class_name ||
+                  "班級"}
+                {"｜"}
+                {students.length} 位學生
+              </span>
+
+              <span>
+                選擇後立即自動儲存
+              </span>
+            </div>
+
+            <div
+              style={{
+                overflowX: "auto",
+                border:
+                  "1px solid #e1e5df",
+                borderRadius: "14px",
+              }}
+            >
+              <table
+                style={{
+                  width: "100%",
+                  minWidth:
+                    `${180 + activeItems.length * 170}px`,
+                  borderCollapse:
+                    "separate",
+                  borderSpacing: 0,
+                  fontSize: "13px",
+                }}
+              >
+                <thead>
+                  <tr>
+                    <th
+                      style={{
+                        position: "sticky",
+                        left: 0,
+                        zIndex: 2,
+                        width: "180px",
+                        minWidth: "180px",
+                        padding:
+                          "11px 12px",
+                        textAlign: "left",
+                        background:
+                          "#f4f6f2",
+                        borderBottom:
+                          "1px solid #e1e5df",
+                        borderRight:
+                          "1px solid #e1e5df",
+                        color: "#34423a",
+                      }}
+                    >
+                      學生姓名
+                    </th>
+
+                    {activeItems.map(
+                      (item) => (
+                        <th
+                          key={item.id}
+                          style={{
+                            minWidth:
+                              "170px",
+                            padding:
+                              "10px 8px",
+                            textAlign:
+                              "center",
+                            background:
+                              "#f8f9f6",
+                            borderBottom:
+                              "1px solid #e1e5df",
+                            borderRight:
+                              "1px solid #ecefeb",
+                            color:
+                              "#4f5c54",
+                          }}
+                        >
+                          <div>
+                            {item.name}
+                          </div>
+                          <small
+                            style={{
+                              display:
+                                "block",
+                              marginTop:
+                                "3px",
+                              color:
+                                "#929992",
+                              fontWeight:
+                                400,
+                            }}
+                          >
+                            {item.requires_option
+                              ? "選擇口味"
+                              : "填寫數量"}
+                          </small>
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {students.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={
+                          activeItems.length +
+                          1
+                        }
+                        style={{
+                          padding:
+                            "32px 18px",
+                          textAlign:
+                            "center",
+                          color:
+                            "#929992",
+                        }}
+                      >
+                        這個班級目前沒有在籍學生
+                      </td>
+                    </tr>
+                  ) : (
+                    students.map(
+                      (
+                        student,
+                        studentIndex
+                      ) => (
+                        <tr
+                          key={
+                            student.student_id
+                          }
+                        >
+                          <th
+                            style={{
+                              position:
+                                "sticky",
+                              left: 0,
+                              zIndex: 1,
+                              padding:
+                                "10px 12px",
+                              textAlign:
+                                "left",
+                              background:
+                                studentIndex %
+                                  2 ===
+                                0
+                                  ? "#fff"
+                                  : "#fbfcfa",
+                              borderBottom:
+                                "1px solid #ecefeb",
+                              borderRight:
+                                "1px solid #e1e5df",
+                              color:
+                                "#34423a",
+                              whiteSpace:
+                                "nowrap",
+                            }}
+                          >
+                            {student.name}
+                          </th>
+
+                          {activeItems.map(
+                            (item) => {
+                              const choice =
+                                getStudentSnackChoice(
+                                  student.student_id,
+                                  item.id
+                                );
+
+                              const saving =
+                                savingPreferenceKey ===
+                                `${student.student_id}:${item.id}`;
+
+                              const activeOptions =
+                                (
+                                  item.options ||
+                                  []
+                                ).filter(
+                                  (
+                                    option
+                                  ) =>
+                                    option.is_active
+                                );
+
+                              return (
+                                <td
+                                  key={
+                                    item.id
+                                  }
+                                  style={{
+                                    padding:
+                                      "7px 8px",
+                                    textAlign:
+                                      "center",
+                                    background:
+                                      studentIndex %
+                                        2 ===
+                                      0
+                                        ? "#fff"
+                                        : "#fbfcfa",
+                                    borderBottom:
+                                      "1px solid #ecefeb",
+                                    borderRight:
+                                      "1px solid #ecefeb",
+                                  }}
+                                >
+                                  {item.requires_option ? (
+                                    activeOptions.length ===
+                                    0 ? (
+                                      <span
+                                        style={{
+                                          color:
+                                            "#a0968d",
+                                          fontSize:
+                                            "12px",
+                                        }}
+                                      >
+                                        尚無選項
+                                      </span>
+                                    ) : (
+                                      <select
+                                        value={
+                                          choice?.snack_item_option_id ||
+                                          ""
+                                        }
+                                        onChange={(
+                                          event
+                                        ) =>
+                                          saveStudentSnackChoice(
+                                            {
+                                              studentId:
+                                                student.student_id,
+                                              snackItem:
+                                                item,
+                                              optionId:
+                                                event.target.value ||
+                                                null,
+                                              quantity:
+                                                1,
+                                            }
+                                          )
+                                        }
+                                        disabled={
+                                          saving
+                                        }
+                                        style={{
+                                          width:
+                                            "100%",
+                                          height:
+                                            "36px",
+                                          padding:
+                                            "0 9px",
+                                          border:
+                                            "1px solid #d9ded8",
+                                          borderRadius:
+                                            "8px",
+                                          background:
+                                            "#fff",
+                                          font:
+                                            "inherit",
+                                        }}
+                                      >
+                                        <option value="">
+                                          未選擇
+                                        </option>
+
+                                        {activeOptions.map(
+                                          (
+                                            option
+                                          ) => (
+                                            <option
+                                              key={
+                                                option.id
+                                              }
+                                              value={
+                                                option.id
+                                              }
+                                            >
+                                              {option.name}
+                                              {option.is_vegetarian_option
+                                                ? "（素）"
+                                                : ""}
+                                            </option>
+                                          )
+                                        )}
+                                      </select>
+                                    )
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={
+                                        choice?.quantity ??
+                                        0
+                                      }
+                                      onChange={(
+                                        event
+                                      ) =>
+                                        saveStudentSnackChoice(
+                                          {
+                                            studentId:
+                                              student.student_id,
+                                            snackItem:
+                                              item,
+                                            optionId:
+                                              null,
+                                            quantity:
+                                              event.target.value,
+                                          }
+                                        )
+                                      }
+                                      disabled={
+                                        saving
+                                      }
+                                      style={{
+                                        width:
+                                          "78px",
+                                        height:
+                                          "36px",
+                                        padding:
+                                          "0 8px",
+                                        border:
+                                          "1px solid #d9ded8",
+                                        borderRadius:
+                                          "8px",
+                                        textAlign:
+                                          "center",
+                                        font:
+                                          "inherit",
+                                      }}
+                                    />
+                                  )}
+
+                                  {saving && (
+                                    <small
+                                      style={{
+                                        display:
+                                          "block",
+                                        marginTop:
+                                          "3px",
+                                        color:
+                                          "#8b968e",
+                                      }}
+                                    >
+                                      儲存中…
+                                    </small>
+                                  )}
+                                </td>
+                              );
+                            }
+                          )}
+                        </tr>
+                      )
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div
+              style={{
+                padding: "11px 13px",
+                borderRadius: "10px",
+                background: "#fff8e8",
+                color: "#806b38",
+                fontSize: "12px",
+                lineHeight: 1.7,
+              }}
+            >
+              「未選擇」代表目前沒有固定偏好；不需要口味的品項可直接輸入數量。
+              美語／班外生維持每日臨時訂餐，不納入固定點心選擇。
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   function renderSnackSettings() {
     return (
       <div
@@ -3814,6 +6077,10 @@ function SnackManagementPage() {
 
         {activeTab === "MONTHLY" ? (
           renderMonthlyTable()
+        ) : activeTab === "PREFERENCES" ? (
+          renderSnackPreferences()
+        ) : activeTab === "SUMMARY" ? (
+          renderSnackSummary()
         ) : activeTab === "SETTINGS" ? (
           renderSnackSettings()
         ) : (
