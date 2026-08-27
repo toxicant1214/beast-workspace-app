@@ -14,6 +14,12 @@ function DashboardPage({ currentTeacher }) {
     talentEnrollmentCount: null,
   });
 
+  const displayName =
+    currentTeacher?.display_name ||
+    currentTeacher?.chinese_name ||
+    currentTeacher?.english_name ||
+    "使用者";
+
   const today = new Date();
 
   const dateText = today.toLocaleDateString("zh-TW", {
@@ -79,7 +85,7 @@ function DashboardPage({ currentTeacher }) {
           </p>
 
           <h1>
-            {greeting}，Lin
+            {greeting}，{displayName}
           </h1>
 
           <p className="summary">
