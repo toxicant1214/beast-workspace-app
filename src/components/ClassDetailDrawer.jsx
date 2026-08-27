@@ -84,9 +84,64 @@ function ClassDetailDrawer({
     try {
       setIsLoadingTeachers(true);
 
+      if (readOnly) {
+        const {
+          data: viewerTeacherRows,
+          error: viewerTeacherError,
+        } = await supabase.rpc(
+          "get_viewer_class_teachers"
+        );
+
+        if (viewerTeacherError) {
+          throw viewerTeacherError;
+        }
+
+        const normalizedRows =
+          (viewerTeacherRows || [])
+            .filter(
+              (item) =>
+                item.class_id ===
+                classItem.id
+            )
+            .map((item) => ({
+              id:
+                item.relation_id,
+              class_id:
+                item.class_id,
+              teacher_id:
+                item.teacher_id,
+              is_primary:
+                item.is_primary,
+              teachers: {
+                id:
+                  item.teacher_id,
+                chinese_name:
+                  item.chinese_name,
+                english_name:
+                  item.english_name,
+                status:
+                  "active",
+              },
+            }));
+
+        setClassTeachers(
+          normalizedRows
+        );
+
+        setTeacherOptions([]);
+
+        return;
+      }
+
       const [
-        { data: relationRows, error: relationError },
-        { data: teacherRows, error: teacherError },
+        {
+          data: relationRows,
+          error: relationError,
+        },
+        {
+          data: teacherRows,
+          error: teacherError,
+        },
       ] = await Promise.all([
         supabase
           .from("class_teachers")
@@ -102,9 +157,18 @@ function ClassDetailDrawer({
               status
             )
           `)
-          .eq("class_id", classItem.id)
-          .order("is_primary", { ascending: false })
-          .order("created_at", { ascending: true }),
+          .eq(
+            "class_id",
+            classItem.id
+          )
+          .order(
+            "is_primary",
+            { ascending: false }
+          )
+          .order(
+            "created_at",
+            { ascending: true }
+          ),
 
         supabase
           .from("teachers")
@@ -114,18 +178,41 @@ function ClassDetailDrawer({
             english_name,
             status
           `)
-          .eq("status", "active")
-          .order("chinese_name", { ascending: true }),
+          .eq(
+            "status",
+            "active"
+          )
+          .order(
+            "chinese_name",
+            { ascending: true }
+          ),
       ]);
 
-      if (relationError) throw relationError;
-      if (teacherError) throw teacherError;
+      if (relationError) {
+        throw relationError;
+      }
 
-      setClassTeachers(relationRows || []);
-      setTeacherOptions(teacherRows || []);
+      if (teacherError) {
+        throw teacherError;
+      }
+
+      setClassTeachers(
+        relationRows || []
+      );
+
+      setTeacherOptions(
+        teacherRows || []
+      );
     } catch (error) {
-      console.error("讀取班級老師失敗：", error);
-      window.alert(`讀取班級老師失敗：${error.message}`);
+      console.error(
+        "讀取班級老師失敗：",
+        error
+      );
+
+      window.alert(
+        `讀取班級老師失敗：${error.message}`
+      );
+
       setClassTeachers([]);
       setTeacherOptions([]);
     } finally {
@@ -484,7 +571,9 @@ function ClassDetailDrawer({
                   {!readOnly && (
                     <button
                       type="button"
-                      onClick={() => onEdit(classItem)}
+                      onClick={() =>
+                        onEdit(classItem)
+                      }
                     >
                       編輯
                     </button>
@@ -624,12 +713,19 @@ function ClassDetailDrawer({
                               <button
                                 type="button"
                                 disabled={isSavingTeacher}
-                                onClick={() => removeClassTeacher(item)}
+                                onClick={() =>
+                                  removeClassTeacher(
+                                    item
+                                  )
+                                }
                                 style={{
                                   border: "none",
-                                  background: "transparent",
-                                  color: "#9b6d67",
-                                  cursor: "pointer",
+                                  background:
+                                    "transparent",
+                                  color:
+                                    "#9b6d67",
+                                  cursor:
+                                    "pointer",
                                 }}
                               >
                                 移除
@@ -641,7 +737,7 @@ function ClassDetailDrawer({
                     </div>
                   )}
 
-                  {!readOnly && (
+{!readOnly && (
                   <div
                     style={{
                       display: "flex",
@@ -755,7 +851,7 @@ function ClassDetailDrawer({
                             加入於 {formatDate(item.joined_at)}
                           </small>
 
-                          {!readOnly && (
+{!readOnly && (
                           <div className="classDetailDrawer__studentMenuWrap">
                             <button
                               type="button"
