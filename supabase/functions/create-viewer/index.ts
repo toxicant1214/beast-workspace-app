@@ -9,13 +9,10 @@ const corsHeaders = {
 
 const ALLOWED_VIEWER_MODULES = new Set([
   "dashboard",
-  "students",
-  "camps",
+  "classes",
   "calendar",
   "pickup",
   "snack_management",
-  "learning_reports",
-  "score_analysis",
 ]);
 
 function jsonResponse(

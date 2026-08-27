@@ -6,42 +6,27 @@ const VIEWER_PAGE_OPTIONS = [
   {
     key: "dashboard",
     label: "首頁",
-    description: "查看 Workspace 首頁與統計資訊。",
+    description: "查看經營與統計資訊；viewer 端隱藏今日概況。",
   },
   {
-    key: "students",
-    label: "學生資料",
-    description: "查看學生基本資料與相關資訊。",
-  },
-  {
-    key: "camps",
-    label: "營隊管理",
-    description: "查看營隊資料與安排。",
+    key: "classes",
+    label: "班級管理",
+    description: "可查看、點開明細與下載；不顯示任何編輯入口。",
   },
   {
     key: "calendar",
     label: "行事曆",
-    description: "查看行事曆與重要日期。",
+    description: "可查看、切換與點開內容；不顯示任何編輯入口。",
   },
   {
     key: "pickup",
     label: "接送管理",
-    description: "查看接送安排與相關資料。",
+    description: "可查看與展開接送資料；不顯示任何編輯入口。",
   },
   {
     key: "snack_management",
     label: "點心管理",
-    description: "查看月點心表、明細、統計與 PDF。",
-  },
-  {
-    key: "learning_reports",
-    label: "學習報告書",
-    description: "查看學生學習報告資料。",
-  },
-  {
-    key: "score_analysis",
-    label: "成績分析",
-    description: "查看成績統計與分析資料。",
+    description: "可查看明細、統計與 PDF；不顯示任何設定或編輯入口。",
   },
 ];
 
