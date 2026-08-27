@@ -120,7 +120,10 @@ function isMembershipActiveOnDate(membership, dateString) {
   return true;
 }
 
-function SnackManagementPage({ teacherMode = null }) {
+function SnackManagementPage({
+  teacherMode = null,
+  readOnly = false,
+}) {
   const [semesters, setSemesters] = useState([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
   const [activeTab, setActiveTab] = useState(
@@ -1925,15 +1928,21 @@ function SnackManagementPage({ teacherMode = null }) {
   }, [selectedSemester]);
 
   const visibleTabs =
-    teacherMode === "PREFERENCES"
+    readOnly
       ? TABS.filter(
-          (tab) => tab.key === "PREFERENCES"
+          (tab) =>
+            tab.key === "MONTHLY" ||
+            tab.key === "SUMMARY"
         )
-      : teacherMode === "MONTHLY"
+      : teacherMode === "PREFERENCES"
         ? TABS.filter(
-            (tab) => tab.key === "MONTHLY"
+            (tab) => tab.key === "PREFERENCES"
           )
-        : TABS;
+        : teacherMode === "MONTHLY"
+          ? TABS.filter(
+              (tab) => tab.key === "MONTHLY"
+            )
+          : TABS;
 
   const activeTabItem = visibleTabs.find(
     (tab) => tab.key === activeTab
@@ -6793,40 +6802,61 @@ function SnackManagementPage({ teacherMode = null }) {
                           "1px solid #e1e5df",
                       }}
                     >
-                      <select
-                        value={
-                          getClassTeacherEatsSnack(
+                      {readOnly ? (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            minWidth: "46px",
+                            padding: "5px 8px",
+                            borderRadius: "8px",
+                            background: "#f4f6f2",
+                            color: "#5f675f",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {getClassTeacherEatsSnack(
                             classItem.id
                           )
-                            ? "YES"
-                            : "NO"
-                        }
-                        onChange={(event) =>
-                          saveTeacherSetting(
-                            classItem.id,
-                            event.target.value ===
-                              "YES"
-                          )
-                        }
-                        disabled={savingCell}
-                        style={{
-                          width: "60px",
-                          height: "30px",
-                          border:
-                            "1px solid #d9ded8",
-                          borderRadius:
-                            "8px",
-                          background: "#fff",
-                          font: "inherit",
-                        }}
-                      >
-                        <option value="YES">
-                          要
-                        </option>
-                        <option value="NO">
-                          不要
-                        </option>
-                      </select>
+                            ? "要"
+                            : "不要"}
+                        </span>
+                      ) : (
+                        <select
+                          value={
+                            getClassTeacherEatsSnack(
+                              classItem.id
+                            )
+                              ? "YES"
+                              : "NO"
+                          }
+                          onChange={(event) =>
+                            saveTeacherSetting(
+                              classItem.id,
+                              event.target.value ===
+                                "YES"
+                            )
+                          }
+                          disabled={savingCell}
+                          style={{
+                            width: "60px",
+                            height: "30px",
+                            border:
+                              "1px solid #d9ded8",
+                            borderRadius:
+                              "8px",
+                            background: "#fff",
+                            font: "inherit",
+                          }}
+                        >
+                          <option value="YES">
+                            要
+                          </option>
+                          <option value="NO">
+                            不要
+                          </option>
+                        </select>
+                      )}
                     </td>
 
                     {classItem.counts.map((cell) => {
@@ -6841,10 +6871,15 @@ function SnackManagementPage({ teacherMode = null }) {
                           title={
                             closed
                               ? `${closed.title}｜不需點心`
-                              : `${classItem.class_name}｜${cell.dateString}｜點擊調整`
+                              : readOnly
+                                ? `${classItem.class_name}｜${cell.dateString}`
+                                : `${classItem.class_name}｜${cell.dateString}｜點擊調整`
                           }
                           onClick={() => {
-                            if (!closed) {
+                            if (
+                              !readOnly &&
+                              !closed
+                            ) {
                               openDailyCell(
                                 classItem,
                                 cell.dateString
@@ -6866,9 +6901,10 @@ function SnackManagementPage({ teacherMode = null }) {
                               "1px solid #ecefeb",
                             borderRight:
                               "1px solid #ecefeb",
-                            cursor: closed
-                              ? "default"
-                              : "pointer",
+                            cursor:
+                              closed || readOnly
+                                ? "default"
+                                : "pointer",
                             position: "relative",
                           }}
                         >
@@ -6934,8 +6970,23 @@ function SnackManagementPage({ teacherMode = null }) {
                     return (
                       <td
                         key={day.dateString}
-                        title={closed ? `${closed.title}｜不需點心` : `美語／班外生｜${day.dateString}｜點擊管理訂餐名單`}
-                        onClick={() => { if (!closed) openExternalOrders(day.dateString); }}
+                        title={
+                          closed
+                            ? `${closed.title}｜不需點心`
+                            : readOnly
+                              ? `美語／班外生｜${day.dateString}`
+                              : `美語／班外生｜${day.dateString}｜點擊管理訂餐名單`
+                        }
+                        onClick={() => {
+                          if (
+                            !readOnly &&
+                            !closed
+                          ) {
+                            openExternalOrders(
+                              day.dateString
+                            );
+                          }
+                        }}
                         style={{
                           height: "44px",
                           padding: "4px 1px",
@@ -6945,7 +6996,10 @@ function SnackManagementPage({ teacherMode = null }) {
                           color: closed ? "#a8aca7" : count > 0 ? "#725b42" : "#a59a8d",
                           borderBottom: "1px solid #ecefeb",
                           borderRight: "1px solid #ecefeb",
-                          cursor: closed ? "default" : "pointer",
+                          cursor:
+                            closed || readOnly
+                              ? "default"
+                              : "pointer",
                         }}
                       >
                         {closed ? "休" : count}
@@ -7265,7 +7319,7 @@ function SnackManagementPage({ teacherMode = null }) {
         )}
       </section>
 
-      {selectedExternalDate && (
+      {!readOnly && selectedExternalDate && (
         <div
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !savingExternalOrders) {
@@ -7345,7 +7399,7 @@ function SnackManagementPage({ teacherMode = null }) {
         </div>
       )}
 
-      {selectedCell && (
+      {!readOnly && selectedCell && (
         <div
           onMouseDown={(event) => {
             if (

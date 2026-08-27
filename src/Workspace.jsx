@@ -1003,7 +1003,12 @@ function Workspace() {
       "點心管理"
     ) {
       return (
-        <SnackManagementPage />
+        <SnackManagementPage
+          readOnly={
+            currentTeacher?.role ===
+            "viewer"
+          }
+        />
       );
     }
 
