@@ -89,6 +89,11 @@ const PAGE_OPTIONS = [
     adminOnly: true,
   },
   {
+    label: "月點心表",
+    key: "snack_monthly",
+    teacherOnly: true,
+  },
+  {
     label: "點心選擇",
     key: "snack_preferences",
     teacherOnly: true,
@@ -819,11 +824,22 @@ return hasPagePermission(
 
     if (
       activePage ===
+      "月點心表"
+    ) {
+      return (
+        <SnackManagementPage
+          teacherMode="MONTHLY"
+        />
+      );
+    }
+
+    if (
+      activePage ===
       "點心選擇"
     ) {
       return (
         <SnackManagementPage
-          teacherMode
+          teacherMode="PREFERENCES"
         />
       );
     }

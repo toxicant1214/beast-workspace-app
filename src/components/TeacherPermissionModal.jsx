@@ -55,6 +55,12 @@ const PERMISSION_MODULES = [
     description: "學生接送與路隊資料",
   },
   {
+    key: "snack_monthly",
+    label: "月點心表",
+    description: "查看並編輯各班每日點心訂購狀況",
+    editOnly: true,
+  },
+  {
     key: "snack_preferences",
     label: "點心選擇",
     description: "查看並設定學生與班級老師的點心口味",

@@ -120,11 +120,13 @@ function isMembershipActiveOnDate(membership, dateString) {
   return true;
 }
 
-function SnackManagementPage({ teacherMode = false }) {
+function SnackManagementPage({ teacherMode = null }) {
   const [semesters, setSemesters] = useState([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
   const [activeTab, setActiveTab] = useState(
-    teacherMode ? "PREFERENCES" : "MONTHLY"
+    teacherMode === "PREFERENCES"
+      ? "PREFERENCES"
+      : "MONTHLY"
   );
 
   const [selectedMonth, setSelectedMonth] = useState("");
@@ -175,8 +177,10 @@ function SnackManagementPage({ teacherMode = false }) {
   }, []);
 
   useEffect(() => {
-    if (teacherMode) {
+    if (teacherMode === "PREFERENCES") {
       setActiveTab("PREFERENCES");
+    } else if (teacherMode === "MONTHLY") {
+      setActiveTab("MONTHLY");
     }
   }, [teacherMode]);
 
@@ -1920,11 +1924,16 @@ function SnackManagementPage({ teacherMode = false }) {
     return result;
   }, [selectedSemester]);
 
-  const visibleTabs = teacherMode
-    ? TABS.filter(
-        (tab) => tab.key === "PREFERENCES"
-      )
-    : TABS;
+  const visibleTabs =
+    teacherMode === "PREFERENCES"
+      ? TABS.filter(
+          (tab) => tab.key === "PREFERENCES"
+        )
+      : teacherMode === "MONTHLY"
+        ? TABS.filter(
+            (tab) => tab.key === "MONTHLY"
+          )
+        : TABS;
 
   const activeTabItem = visibleTabs.find(
     (tab) => tab.key === activeTab
