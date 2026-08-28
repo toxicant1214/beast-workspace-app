@@ -2416,7 +2416,8 @@ function SnackManagementPage({
       };
 
       const getClassDayNote = (classItem, day) => {
-        if (closedDateMap.has(day.dateString)) return "休";
+        const closed = closedDateMap.get(day.dateString);
+        if (closed) return closed.title || "休假";
 
         const parts = [];
         const excludedNames = getExcludedStudentNames(
@@ -2494,10 +2495,17 @@ function SnackManagementPage({
           "班級",
           "老師",
           "人數",
-          ...weekDays.flatMap((day) => [
-            `${Number(day.dateString.slice(5, 7))}月${day.day}日`,
-            "備註",
-          ]),
+          ...weekDays.flatMap((day) => {
+            const closed = closedDateMap.get(day.dateString);
+            const dateLabel = `${Number(day.dateString.slice(5, 7))}月${day.day}日`;
+
+            return [
+              closed?.title
+                ? `${dateLabel}（${closed.title}）`
+                : dateLabel,
+              "備註",
+            ];
+          }),
         ]);
 
         classRows.forEach((classItem) => {
@@ -2537,7 +2545,7 @@ function SnackManagementPage({
           externalRow.push(closed ? "休" : orders.length);
           externalRow.push(
             closed
-              ? "休"
+              ? closedDateMap.get(day.dateString)?.title || "休假"
               : orders
                   .map((item) => item.person_name)
                   .filter(Boolean)
@@ -2553,7 +2561,7 @@ function SnackManagementPage({
           );
           const closed = closedDateMap.has(day.dateString);
           totalRow.push(
-            closed ? "—" : dailyTotals[monthDayIndex] ?? ""
+            closed ? "休" : dailyTotals[monthDayIndex] ?? ""
           );
           totalRow.push("");
         });
@@ -7077,6 +7085,22 @@ function SnackManagementPage({
                             ][day.weekday]
                           }
                         </div>
+                        {closed?.title && (
+                          <div
+                            style={{
+                              marginTop: "3px",
+                              padding: "0 2px",
+                              fontSize: "9px",
+                              lineHeight: 1.2,
+                              fontWeight: 700,
+                              color: "#9a6658",
+                              whiteSpace: "normal",
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {closed.title}
+                          </div>
+                        )}
                       </th>
                     );
                   })}
