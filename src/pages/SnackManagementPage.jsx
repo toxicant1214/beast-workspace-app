@@ -2402,6 +2402,19 @@ function SnackManagementPage({
         return names.sort((a, b) => a.localeCompare(b, "zh-Hant"));
       };
 
+      const getClassEnrollmentCount = (classId, dateString) => {
+        const studentIds = new Set();
+
+        memberships.forEach((membership) => {
+          if (membership.class_id !== classId) return;
+          if (!isMembershipActiveOnDate(membership, dateString)) return;
+
+          studentIds.add(membership.student_id);
+        });
+
+        return studentIds.size;
+      };
+
       const getClassDayNote = (classItem, day) => {
         if (closedDateMap.has(day.dateString)) return "休";
 
@@ -2491,17 +2504,17 @@ function SnackManagementPage({
           const firstOpenDay = weekDays.find(
             (day) => !closedDateMap.has(day.dateString)
           );
-          const firstOpenCell = firstOpenDay
-            ? classItem.counts.find(
-                (cell) => cell.dateString === firstOpenDay.dateString
+          const enrollmentCount = firstOpenDay
+            ? getClassEnrollmentCount(
+                classItem.id,
+                firstOpenDay.dateString
               )
-            : null;
-          const baseCount = firstOpenCell?.breakdown?.baseCount ?? "";
+            : "";
 
           const row = [
             classItem.class_name,
             (teacherNamesByClass.get(classItem.id) || []).join("、"),
-            baseCount,
+            enrollmentCount,
           ];
 
           weekDays.forEach((day) => {
