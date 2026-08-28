@@ -1468,8 +1468,17 @@ function SnackManagementPage({
           .lte("joined_at", monthEnd),
 
         supabase
-          .from("calendar_school_events")
-          .select("*")
+          .from("calendar_day_overrides")
+          .select(`
+            id,
+            semester_id,
+            override_date,
+            override_type,
+            title,
+            notes,
+            created_at,
+            updated_at
+          `)
           .eq("semester_id", selectedSemesterId),
 
         supabase
@@ -1603,6 +1612,7 @@ function SnackManagementPage({
 
     for (const event of calendarEvents) {
       const eventType =
+        event.override_type ||
         event.event_type ||
         event.type ||
         event.event_kind ||
@@ -1614,11 +1624,13 @@ function SnackManagementPage({
       }
 
       const start =
+        event.override_date ||
         event.start_date ||
         event.event_date ||
         event.date;
 
       const end =
+        event.override_date ||
         event.end_date ||
         event.event_date ||
         event.date ||
