@@ -6,6 +6,7 @@ import {
 
 import { supabase } from "../lib/supabase";
 import { jsPDF } from "jspdf";
+import * as XLSX from "xlsx";
 import { getStudentPickupDecision } from "../components/pickup/pickupStudentSchedule";
 
 const TABS = [
@@ -2328,6 +2329,201 @@ function SnackManagementPage({
       setErrorMessage(`刪除美語／班外生點心失敗：${error.message}`);
     } finally {
       setSavingExternalOrders(false);
+    }
+  }
+
+  async function exportMonthlySnackExcel() {
+    if (
+      !selectedSemester ||
+      !selectedMonth ||
+      classRows.length === 0 ||
+      monthlyLoading
+    ) {
+      return;
+    }
+
+    try {
+      setErrorMessage("");
+
+      const classIds = classRows.map((item) => item.id);
+      const { data: teacherRows, error: teacherError } = await supabase
+        .from("class_teachers")
+        .select(`
+          class_id,
+          teacher_id,
+          is_primary,
+          teachers (
+            chinese_name,
+            english_name,
+            status
+          )
+        `)
+        .in("class_id", classIds);
+
+      if (teacherError) throw teacherError;
+
+      const teacherNamesByClass = new Map();
+      (teacherRows || []).forEach((row) => {
+        if (row.teachers?.status === "inactive") return;
+
+        const name =
+          row.teachers?.chinese_name ||
+          row.teachers?.english_name ||
+          "";
+
+        if (!name) return;
+
+        const names = teacherNamesByClass.get(row.class_id) || [];
+        if (!names.includes(name)) names.push(name);
+        teacherNamesByClass.set(row.class_id, names);
+      });
+
+      const getExcludedStudentNames = (classId, dateString) => {
+        const excludedIds = getDailyStudentExceptionIds(classId, dateString);
+        const names = [];
+
+        memberships.forEach((membership) => {
+          if (
+            membership.class_id !== classId ||
+            !excludedIds.has(membership.student_id) ||
+            !isMembershipActiveOnDate(membership, dateString)
+          ) {
+            return;
+          }
+
+          const name =
+            membership.students?.chinese_name ||
+            membership.students?.english_name ||
+            "未命名學生";
+
+          if (!names.includes(name)) names.push(name);
+        });
+
+        return names.sort((a, b) => a.localeCompare(b, "zh-Hant"));
+      };
+
+      const getClassDayNote = (classItem, day) => {
+        if (closedDateMap.has(day.dateString)) return "休";
+
+        const parts = [];
+        const excludedNames = getExcludedStudentNames(
+          classItem.id,
+          day.dateString
+        );
+
+        if (excludedNames.length > 0) {
+          parts.push(`${excludedNames.join("、")}不吃`);
+        }
+
+        if (getClassTeacherEatsSnack(classItem.id)) {
+          parts.push("含老師");
+        }
+
+        const adjustmentRow = getDailyAdjustment(
+          classItem.id,
+          day.dateString
+        );
+        const adjustment = Number(adjustmentRow?.quantity_delta || 0);
+
+        if (adjustment !== 0) {
+          parts.push(`手動${adjustment > 0 ? "+" : ""}${adjustment}`);
+        }
+
+        if (adjustmentRow?.reason) {
+          parts.push(adjustmentRow.reason);
+        }
+
+        return parts.join("；");
+      };
+
+      const rows = [];
+      const titleRow = [
+        "班級",
+        "老師",
+        "基準人數",
+        ...monthDays.flatMap((day) => [
+          `${Number(selectedMonth.slice(5, 7))}月${day.day}日`,
+          "備註",
+        ]),
+      ];
+
+      rows.push(titleRow);
+
+      classRows.forEach((classItem) => {
+        const firstOpenDay = classItem.counts.find(
+          (cell) => !closedDateMap.has(cell.dateString)
+        );
+        const baseCount = firstOpenDay?.breakdown?.baseCount ?? "";
+        const row = [
+          classItem.class_name,
+          (teacherNamesByClass.get(classItem.id) || []).join("、"),
+          baseCount,
+        ];
+
+        monthDays.forEach((day) => {
+          const cell = classItem.counts.find(
+            (item) => item.dateString === day.dateString
+          );
+          const closed = closedDateMap.has(day.dateString);
+
+          row.push(closed ? "休" : cell?.count ?? "");
+          row.push(getClassDayNote(classItem, day));
+        });
+
+        rows.push(row);
+      });
+
+      const externalRow = ["美語／班外生", "", ""];
+      monthDays.forEach((day) => {
+        const closed = closedDateMap.has(day.dateString);
+        const orders = getExternalOrdersForDate(day.dateString);
+        externalRow.push(closed ? "休" : orders.length);
+        externalRow.push(
+          closed
+            ? "休"
+            : orders.map((item) => item.person_name).filter(Boolean).join("、")
+        );
+      });
+      rows.push(externalRow);
+
+      const totalRow = ["四維總計", "", ""];
+      monthDays.forEach((day, index) => {
+        const closed = closedDateMap.has(day.dateString);
+        totalRow.push(closed ? "—" : dailyTotals[index] ?? "");
+        totalRow.push("");
+      });
+      rows.push(totalRow);
+
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      const lastColumn = rows[0].length - 1;
+
+      worksheet["!cols"] = [
+        { wch: 12 },
+        { wch: 18 },
+        { wch: 10 },
+        ...monthDays.flatMap(() => [{ wch: 9 }, { wch: 24 }]),
+      ];
+
+      worksheet["!rows"] = rows.map((_, index) => ({
+        hpt: index === 0 ? 24 : 22,
+      }));
+
+      worksheet["!autofilter"] = {
+        ref: XLSX.utils.encode_range({ r: 0, c: 0 }, { r: rows.length - 1, c: lastColumn }),
+      };
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "點心數量");
+
+      const safeSemesterName = String(selectedSemester.name || "學期")
+        .replace(/[\\/:*?"<>|]/g, "-");
+      XLSX.writeFile(
+        workbook,
+        `${safeSemesterName}_${selectedMonth}_點心數量.xlsx`
+      );
+    } catch (error) {
+      console.error("下載月點心 Excel 失敗：", error);
+      setErrorMessage(`下載 Excel 失敗：${error.message}`);
     }
   }
 
@@ -6619,6 +6815,28 @@ function SnackManagementPage({
                 </option>
               ))}
             </select>
+
+            <button
+              type="button"
+              onClick={exportMonthlySnackExcel}
+              disabled={
+                monthlyLoading ||
+                classRows.length === 0
+              }
+              style={{
+                height: "38px",
+                padding: "0 14px",
+                border: "1px solid #cfd7d0",
+                borderRadius: "10px",
+                background: "#fff",
+                color: "#445149",
+                font: "inherit",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              下載 Excel
+            </button>
 
             <button
               type="button"
