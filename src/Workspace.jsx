@@ -22,6 +22,7 @@ import LearningReportPage from "./pages/LearningReportPage";
 import CleaningPage from "./pages/CleaningPage";
 import LineReminderPage from "./pages/LineReminderPage";
 import ScoreAnalysisPage from "./pages/ScoreAnalysisPage";
+import FinancePage from "./pages/FinancePage";
 import LoginPage from "./pages/LoginPage";
 import TeacherDashboard from "./pages/TeacherDashboard";
 
@@ -120,6 +121,11 @@ const PAGE_OPTIONS = [
   {
     label: "成績分析",
     key: "score_analysis",
+  },
+  {
+    label: "營運財務",
+    key: "finance",
+    adminOnly: true,
   },
 ];
 
@@ -1082,6 +1088,16 @@ function Workspace() {
             currentTeacher
           }
         />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "營運財務"
+    ) {
+      return (
+        <FinancePage />
       );
     }
 
