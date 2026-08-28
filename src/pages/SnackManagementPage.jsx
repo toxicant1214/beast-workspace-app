@@ -2436,87 +2436,167 @@ function SnackManagementPage({
         return parts.join("；");
       };
 
-      const rows = [];
-      const titleRow = [
-        "班級",
-        "老師",
-        "基準人數",
-        ...monthDays.flatMap((day) => [
-          `${Number(selectedMonth.slice(5, 7))}月${day.day}日`,
-          "備註",
-        ]),
-      ];
+      // 依「週一～週五」分成多個 Excel 工作表。
+      // 月初或月底若不是完整一週，仍保留在該月份的第一／最後一個分頁。
+      const weekGroups = [];
+      let currentWeek = [];
 
-      rows.push(titleRow);
+      monthDays.forEach((day) => {
+        if (day.weekday === 1 && currentWeek.length > 0) {
+          weekGroups.push(currentWeek);
+          currentWeek = [];
+        }
 
-      classRows.forEach((classItem) => {
-        const firstOpenDay = classItem.counts.find(
-          (cell) => !closedDateMap.has(cell.dateString)
-        );
-        const baseCount = firstOpenDay?.breakdown?.baseCount ?? "";
-        const row = [
-          classItem.class_name,
-          (teacherNamesByClass.get(classItem.id) || []).join("、"),
-          baseCount,
-        ];
+        currentWeek.push(day);
 
-        monthDays.forEach((day) => {
-          const cell = classItem.counts.find(
+        if (day.weekday === 5) {
+          weekGroups.push(currentWeek);
+          currentWeek = [];
+        }
+      });
+
+      if (currentWeek.length > 0) {
+        weekGroups.push(currentWeek);
+      }
+
+      const workbook = XLSX.utils.book_new();
+      const selectedMonthNumber = Number(selectedMonth.slice(5, 7));
+
+      weekGroups.forEach((weekDays) => {
+        const rows = [];
+
+        rows.push([
+          `${selectedMonthNumber}月每週統計表`,
+          "",
+          "",
+          ...weekDays.flatMap(() => ["", ""]),
+        ]);
+        rows.push([
+          "",
+          "",
+          "點心數量",
+          ...weekDays.flatMap(() => ["", ""]),
+        ]);
+        rows.push([
+          "班級",
+          "老師",
+          "人數",
+          ...weekDays.flatMap((day) => [
+            `${Number(day.dateString.slice(5, 7))}月${day.day}日`,
+            "備註",
+          ]),
+        ]);
+
+        classRows.forEach((classItem) => {
+          const firstOpenDay = weekDays.find(
+            (day) => !closedDateMap.has(day.dateString)
+          );
+          const firstOpenCell = firstOpenDay
+            ? classItem.counts.find(
+                (cell) => cell.dateString === firstOpenDay.dateString
+              )
+            : null;
+          const baseCount = firstOpenCell?.breakdown?.baseCount ?? "";
+
+          const row = [
+            classItem.class_name,
+            (teacherNamesByClass.get(classItem.id) || []).join("、"),
+            baseCount,
+          ];
+
+          weekDays.forEach((day) => {
+            const cell = classItem.counts.find(
+              (item) => item.dateString === day.dateString
+            );
+            const closed = closedDateMap.has(day.dateString);
+
+            row.push(closed ? "休" : cell?.count ?? "");
+            row.push(getClassDayNote(classItem, day));
+          });
+
+          rows.push(row);
+        });
+
+        const externalRow = ["美語班／其他", "", ""];
+        weekDays.forEach((day) => {
+          const closed = closedDateMap.has(day.dateString);
+          const orders = getExternalOrdersForDate(day.dateString);
+          externalRow.push(closed ? "休" : orders.length);
+          externalRow.push(
+            closed
+              ? "休"
+              : orders
+                  .map((item) => item.person_name)
+                  .filter(Boolean)
+                  .join("、")
+          );
+        });
+        rows.push(externalRow);
+
+        const totalRow = ["四維總計", "", ""];
+        weekDays.forEach((day) => {
+          const monthDayIndex = monthDays.findIndex(
             (item) => item.dateString === day.dateString
           );
           const closed = closedDateMap.has(day.dateString);
-
-          row.push(closed ? "休" : cell?.count ?? "");
-          row.push(getClassDayNote(classItem, day));
+          totalRow.push(
+            closed ? "—" : dailyTotals[monthDayIndex] ?? ""
+          );
+          totalRow.push("");
         });
+        rows.push(totalRow);
 
-        rows.push(row);
-      });
+        const worksheet = XLSX.utils.aoa_to_sheet(rows);
+        const lastColumn = rows[2].length - 1;
 
-      const externalRow = ["美語／班外生", "", ""];
-      monthDays.forEach((day) => {
-        const closed = closedDateMap.has(day.dateString);
-        const orders = getExternalOrdersForDate(day.dateString);
-        externalRow.push(closed ? "休" : orders.length);
-        externalRow.push(
-          closed
-            ? "休"
-            : orders.map((item) => item.person_name).filter(Boolean).join("、")
+        worksheet["!cols"] = [
+          { wch: 12 },
+          { wch: 12 },
+          { wch: 8 },
+          ...weekDays.flatMap(() => [{ wch: 7 }, { wch: 24 }]),
+        ];
+
+        worksheet["!rows"] = rows.map((_, index) => ({
+          hpt: index === 0 ? 20 : index === 1 ? 26 : 22,
+        }));
+
+        worksheet["!merges"] = [
+          {
+            s: { r: 0, c: 0 },
+            e: { r: 0, c: lastColumn },
+          },
+          {
+            s: { r: 1, c: 0 },
+            e: { r: 1, c: lastColumn },
+          },
+        ];
+
+        worksheet["!freeze"] = {
+          xSplit: 3,
+          ySplit: 3,
+          topLeftCell: "D4",
+          activePane: "bottomRight",
+          state: "frozen",
+        };
+
+        const firstDay = weekDays[0];
+        const lastDay = weekDays[weekDays.length - 1];
+        const sheetName = `${String(
+          Number(firstDay.dateString.slice(5, 7))
+        ).padStart(2, "0")}${String(firstDay.day).padStart(2, "0")}-${String(
+          Number(lastDay.dateString.slice(5, 7))
+        ).padStart(2, "0")}${String(lastDay.day).padStart(2, "0")}`;
+
+        XLSX.utils.book_append_sheet(
+          workbook,
+          worksheet,
+          sheetName.slice(0, 31)
         );
       });
-      rows.push(externalRow);
-
-      const totalRow = ["四維總計", "", ""];
-      monthDays.forEach((day, index) => {
-        const closed = closedDateMap.has(day.dateString);
-        totalRow.push(closed ? "—" : dailyTotals[index] ?? "");
-        totalRow.push("");
-      });
-      rows.push(totalRow);
-
-      const worksheet = XLSX.utils.aoa_to_sheet(rows);
-      const lastColumn = rows[0].length - 1;
-
-      worksheet["!cols"] = [
-        { wch: 12 },
-        { wch: 18 },
-        { wch: 10 },
-        ...monthDays.flatMap(() => [{ wch: 9 }, { wch: 24 }]),
-      ];
-
-      worksheet["!rows"] = rows.map((_, index) => ({
-        hpt: index === 0 ? 24 : 22,
-      }));
-
-      worksheet["!autofilter"] = {
-        ref: XLSX.utils.encode_range({ r: 0, c: 0 }, { r: rows.length - 1, c: lastColumn }),
-      };
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "點心數量");
 
       const safeSemesterName = String(selectedSemester.name || "學期")
         .replace(/[\\/:*?"<>|]/g, "-");
+
       XLSX.writeFile(
         workbook,
         `${safeSemesterName}_${selectedMonth}_點心數量.xlsx`
