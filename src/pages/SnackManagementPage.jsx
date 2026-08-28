@@ -7110,16 +7110,34 @@ function SnackManagementPage({
                               wordBreak: "keep-all",
                             }}
                           >
-                            {closed.title.endsWith("放假") ? (
-                              <>
-                                <div>
-                                  {closed.title.slice(0, -2)}
+                            {(() => {
+                              const holidayName = closed.title
+                                .replace(/(放假|補假|休假)$/, "")
+                                .trim();
+
+                              if (holidayName.length > 4) {
+                                const splitIndex = Math.floor(holidayName.length / 2);
+                                const firstLine = holidayName.slice(0, splitIndex);
+                                const secondLine = holidayName.slice(splitIndex);
+
+                                return (
+                                  <>
+                                    <div style={{ whiteSpace: "nowrap" }}>
+                                      {firstLine}
+                                    </div>
+                                    <div style={{ whiteSpace: "nowrap" }}>
+                                      {secondLine}
+                                    </div>
+                                  </>
+                                );
+                              }
+
+                              return (
+                                <div style={{ whiteSpace: "nowrap" }}>
+                                  {holidayName || "休假"}
                                 </div>
-                                <div>放假</div>
-                              </>
-                            ) : (
-                              <div>{closed.title}</div>
-                            )}
+                              );
+                            })()}
                           </div>
                         )}
                       </th>
