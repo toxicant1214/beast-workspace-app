@@ -7107,10 +7107,19 @@ function SnackManagementPage({
                               fontWeight: 700,
                               color: "#9a6658",
                               whiteSpace: "normal",
-                              wordBreak: "break-word",
+                              wordBreak: "keep-all",
                             }}
                           >
-                            {closed.title}
+                            {closed.title.endsWith("放假") ? (
+                              <>
+                                <div>
+                                  {closed.title.slice(0, -2)}
+                                </div>
+                                <div>放假</div>
+                              </>
+                            ) : (
+                              <div>{closed.title}</div>
+                            )}
                           </div>
                         )}
                       </th>
