@@ -26,6 +26,12 @@ import {
   updateLeaveCsvPreviewRow,
 } from "../services/leaveCsvService";
 
+import {
+  buildMonthlyLeaveReport,
+  getCurrentMonthString,
+  getMonthLabel,
+} from "../services/leaveReportService";
+
 import "./LeaveManagementPage.css";
 
 
@@ -227,6 +233,14 @@ function LeaveManagementPage() {
   });
 
 
+  const [
+    reportMonth,
+    setReportMonth,
+  ] = useState(
+    getCurrentMonthString()
+  );
+
+
   const csvInputRef =
     useRef(null);
 
@@ -332,6 +346,23 @@ function LeaveManagementPage() {
             row.errors.length === 0
         ).length,
       [csvRows]
+    );
+
+
+  const monthlyReport =
+    useMemo(
+      () =>
+        buildMonthlyLeaveReport({
+          records,
+          month:
+            reportMonth,
+          teachers,
+        }),
+      [
+        records,
+        reportMonth,
+        teachers,
+      ]
     );
 
 
@@ -2440,30 +2471,389 @@ function LeaveManagementPage() {
 
 
   function renderMonthlyReport() {
+    const summary =
+      monthlyReport.summary;
+
     return (
       <section className="leave-section">
-        <div>
-          <h2>
-            月報表
-          </h2>
+        <div className="leave-report-heading">
+          <div>
+            <p className="leave-report-eyebrow">
+              MONTHLY REPORT
+            </p>
 
-          <p>
-            每月統計休假狀況，
-            整理後提供給主管。
-          </p>
+            <h2>
+              月報表
+            </h2>
+
+            <p>
+              彙整當月休假狀況，
+              作為每月主管報表使用。
+            </p>
+          </div>
+
+
+          <label className="leave-report-month-picker">
+            <span>
+              報表月份
+            </span>
+
+            <input
+              type="month"
+              value={
+                reportMonth
+              }
+              onChange={(
+                event
+              ) =>
+                setReportMonth(
+                  event.target
+                    .value
+                )
+              }
+            />
+          </label>
         </div>
 
-        <div className="leave-placeholder">
-          <strong>
-            每月休假統計
-          </strong>
 
-          <p>
-            之後可以選擇月份、
-            查看統計、下載 Excel，
-            並封存正式送出的版本。
-          </p>
+        <div className="leave-report-title-card">
+          <div>
+            <span>
+              BEAST WORKSPACE
+            </span>
+
+            <h3>
+              {getMonthLabel(
+                reportMonth
+              )}
+              休假統計
+            </h3>
+          </div>
+
+          <div className="leave-report-title-total">
+            <span>
+              本月休假合計
+            </span>
+
+            <strong>
+              {
+                summary.totalDisplay
+              }
+            </strong>
+
+            <small>
+              共 {summary.totalLeaveCount} 次
+            </small>
+          </div>
         </div>
+
+
+        <div className="leave-report-summary-grid">
+          <div className="leave-report-summary-card">
+            <span>
+              當月請假人數
+            </span>
+
+            <strong>
+              {
+                summary.peopleOnLeave
+              }
+            </strong>
+
+            <small>
+              人
+            </small>
+          </div>
+
+
+          <div className="leave-report-summary-card">
+            <span>
+              未請假老師
+            </span>
+
+            <strong>
+              {
+                summary.noLeaveTeacherCount
+              }
+            </strong>
+
+            <small>
+              人
+            </small>
+          </div>
+
+
+          <div className="leave-report-summary-card">
+            <span>
+              本月休假次數
+            </span>
+
+            <strong>
+              {
+                summary.totalLeaveCount
+              }
+            </strong>
+
+            <small>
+              次
+            </small>
+          </div>
+
+
+          <div className="leave-report-summary-card">
+            <span>
+              單月 3 次以上
+            </span>
+
+            <strong>
+              {
+                summary.frequentLeaveCount
+              }
+            </strong>
+
+            <small>
+              人
+            </small>
+          </div>
+        </div>
+
+
+        <div className="leave-report-type-grid">
+          <div className="leave-report-type-card">
+            <span>
+              事假
+            </span>
+
+            <strong>
+              {
+                summary.personalDisplay
+              }
+            </strong>
+          </div>
+
+          <div className="leave-report-type-card">
+            <span>
+              病假
+            </span>
+
+            <strong>
+              {
+                summary.sickDisplay
+              }
+            </strong>
+          </div>
+
+          <div className="leave-report-type-card">
+            <span>
+              特休
+            </span>
+
+            <strong>
+              {
+                summary.annualDisplay
+              }
+            </strong>
+          </div>
+
+          <div className="leave-report-type-card">
+            <span>
+              其他
+            </span>
+
+            <strong>
+              {
+                summary.otherDisplay
+              }
+            </strong>
+          </div>
+        </div>
+
+
+        <div className="leave-report-table-card">
+          <div className="leave-report-table-heading">
+            <div>
+              <strong>
+                人員休假明細
+              </strong>
+
+              <span>
+                僅顯示本月有休假紀錄的人員
+              </span>
+            </div>
+          </div>
+
+
+          {loading ? (
+            <div className="leave-report-empty">
+              正在讀取休假資料…
+            </div>
+          ) : monthlyReport.rows.length ===
+            0 ? (
+            <div className="leave-report-empty">
+              <strong>
+                這個月份目前沒有休假紀錄
+              </strong>
+
+              <span>
+                可以切換月份查看其他月份。
+              </span>
+            </div>
+          ) : (
+            <div className="leave-report-table-wrap">
+              <table className="leave-report-table">
+                <thead>
+                  <tr>
+                    <th>
+                      老師
+                    </th>
+
+                    <th>
+                      所屬
+                    </th>
+
+                    <th>
+                      事假
+                    </th>
+
+                    <th>
+                      病假
+                    </th>
+
+                    <th>
+                      特休
+                    </th>
+
+                    <th>
+                      其他
+                    </th>
+
+                    <th>
+                      本月次數
+                    </th>
+
+                    <th>
+                      本月合計
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {monthlyReport.rows.map(
+                    (
+                      person
+                    ) => (
+                      <tr
+                        key={
+                          person.personKey
+                        }
+                      >
+                        <td>
+                          <strong>
+                            {
+                              person.name
+                            }
+                          </strong>
+                        </td>
+
+                        <td>
+                          {
+                            person.department
+                          }
+                        </td>
+
+                        <td>
+                          {
+                            person.personalDisplay
+                          }
+                        </td>
+
+                        <td>
+                          {
+                            person.sickDisplay
+                          }
+                        </td>
+
+                        <td>
+                          {
+                            person.annualDisplay
+                          }
+                        </td>
+
+                        <td>
+                          {
+                            person.otherDisplay
+                          }
+                        </td>
+
+                        <td>
+                          <strong>
+                            {
+                              person.leaveCount
+                            }
+                          </strong>
+                        </td>
+
+                        <td>
+                          <strong>
+                            {
+                              person.totalDisplay
+                            }
+                          </strong>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+
+        {monthlyReport.frequentLeavePeople.length >
+          0 && (
+          <div className="leave-report-attention">
+            <div>
+              <span>
+                ATTENTION
+              </span>
+
+              <strong>
+                本月休假較頻繁
+              </strong>
+            </div>
+
+            <div className="leave-report-attention-list">
+              {monthlyReport.frequentLeavePeople.map(
+                (
+                  person
+                ) => (
+                  <div
+                    key={
+                      person.personKey
+                    }
+                  >
+                    <strong>
+                      {
+                        person.name
+                      }
+                    </strong>
+
+                    <span>
+                      {
+                        person.leaveCount
+                      }
+                      次・
+                      {
+                        person.totalDisplay
+                      }
+                    </span>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
       </section>
     );
   }

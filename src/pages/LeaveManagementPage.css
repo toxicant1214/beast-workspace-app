@@ -1091,3 +1091,346 @@
     border-radius: 18px 18px 14px 14px;
   }
 }
+/* =========================
+   Monthly leave report
+========================= */
+
+.leave-report-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.leave-report-eyebrow {
+  margin: 0 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  opacity: 0.42;
+}
+
+.leave-report-month-picker {
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.leave-report-month-picker span {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.52;
+}
+
+.leave-report-month-picker input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+}
+
+.leave-report-title-card {
+  margin-top: 22px;
+  padding: 22px 24px;
+  border-radius: 18px;
+  background: #171717;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.leave-report-title-card > div:first-child > span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  opacity: 0.46;
+}
+
+.leave-report-title-card h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.leave-report-title-total {
+  text-align: right;
+}
+
+.leave-report-title-total span,
+.leave-report-title-total small {
+  display: block;
+  opacity: 0.55;
+}
+
+.leave-report-title-total span {
+  margin-bottom: 3px;
+  font-size: 10px;
+}
+
+.leave-report-title-total strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.leave-report-title-total small {
+  font-size: 10px;
+}
+
+.leave-report-summary-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.leave-report-summary-card {
+  min-height: 94px;
+  padding: 16px;
+  box-sizing: border-box;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.leave-report-summary-card span {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.46;
+}
+
+.leave-report-summary-card strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.leave-report-summary-card small {
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.45;
+}
+
+.leave-report-type-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.leave-report-type-card {
+  padding: 13px 15px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.028);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.leave-report-type-card span {
+  font-size: 11px;
+  opacity: 0.52;
+}
+
+.leave-report-type-card strong {
+  font-size: 13px;
+}
+
+.leave-report-table-card {
+  margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.leave-report-table-heading {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.leave-report-table-heading strong,
+.leave-report-table-heading span {
+  display: block;
+}
+
+.leave-report-table-heading strong {
+  margin-bottom: 3px;
+  font-size: 13px;
+}
+
+.leave-report-table-heading span {
+  font-size: 10px;
+  opacity: 0.45;
+}
+
+.leave-report-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.leave-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.leave-report-table th,
+.leave-report-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.055);
+  white-space: nowrap;
+}
+
+.leave-report-table th {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  opacity: 0.4;
+}
+
+.leave-report-table td {
+  font-size: 11px;
+}
+
+.leave-report-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.leave-report-table td:nth-last-child(2),
+.leave-report-table td:last-child,
+.leave-report-table th:nth-last-child(2),
+.leave-report-table th:last-child {
+  text-align: right;
+}
+
+.leave-report-empty {
+  min-height: 130px;
+  padding: 30px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+  opacity: 0.48;
+}
+
+.leave-report-empty strong {
+  font-size: 13px;
+}
+
+.leave-report-empty span {
+  font-size: 10px;
+}
+
+.leave-report-attention {
+  margin-top: 14px;
+  padding: 17px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(0, 0, 0, 0.022);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.leave-report-attention > div:first-child span,
+.leave-report-attention > div:first-child strong {
+  display: block;
+}
+
+.leave-report-attention > div:first-child span {
+  margin-bottom: 4px;
+  font-size: 8px;
+  letter-spacing: 0.17em;
+  opacity: 0.38;
+}
+
+.leave-report-attention > div:first-child strong {
+  font-size: 12px;
+}
+
+.leave-report-attention-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.leave-report-attention-list > div {
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.leave-report-attention-list strong {
+  font-size: 10px;
+}
+
+.leave-report-attention-list span {
+  font-size: 9px;
+  opacity: 0.48;
+}
+
+
+@media (max-width: 900px) {
+  .leave-report-summary-grid,
+  .leave-report-type-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+@media (max-width: 640px) {
+  .leave-report-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .leave-report-month-picker {
+    width: 100%;
+  }
+
+  .leave-report-title-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .leave-report-title-total {
+    width: 100%;
+    text-align: left;
+  }
+
+  .leave-report-summary-grid,
+  .leave-report-type-grid {
+    grid-template-columns:
+      1fr 1fr;
+  }
+
+  .leave-report-attention {
+    flex-direction: column;
+  }
+
+  .leave-report-attention-list {
+    justify-content: flex-start;
+  }
+}
