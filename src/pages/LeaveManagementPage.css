@@ -232,3 +232,468 @@
     grid-template-columns: 1fr;
   }
 }
+/* =========================
+   Leave records heading
+========================= */
+
+.leave-records-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.leave-records-heading h2 {
+  margin: 0;
+}
+
+.leave-records-heading p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.65;
+  opacity: 0.55;
+}
+
+
+/* =========================
+   Buttons
+========================= */
+
+.leave-primary-button,
+.leave-secondary-button,
+.leave-delete-button {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    opacity 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.leave-primary-button {
+  border: 0;
+  border-radius: 11px;
+  padding: 10px 16px;
+  background: #222;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow:
+    0 5px 14px rgba(0, 0, 0, 0.12);
+}
+
+.leave-primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 7px 18px rgba(0, 0, 0, 0.16);
+}
+
+.leave-primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.leave-secondary-button {
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  border-radius: 11px;
+  padding: 9px 15px;
+  background: #fff;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.leave-secondary-button:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.035);
+}
+
+.leave-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.leave-delete-button {
+  border: 0;
+  background: transparent;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  opacity: 0.48;
+}
+
+.leave-delete-button:hover {
+  background: rgba(0, 0, 0, 0.04);
+  opacity: 0.85;
+}
+
+
+/* =========================
+   Messages
+========================= */
+
+.leave-message {
+  padding: 11px 14px;
+  border-radius: 11px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.leave-message--success {
+  background: rgba(39, 125, 80, 0.08);
+  border: 1px solid rgba(39, 125, 80, 0.14);
+}
+
+.leave-message--error {
+  background: rgba(180, 50, 50, 0.07);
+  border: 1px solid rgba(180, 50, 50, 0.14);
+}
+
+
+/* =========================
+   Empty state
+========================= */
+
+.leave-empty-state {
+  min-height: 260px;
+  padding: 32px 24px;
+  box-sizing: border-box;
+  border: 1px solid rgba(0, 0, 0, 0.065);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.72);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.leave-empty-state__icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 13px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.045);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+}
+
+.leave-empty-state strong {
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.leave-empty-state p {
+  max-width: 360px;
+  margin: 7px 0 18px;
+  font-size: 13px;
+  line-height: 1.65;
+  opacity: 0.5;
+}
+
+
+/* =========================
+   Leave record table
+========================= */
+
+.leave-record-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(0, 0, 0, 0.065);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.leave-record-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.leave-record-table th,
+.leave-record-table td {
+  padding: 15px 16px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.055);
+}
+
+.leave-record-table th {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  opacity: 0.45;
+  background: rgba(0, 0, 0, 0.018);
+}
+
+.leave-record-table td {
+  font-size: 13px;
+}
+
+.leave-record-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.leave-record-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.018);
+}
+
+.leave-record-table td strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.leave-record-table td small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  opacity: 0.45;
+}
+
+
+/* =========================
+   Modal
+========================= */
+
+.leave-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  padding: 28px;
+  box-sizing: border-box;
+  background: rgba(20, 20, 20, 0.28);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.leave-modal {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.2);
+}
+
+.leave-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 21px 24px 17px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.leave-modal-header span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  opacity: 0.38;
+}
+
+.leave-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.leave-modal-close {
+  appearance: none;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.045);
+  font-size: 23px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.leave-modal-close:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.leave-modal-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+
+/* =========================
+   Form
+========================= */
+
+.leave-form {
+  padding: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.leave-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.leave-field--full {
+  grid-column: 1 / -1;
+}
+
+.leave-field > span {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.68;
+}
+
+.leave-field input,
+.leave-field select,
+.leave-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(0, 0, 0, 0.11);
+  border-radius: 11px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.leave-field input,
+.leave-field select {
+  height: 44px;
+  padding: 0 12px;
+}
+
+.leave-field textarea {
+  min-height: 90px;
+  padding: 11px 12px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.leave-field input:focus,
+.leave-field select:focus,
+.leave-field textarea:focus {
+  border-color: rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 0 0 3px rgba(0, 0, 0, 0.045);
+}
+
+.leave-field small {
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.43;
+}
+
+
+/* =========================
+   Checkbox field
+========================= */
+
+.leave-check-field {
+  padding: 14px 15px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.018);
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  cursor: pointer;
+}
+
+.leave-check-field input {
+  margin: 3px 0 0;
+  flex: 0 0 auto;
+}
+
+.leave-check-field div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.leave-check-field strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.leave-check-field span {
+  font-size: 12px;
+  line-height: 1.55;
+  opacity: 0.48;
+}
+
+
+/* =========================
+   Form actions
+========================= */
+
+.leave-form-actions {
+  padding-top: 4px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+
+/* =========================
+   Mobile
+========================= */
+
+@media (max-width: 720px) {
+  .leave-records-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .leave-records-heading .leave-primary-button {
+    align-self: flex-start;
+  }
+
+  .leave-modal-backdrop {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .leave-modal {
+    max-height: calc(100vh - 24px);
+    border-radius: 18px 18px 14px 14px;
+  }
+
+  .leave-form {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+
+  .leave-field--full {
+    grid-column: auto;
+  }
+
+  .leave-modal-header {
+    padding: 18px 20px 15px;
+  }
+}

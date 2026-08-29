@@ -1,5 +1,23 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  createExternalStaff,
+  createLeaveRecord,
+  deleteLeaveRecord,
+  formatLeaveHours,
+  getActiveTeachers,
+  getExternalStaff,
+  getLeaveRecords,
+  getLeaveTypes,
+  updateLeaveRecord,
+} from "../services/leaveService";
+
 import "./LeaveManagementPage.css";
+
 
 const TABS = [
   {
@@ -20,86 +38,1365 @@ const TABS = [
   },
 ];
 
+
+function getTodayString() {
+  const now = new Date();
+
+  const year =
+    now.getFullYear();
+
+  const month =
+    String(
+      now.getMonth() + 1
+    ).padStart(2, "0");
+
+  const day =
+    String(
+      now.getDate()
+    ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+
+function getTeacherName(
+  teacher
+) {
+  return (
+    teacher?.chinese_name ||
+    teacher?.english_name ||
+    "未命名老師"
+  );
+}
+
+
+function getRecordPersonName(
+  record
+) {
+  if (record?.teachers) {
+    return getTeacherName(
+      record.teachers
+    );
+  }
+
+  if (
+    record?.leave_external_staff
+  ) {
+    return (
+      record
+        .leave_external_staff
+        .name ||
+      "未命名人員"
+    );
+  }
+
+  return "未知人員";
+}
+
+
 function LeaveManagementPage() {
-  const [activeTab, setActiveTab] =
-    useState("overview");
+  const [
+    activeTab,
+    setActiveTab,
+  ] = useState("overview");
+
+  const [
+    teachers,
+    setTeachers,
+  ] = useState([]);
+
+  const [
+    externalStaff,
+    setExternalStaff,
+  ] = useState([]);
+
+  const [
+    leaveTypes,
+    setLeaveTypes,
+  ] = useState([]);
+
+  const [
+    records,
+    setRecords,
+  ] = useState([]);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
+
+  const [
+    addingExternalStaff,
+    setAddingExternalStaff,
+  ] = useState(false);
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
+
+  const [
+    successMessage,
+    setSuccessMessage,
+  ] = useState("");
+
+  const [
+    showForm,
+    setShowForm,
+  ] = useState(false);
+
+  const [
+    editingRecord,
+    setEditingRecord,
+  ] = useState(null);
+
+  const [
+    showExternalForm,
+    setShowExternalForm,
+  ] = useState(false);
+
+  const [
+    externalForm,
+    setExternalForm,
+  ] = useState({
+    name: "",
+    department: "",
+  });
+
+
+  const today =
+    getTodayString();
+
+
+  const [
+    form,
+    setForm,
+  ] = useState({
+    personValue: "",
+    leaveTypeId: "",
+    startDate: today,
+    endDate: today,
+    inputUnit: "DAY",
+    inputValue: "1",
+    isLastMinute: false,
+    note: "",
+  });
+
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      setErrorMessage("");
+
+      const [
+        teacherRows,
+        externalRows,
+        leaveTypeRows,
+        leaveRecordRows,
+      ] = await Promise.all([
+        getActiveTeachers(),
+        getExternalStaff(),
+        getLeaveTypes(),
+        getLeaveRecords(),
+      ]);
+
+      setTeachers(
+        teacherRows
+      );
+
+      setExternalStaff(
+        externalRows
+      );
+
+      setLeaveTypes(
+        leaveTypeRows
+      );
+
+      setRecords(
+        leaveRecordRows
+      );
+    } catch (error) {
+      console.error(
+        "讀取休假資料失敗：",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+        "休假資料讀取失敗。"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+
+  const activeExternalStaff =
+    useMemo(
+      () =>
+        externalStaff.filter(
+          (person) =>
+            person.is_active
+        ),
+      [externalStaff]
+    );
+
+
+  function updateForm(
+    field,
+    value
+  ) {
+    setForm(
+      (current) => ({
+        ...current,
+        [field]: value,
+      })
+    );
+  }
+
+
+  function resetForm() {
+    setForm({
+      personValue: "",
+      leaveTypeId: "",
+      startDate: today,
+      endDate: today,
+      inputUnit: "DAY",
+      inputValue: "1",
+      isLastMinute: false,
+      note: "",
+    });
+
+    setExternalForm({
+      name: "",
+      department: "",
+    });
+
+    setShowExternalForm(false);
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+
+  function handleOpenForm() {
+    setEditingRecord(null);
+    resetForm();
+    setShowForm(true);
+  }
+
+
+  function handleEditRecord(
+    record
+  ) {
+    const personValue =
+      record.teacher_id
+        ? `teacher:${record.teacher_id}`
+        : `external:${record.external_staff_id}`;
+
+    setEditingRecord(
+      record
+    );
+
+    setForm({
+      personValue,
+      leaveTypeId:
+        record.leave_type_id || "",
+      startDate:
+        record.start_date,
+      endDate:
+        record.end_date,
+      inputUnit:
+        record.input_unit ||
+        "HOUR",
+      inputValue:
+        String(
+          record.input_value ||
+          ""
+        ),
+      isLastMinute:
+        Boolean(
+          record.is_last_minute
+        ),
+      note:
+        record.note || "",
+    });
+
+    setExternalForm({
+      name: "",
+      department: "",
+    });
+
+    setShowExternalForm(false);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setShowForm(true);
+  }
+
+
+  function handleCloseForm() {
+    if (
+      saving ||
+      addingExternalStaff
+    ) {
+      return;
+    }
+
+    setShowForm(false);
+    setEditingRecord(null);
+    resetForm();
+  }
+
+
+  async function handleAddExternalStaff() {
+    try {
+      setAddingExternalStaff(
+        true
+      );
+
+      setErrorMessage("");
+
+      const newPerson =
+        await createExternalStaff({
+          name:
+            externalForm.name,
+          department:
+            externalForm.department,
+        });
+
+      setExternalStaff(
+        (current) => [
+          ...current,
+          newPerson,
+        ]
+      );
+
+      setForm(
+        (current) => ({
+          ...current,
+          personValue:
+            `external:${newPerson.id}`,
+        })
+      );
+
+      setExternalForm({
+        name: "",
+        department: "",
+      });
+
+      setShowExternalForm(
+        false
+      );
+    } catch (error) {
+      console.error(
+        "新增其他人員失敗：",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+        "新增其他人員失敗。"
+      );
+    } finally {
+      setAddingExternalStaff(
+        false
+      );
+    }
+  }
+
+
+  async function handleSubmit(
+    event
+  ) {
+    event.preventDefault();
+
+    try {
+      setSaving(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const [
+        personType,
+        personId,
+      ] =
+        form.personValue.split(
+          ":"
+        );
+
+      const recordPayload = {
+        personType,
+        personId,
+        leaveTypeId:
+          form.leaveTypeId,
+        startDate:
+          form.startDate,
+        endDate:
+          form.endDate,
+        inputUnit:
+          form.inputUnit,
+        inputValue:
+          form.inputValue,
+        isLastMinute:
+          form.isLastMinute,
+        note:
+          form.note,
+      };
+
+
+      if (editingRecord) {
+        await updateLeaveRecord(
+          editingRecord.id,
+          recordPayload
+        );
+      } else {
+        await createLeaveRecord(
+          recordPayload
+        );
+      }
+
+
+      await loadData();
+
+
+      setSuccessMessage(
+        editingRecord
+          ? "休假紀錄已修改。"
+          : "休假紀錄已新增。"
+      );
+
+
+      setShowForm(false);
+      setEditingRecord(null);
+
+      setForm({
+        personValue: "",
+        leaveTypeId: "",
+        startDate: today,
+        endDate: today,
+        inputUnit: "DAY",
+        inputValue: "1",
+        isLastMinute: false,
+        note: "",
+      });
+    } catch (error) {
+      console.error(
+        editingRecord
+          ? "修改休假紀錄失敗："
+          : "新增休假紀錄失敗：",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+        (
+          editingRecord
+            ? "修改休假紀錄失敗。"
+            : "新增休假紀錄失敗。"
+        )
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+
+  async function handleDelete(
+    record
+  ) {
+    const personName =
+      getRecordPersonName(
+        record
+      );
+
+    const confirmed =
+      window.confirm(
+        `確定要刪除 ${personName} 的這筆休假紀錄嗎？`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      await deleteLeaveRecord(
+        record.id
+      );
+
+      await loadData();
+
+      setSuccessMessage(
+        "休假紀錄已刪除。"
+      );
+    } catch (error) {
+      console.error(
+        "刪除休假紀錄失敗：",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+        "刪除休假紀錄失敗。"
+      );
+    }
+  }
+
 
   function renderOverview() {
     return (
       <section className="leave-section">
         <div>
-          <h2>休假總覽</h2>
+          <h2>
+            休假總覽
+          </h2>
+
           <p>
             查看本月與本學期的休假狀況。
           </p>
         </div>
 
+
         <div className="leave-summary-grid">
           <div className="leave-summary-card">
-            <span>本月休假人數</span>
-            <strong>—</strong>
+            <span>
+              本月休假人數
+            </span>
+
+            <strong>
+              —
+            </strong>
           </div>
 
           <div className="leave-summary-card">
-            <span>本月休假次數</span>
-            <strong>—</strong>
+            <span>
+              本月休假次數
+            </span>
+
+            <strong>
+              —
+            </strong>
           </div>
 
           <div className="leave-summary-card">
-            <span>本月休假時數</span>
-            <strong>—</strong>
+            <span>
+              本月休假時數
+            </span>
+
+            <strong>
+              —
+            </strong>
           </div>
 
           <div className="leave-summary-card">
-            <span>本學期休假時數</span>
-            <strong>—</strong>
+            <span>
+              本學期休假時數
+            </span>
+
+            <strong>
+              —
+            </strong>
           </div>
         </div>
 
+
         <div className="leave-placeholder">
-          <strong>近期休假紀錄</strong>
+          <strong>
+            近期休假紀錄
+          </strong>
+
           <p>
-            下一步接上資料後，這裡會顯示最近的休假登記。
+            下一階段會將近期紀錄與統計放到這裡。
           </p>
         </div>
       </section>
     );
   }
+
 
   function renderRecords() {
     return (
       <section className="leave-section">
-        <div>
-          <h2>休假登記</h2>
-          <p>
-            登記老師或額外人員的休假紀錄。
-          </p>
+        <div className="leave-records-heading">
+          <div>
+            <h2>
+              休假登記
+            </h2>
+
+            <p>
+              登記老師或其他人員的休假紀錄。
+            </p>
+          </div>
+
+
+          <button
+            type="button"
+            className="leave-primary-button"
+            onClick={
+              handleOpenForm
+            }
+          >
+            ＋ 新增休假
+          </button>
         </div>
 
-        <div className="leave-placeholder">
-          <strong>休假紀錄</strong>
-          <p>
-            之後會在這裡新增、修改及查看每一筆休假。
-          </p>
-        </div>
+
+        {successMessage && (
+          <div className="leave-message leave-message--success">
+            {successMessage}
+          </div>
+        )}
+
+
+        {errorMessage &&
+          !showForm && (
+          <div className="leave-message leave-message--error">
+            {errorMessage}
+          </div>
+        )}
+
+
+        {loading ? (
+          <div className="leave-placeholder">
+            <strong>
+              讀取中…
+            </strong>
+
+            <p>
+              正在讀取休假資料。
+            </p>
+          </div>
+        ) : records.length ===
+          0 ? (
+          <div className="leave-empty-state">
+            <div className="leave-empty-state__icon">
+              ◷
+            </div>
+
+            <strong>
+              還沒有休假紀錄
+            </strong>
+
+            <p>
+              新增第一筆休假後，
+              就會從這裡開始累積統計。
+            </p>
+
+            <button
+              type="button"
+              className="leave-secondary-button"
+              onClick={
+                handleOpenForm
+              }
+            >
+              新增第一筆休假
+            </button>
+          </div>
+        ) : (
+          <div className="leave-record-table-wrap">
+            <table className="leave-record-table">
+              <thead>
+                <tr>
+                  <th>人員</th>
+                  <th>假別</th>
+                  <th>日期</th>
+                  <th>時數</th>
+                  <th>臨時請假</th>
+                  <th>備註</th>
+                  <th />
+                </tr>
+              </thead>
+
+
+              <tbody>
+                {records.map(
+                  (record) => (
+                    <tr
+                      key={
+                        record.id
+                      }
+                    >
+                      <td>
+                        <strong>
+                          {
+                            getRecordPersonName(
+                              record
+                            )
+                          }
+                        </strong>
+
+                        {record
+                          .leave_external_staff
+                          ?.department && (
+                          <small>
+                            {
+                              record
+                                .leave_external_staff
+                                .department
+                            }
+                          </small>
+                        )}
+                      </td>
+
+
+                      <td>
+                        {
+                          record
+                            .leave_types
+                            ?.name ||
+                          "—"
+                        }
+                      </td>
+
+
+                      <td>
+                        {record.start_date ===
+                        record.end_date
+                          ? record.start_date
+                          : `${record.start_date} ～ ${record.end_date}`}
+                      </td>
+
+
+                      <td>
+                        {
+                          formatLeaveHours(
+                            record.leave_hours
+                          )
+                        }
+                      </td>
+
+
+                      <td>
+                        {record.is_last_minute
+                          ? "是"
+                          : "—"}
+                      </td>
+
+
+                      <td>
+                        {record.note ||
+                          "—"}
+                      </td>
+
+
+                      <td>
+                        <div className="leave-row-actions">
+                          <button
+                            type="button"
+                            className="leave-edit-button"
+                            onClick={() =>
+                              handleEditRecord(
+                                record
+                              )
+                            }
+                          >
+                            修改
+                          </button>
+
+                          <button
+                            type="button"
+                            className="leave-delete-button"
+                            onClick={() =>
+                              handleDelete(
+                                record
+                              )
+                            }
+                          >
+                            刪除
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+
+        {showForm && (
+          <div
+            className="leave-modal-backdrop"
+            onMouseDown={
+              handleCloseForm
+            }
+          >
+            <div
+              className="leave-modal"
+              onMouseDown={(
+                event
+              ) =>
+                event.stopPropagation()
+              }
+            >
+              <div className="leave-modal-header">
+                <div>
+                  <span>
+                    LEAVE RECORD
+                  </span>
+
+                  <h3>
+                    {editingRecord
+                      ? "修改休假"
+                      : "新增休假"}
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  className="leave-modal-close"
+                  onClick={
+                    handleCloseForm
+                  }
+                  disabled={
+                    saving ||
+                    addingExternalStaff
+                  }
+                >
+                  ×
+                </button>
+              </div>
+
+
+              <form
+                className="leave-form"
+                onSubmit={
+                  handleSubmit
+                }
+              >
+                <div className="leave-field leave-field--full">
+                  <div className="leave-field-heading">
+                    <span>
+                      請假人員
+                    </span>
+
+                    {!editingRecord && (
+                      <button
+                        type="button"
+                        className="leave-inline-add-button"
+                        onClick={() =>
+                          setShowExternalForm(
+                            (
+                              current
+                            ) =>
+                              !current
+                          )
+                        }
+                      >
+                        ＋ 其他人員
+                      </button>
+                    )}
+                  </div>
+
+                  <select
+                    value={
+                      form.personValue
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateForm(
+                        "personValue",
+                        event.target
+                          .value
+                      )
+                    }
+                    required
+                  >
+                    <option value="">
+                      請選擇人員
+                    </option>
+
+
+                    {teachers.length >
+                      0 && (
+                      <optgroup label="Workspace 老師">
+                        {teachers.map(
+                          (
+                            teacher
+                          ) => (
+                            <option
+                              key={
+                                teacher.id
+                              }
+                              value={`teacher:${teacher.id}`}
+                            >
+                              {
+                                getTeacherName(
+                                  teacher
+                                )
+                              }
+                            </option>
+                          )
+                        )}
+                      </optgroup>
+                    )}
+
+
+                    {activeExternalStaff.length >
+                      0 && (
+                      <optgroup label="其他人員">
+                        {activeExternalStaff.map(
+                          (
+                            person
+                          ) => (
+                            <option
+                              key={
+                                person.id
+                              }
+                              value={`external:${person.id}`}
+                            >
+                              {
+                                person.name
+                              }
+                              {person.department
+                                ? `｜${person.department}`
+                                : ""}
+                            </option>
+                          )
+                        )}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
+
+
+                {showExternalForm &&
+                  !editingRecord && (
+                  <div className="leave-external-form leave-field--full">
+                    <div className="leave-external-form-header">
+                      <div>
+                        <strong>
+                          新增其他人員
+                        </strong>
+
+                        <span>
+                          只加入休假登記名單，
+                          不會建立 Workspace 老師帳號。
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowExternalForm(
+                            false
+                          )
+                        }
+                      >
+                        ×
+                      </button>
+                    </div>
+
+
+                    <div className="leave-external-form-grid">
+                      <label className="leave-field">
+                        <span>
+                          姓名
+                        </span>
+
+                        <input
+                          type="text"
+                          placeholder="例如：Amy"
+                          value={
+                            externalForm.name
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setExternalForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                name:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                        />
+                      </label>
+
+
+                      <label className="leave-field">
+                        <span>
+                          所屬
+                        </span>
+
+                        <input
+                          type="text"
+                          placeholder="例如：美語部"
+                          value={
+                            externalForm.department
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setExternalForm(
+                              (
+                                current
+                              ) => ({
+                                ...current,
+                                department:
+                                  event
+                                    .target
+                                    .value,
+                              })
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+
+
+                    <div className="leave-external-form-actions">
+                      <button
+                        type="button"
+                        className="leave-secondary-button"
+                        onClick={() =>
+                          setShowExternalForm(
+                            false
+                          )
+                        }
+                        disabled={
+                          addingExternalStaff
+                        }
+                      >
+                        取消
+                      </button>
+
+                      <button
+                        type="button"
+                        className="leave-primary-button"
+                        onClick={
+                          handleAddExternalStaff
+                        }
+                        disabled={
+                          addingExternalStaff
+                        }
+                      >
+                        {addingExternalStaff
+                          ? "新增中…"
+                          : "加入名單"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+
+                <label className="leave-field leave-field--full">
+                  <span>
+                    假別
+                  </span>
+
+                  <select
+                    value={
+                      form.leaveTypeId
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateForm(
+                        "leaveTypeId",
+                        event.target
+                          .value
+                      )
+                    }
+                    required
+                  >
+                    <option value="">
+                      請選擇假別
+                    </option>
+
+                    {leaveTypes.map(
+                      (
+                        leaveType
+                      ) => (
+                        <option
+                          key={
+                            leaveType.id
+                          }
+                          value={
+                            leaveType.id
+                          }
+                        >
+                          {
+                            leaveType.name
+                          }
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+
+
+                <label className="leave-field">
+                  <span>
+                    開始日期
+                  </span>
+
+                  <input
+                    type="date"
+                    value={
+                      form.startDate
+                    }
+                    onChange={(
+                      event
+                    ) => {
+                      const value =
+                        event.target
+                          .value;
+
+                      updateForm(
+                        "startDate",
+                        value
+                      );
+
+                      if (
+                        form.endDate <
+                        value
+                      ) {
+                        updateForm(
+                          "endDate",
+                          value
+                        );
+                      }
+                    }}
+                    required
+                  />
+                </label>
+
+
+                <label className="leave-field">
+                  <span>
+                    結束日期
+                  </span>
+
+                  <input
+                    type="date"
+                    value={
+                      form.endDate
+                    }
+                    min={
+                      form.startDate
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateForm(
+                        "endDate",
+                        event.target
+                          .value
+                      )
+                    }
+                    required
+                  />
+                </label>
+
+
+                <label className="leave-field">
+                  <span>
+                    計算方式
+                  </span>
+
+                  <select
+                    value={
+                      form.inputUnit
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateForm(
+                        "inputUnit",
+                        event.target
+                          .value
+                      )
+                    }
+                  >
+                    <option value="DAY">
+                      天
+                    </option>
+
+                    <option value="HOUR">
+                      小時
+                    </option>
+                  </select>
+                </label>
+
+
+                <label className="leave-field">
+                  <span>
+                    {form.inputUnit ===
+                    "DAY"
+                      ? "休假天數"
+                      : "休假時數"}
+                  </span>
+
+                  <input
+                    type="number"
+                    min="0.25"
+                    step="0.25"
+                    value={
+                      form.inputValue
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateForm(
+                        "inputValue",
+                        event.target
+                          .value
+                      )
+                    }
+                    required
+                  />
+
+                  <small>
+                    {form.inputUnit ===
+                    "DAY"
+                      ? "1 日以 8 小時計算"
+                      : "可直接輸入實際時數"}
+                  </small>
+                </label>
+
+
+                <label className="leave-check-field leave-field--full">
+                  <input
+                    type="checkbox"
+                    checked={
+                      form.isLastMinute
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateForm(
+                        "isLastMinute",
+                        event.target
+                          .checked
+                      )
+                    }
+                  />
+
+                  <div>
+                    <strong>
+                      臨時請假
+                    </strong>
+
+                    <span>
+                      若為臨時提出的休假，
+                      可另外標記供後續統計使用。
+                    </span>
+                  </div>
+                </label>
+
+
+                <label className="leave-field leave-field--full">
+                  <span>
+                    備註
+                  </span>
+
+                  <textarea
+                    rows="3"
+                    placeholder="選填，例如：其他假別原因、特殊說明…"
+                    value={
+                      form.note
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateForm(
+                        "note",
+                        event.target
+                          .value
+                      )
+                    }
+                  />
+                </label>
+
+
+                {errorMessage && (
+                  <div className="leave-message leave-message--error leave-field--full">
+                    {
+                      errorMessage
+                    }
+                  </div>
+                )}
+
+
+                <div className="leave-form-actions leave-field--full">
+                  <button
+                    type="button"
+                    className="leave-secondary-button"
+                    onClick={
+                      handleCloseForm
+                    }
+                    disabled={
+                      saving ||
+                      addingExternalStaff
+                    }
+                  >
+                    取消
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="leave-primary-button"
+                    disabled={
+                      saving ||
+                      addingExternalStaff
+                    }
+                  >
+                    {saving
+                      ? "儲存中…"
+                      : editingRecord
+                        ? "儲存修改"
+                        : "儲存休假"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </section>
     );
   }
+
 
   function renderMonthlyReport() {
     return (
       <section className="leave-section">
         <div>
-          <h2>月報表</h2>
+          <h2>
+            月報表
+          </h2>
+
           <p>
-            每月統計休假狀況，整理後提供給主管。
+            每月統計休假狀況，
+            整理後提供給主管。
           </p>
         </div>
 
         <div className="leave-placeholder">
-          <strong>每月休假統計</strong>
+          <strong>
+            每月休假統計
+          </strong>
+
           <p>
-            之後可以選擇月份、查看統計、下載 Excel，
+            之後可以選擇月份、
+            查看統計、下載 Excel，
             並封存正式送出的版本。
           </p>
         </div>
@@ -107,45 +1404,82 @@ function LeaveManagementPage() {
     );
   }
 
+
   function renderSettings() {
     return (
       <section className="leave-section">
         <div>
-          <h2>假別／額度設定</h2>
+          <h2>
+            假別／額度設定
+          </h2>
+
           <p>
-            管理休假假別與額外統計人員。
+            管理休假假別與後續額度設定。
           </p>
         </div>
 
+
         <div className="leave-placeholder">
-          <strong>目前假別</strong>
+          <strong>
+            目前假別
+          </strong>
 
           <div className="leave-type-list">
-            <span>事假</span>
-            <span>病假</span>
-            <span>特休</span>
-            <span>其他</span>
+            {leaveTypes.length >
+            0 ? (
+              leaveTypes.map(
+                (leaveType) => (
+                  <span
+                    key={
+                      leaveType.id
+                    }
+                  >
+                    {
+                      leaveType.name
+                    }
+                  </span>
+                )
+              )
+            ) : (
+              <>
+                <span>事假</span>
+                <span>病假</span>
+                <span>特休</span>
+                <span>其他</span>
+              </>
+            )}
           </div>
         </div>
       </section>
     );
   }
 
+
   function renderContent() {
-    if (activeTab === "records") {
+    if (
+      activeTab ===
+      "records"
+    ) {
       return renderRecords();
     }
 
-    if (activeTab === "monthly") {
+    if (
+      activeTab ===
+      "monthly"
+    ) {
       return renderMonthlyReport();
     }
 
-    if (activeTab === "settings") {
+    if (
+      activeTab ===
+      "settings"
+    ) {
       return renderSettings();
     }
 
     return renderOverview();
   }
+
 
   return (
     <div className="leave-management-page">
@@ -155,36 +1489,51 @@ function LeaveManagementPage() {
             STAFF MANAGEMENT
           </p>
 
-          <h1>休假管理</h1>
+          <h1>
+            休假管理
+          </h1>
 
           <p>
-            統一管理老師休假、月度統計與正式報表。
+            統一管理老師休假、
+            月度統計與正式報表。
           </p>
         </div>
       </div>
 
+
       <div className="leave-tabs">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={
-              activeTab === tab.key
-                ? "leave-tab leave-tab--active"
-                : "leave-tab"
-            }
-            onClick={() =>
-              setActiveTab(tab.key)
-            }
-          >
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map(
+          (tab) => (
+            <button
+              key={
+                tab.key
+              }
+              type="button"
+              className={
+                activeTab ===
+                tab.key
+                  ? "leave-tab leave-tab--active"
+                  : "leave-tab"
+              }
+              onClick={() =>
+                setActiveTab(
+                  tab.key
+                )
+              }
+            >
+              {
+                tab.label
+              }
+            </button>
+          )
+        )}
       </div>
+
 
       {renderContent()}
     </div>
   );
 }
+
 
 export default LeaveManagementPage;
