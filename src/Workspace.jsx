@@ -10,6 +10,7 @@ import DashboardPage from "./pages/DashboardPage";
 import TaskPage from "./pages/TaskPage";
 import StudentPage from "./pages/StudentPage";
 import TeacherPage from "./pages/TeacherPage";
+import LeaveManagementPage from "./pages/LeaveManagementPage";
 import TeacherAssignmentPage from "./pages/TeacherAssignmentPage";
 import ClassPage from "./pages/ClassPage";
 import CoursePage from "./pages/CoursePage";
@@ -54,9 +55,14 @@ const PAGE_OPTIONS = [
     label: "學生資料",
     key: "students",
   },
-  {
+    {
     label: "老師管理",
     key: "teachers",
+    adminOnly: true,
+  },
+  {
+    label: "休假管理",
+    key: "leave_management",
     adminOnly: true,
   },
   {
@@ -909,6 +915,14 @@ function Workspace() {
       );
     }
 
+    if (
+      activePage ===
+      "休假管理"
+    ) {
+      return (
+        <LeaveManagementPage />
+      );
+    }
 
     if (
       activePage ===
