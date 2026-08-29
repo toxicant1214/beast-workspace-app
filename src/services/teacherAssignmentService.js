@@ -302,8 +302,8 @@ export async function syncCalendarEventAssignment(
     description:
       calendarEvent.notes?.trim() || null,
     deadline:
-  calendarEvent.start_date
-    ? `${calendarEvent.start_date}T23:00:00+08:00`
+  calendarEvent.end_date || calendarEvent.start_date
+    ? `${calendarEvent.end_date || calendarEvent.start_date}T23:00:00+08:00`
     : null,
     priority: "normal",
     status: "active",
