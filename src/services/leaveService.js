@@ -509,3 +509,421 @@ export async function deleteLeaveRecord(
     throw error;
   }
 }
+export async function importLeaveCsvRows(
+  rows
+) {
+  if (
+    !Array.isArray(rows) ||
+    rows.length === 0
+  ) {
+    throw new Error(
+      "沒有可匯入的休假資料。"
+    );
+  }
+
+
+  const validRows =
+    rows.filter(
+      (row) =>
+        Array.isArray(row.errors) &&
+        row.errors.length === 0
+    );
+
+
+  if (
+    validRows.length === 0
+  ) {
+    throw new Error(
+      "目前沒有可以匯入的資料。"
+    );
+  }
+
+
+  const importKeys =
+    validRows
+      .map(
+        (row) =>
+          row.importKey
+      )
+      .filter(Boolean);
+
+
+  let existingKeys =
+    new Set();
+
+
+  if (
+    importKeys.length > 0
+  ) {
+    const {
+      data:
+        existingRows,
+      error:
+        existingError,
+    } =
+      await supabase
+        .from(
+          "teacher_leave_records"
+        )
+        .select(
+          "import_key"
+        )
+        .in(
+          "import_key",
+          importKeys
+        );
+
+
+    if (existingError) {
+      throw existingError;
+    }
+
+
+    existingKeys =
+      new Set(
+        (
+          existingRows ||
+          []
+        )
+          .map(
+            (item) =>
+              item.import_key
+          )
+          .filter(Boolean)
+      );
+  }
+
+
+  const externalCache =
+    new Map();
+
+
+  const {
+    data:
+      existingExternalStaff,
+    error:
+      externalStaffError,
+  } =
+    await supabase
+      .from(
+        "leave_external_staff"
+      )
+      .select(`
+        id,
+        name,
+        department,
+        is_active
+      `);
+
+
+  if (externalStaffError) {
+    throw externalStaffError;
+  }
+
+
+  (
+    existingExternalStaff ||
+    []
+  ).forEach(
+    (person) => {
+      const key =
+        String(
+          person.name || ""
+        )
+          .trim()
+          .replace(
+            /\s+/g,
+            ""
+          )
+          .toLowerCase();
+
+
+      if (key) {
+        externalCache.set(
+          key,
+          person
+        );
+      }
+    }
+  );
+
+
+  const result = {
+    imported: 0,
+    skippedDuplicate: 0,
+    skippedError: 0,
+    createdExternal: 0,
+    failed: [],
+  };
+
+
+  for (
+    const row
+    of rows
+  ) {
+    if (
+      row.errors?.length >
+      0
+    ) {
+      result.skippedError +=
+        1;
+
+      continue;
+    }
+
+
+    if (
+      row.importKey &&
+      existingKeys.has(
+        row.importKey
+      )
+    ) {
+      result.skippedDuplicate +=
+        1;
+
+      continue;
+    }
+
+
+    try {
+      let teacherId =
+        null;
+
+      let externalStaffId =
+        null;
+
+
+      if (
+        row.personStatus ===
+          "TEACHER" &&
+        row.personId
+      ) {
+        teacherId =
+          row.personId;
+      } else if (
+        row.personStatus ===
+          "EXTERNAL" &&
+        row.personId
+      ) {
+        externalStaffId =
+          row.personId;
+      } else {
+        const normalizedName =
+          String(
+            row.personName ||
+              ""
+          )
+            .trim()
+            .replace(
+              /\s+/g,
+              ""
+            )
+            .toLowerCase();
+
+
+        let externalPerson =
+          externalCache.get(
+            normalizedName
+          );
+
+
+        if (
+          !externalPerson
+        ) {
+          const {
+            data:
+              newExternalPerson,
+            error:
+              createExternalError,
+          } =
+            await supabase
+              .from(
+                "leave_external_staff"
+              )
+              .insert({
+                name:
+                  row.personName,
+                department:
+                  "美語部",
+                is_active:
+                  true,
+              })
+              .select(`
+                id,
+                name,
+                department,
+                is_active
+              `)
+              .single();
+
+
+          if (
+            createExternalError
+          ) {
+            throw createExternalError;
+          }
+
+
+          externalPerson =
+            newExternalPerson;
+
+
+          externalCache.set(
+            normalizedName,
+            externalPerson
+          );
+
+
+          result.createdExternal +=
+            1;
+        }
+
+
+        externalStaffId =
+          externalPerson.id;
+      }
+
+
+      if (
+        !teacherId &&
+        !externalStaffId
+      ) {
+        throw new Error(
+          "無法確認請假人員。"
+        );
+      }
+
+
+      if (
+        !row.leaveTypeId
+      ) {
+        throw new Error(
+          `找不到「${row.leaveTypeName}」假別。`
+        );
+      }
+
+
+      const totalHours =
+        Number(
+          row.totalHours
+        );
+
+
+      if (
+        !Number.isFinite(
+          totalHours
+        ) ||
+        totalHours <= 0
+      ) {
+        throw new Error(
+          "休假時數不正確。"
+        );
+      }
+
+
+      const payload = {
+        teacher_id:
+          teacherId,
+
+        external_staff_id:
+          externalStaffId,
+
+        leave_type_id:
+          row.leaveTypeId,
+
+        start_date:
+          row.start.dateString,
+
+        end_date:
+          row.end.dateString,
+
+        start_datetime:
+          row.start.isoLocal,
+
+        end_datetime:
+          row.end.isoLocal,
+
+        leave_hours:
+          totalHours,
+
+        input_unit:
+          "HOUR",
+
+        input_value:
+          totalHours,
+
+        is_last_minute:
+          false,
+
+        leave_reason:
+          row.leaveReason ||
+          null,
+
+        note:
+          null,
+
+        source:
+          "CSV",
+
+        import_key:
+          row.importKey,
+      };
+
+
+      const {
+        error:
+          insertError,
+      } =
+        await supabase
+          .from(
+            "teacher_leave_records"
+          )
+          .insert(
+            payload
+          );
+
+
+      if (insertError) {
+        if (
+          insertError.code ===
+          "23505"
+        ) {
+          result.skippedDuplicate +=
+            1;
+
+          continue;
+        }
+
+        throw insertError;
+      }
+
+
+      if (
+        row.importKey
+      ) {
+        existingKeys.add(
+          row.importKey
+        );
+      }
+
+
+      result.imported +=
+        1;
+    } catch (error) {
+      result.failed.push({
+        rowNumber:
+          row.rowNumber,
+
+        personName:
+          row.personName,
+
+        message:
+          error?.message ||
+          "匯入失敗",
+      });
+    }
+  }
+
+
+  return result;
+}

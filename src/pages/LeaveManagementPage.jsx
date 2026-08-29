@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -13,8 +14,17 @@ import {
   getExternalStaff,
   getLeaveRecords,
   getLeaveTypes,
+  importLeaveCsvRows,
   updateLeaveRecord,
 } from "../services/leaveService";
+
+import {
+  formatCsvLeaveHours,
+  getCsvPreviewSummary,
+  matchLeaveCsvRows,
+  parseLeaveCsvFile,
+  updateLeaveCsvPreviewRow,
+} from "../services/leaveCsvService";
 
 import "./LeaveManagementPage.css";
 
@@ -169,6 +179,58 @@ function LeaveManagementPage() {
   });
 
 
+  const [
+    showCsvPreview,
+    setShowCsvPreview,
+  ] = useState(false);
+
+  const [
+    csvFileName,
+    setCsvFileName,
+  ] = useState("");
+
+  const [
+    csvRows,
+    setCsvRows,
+  ] = useState([]);
+
+  const [
+    csvLoading,
+    setCsvLoading,
+  ] = useState(false);
+
+  const [
+    csvImporting,
+    setCsvImporting,
+  ] = useState(false);
+
+  const [
+    csvImportError,
+    setCsvImportError,
+  ] = useState("");
+
+
+  const [
+    editingCsvRow,
+    setEditingCsvRow,
+  ] = useState(null);
+
+  const [
+    csvEditForm,
+    setCsvEditForm,
+  ] = useState({
+    personName: "",
+    leaveTypeName: "",
+    startValue: "",
+    endValue: "",
+    leaveReason: "",
+  });
+
+
+  const csvInputRef =
+    useRef(null);
+
+
   const today =
     getTodayString();
 
@@ -249,6 +311,27 @@ function LeaveManagementPage() {
             person.is_active
         ),
       [externalStaff]
+    );
+
+
+  const csvSummary =
+    useMemo(
+      () =>
+        getCsvPreviewSummary(
+          csvRows
+        ),
+      [csvRows]
+    );
+
+
+  const csvImportableCount =
+    useMemo(
+      () =>
+        csvRows.filter(
+          (row) =>
+            row.errors.length === 0
+        ).length,
+      [csvRows]
     );
 
 
@@ -553,6 +636,339 @@ function LeaveManagementPage() {
   }
 
 
+  function handleOpenCsvPicker() {
+    setErrorMessage("");
+    setSuccessMessage("");
+    setCsvImportError("");
+
+    if (
+      csvInputRef.current
+    ) {
+      csvInputRef.current.value =
+        "";
+
+      csvInputRef.current.click();
+    }
+  }
+
+
+  async function handleCsvFileChange(
+    event
+  ) {
+    const file =
+      event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      setCsvLoading(true);
+      setErrorMessage("");
+      setCsvImportError("");
+
+      const parsedRows =
+        await parseLeaveCsvFile(
+          file
+        );
+
+      const matchedRows =
+        matchLeaveCsvRows({
+          rows:
+            parsedRows,
+          teachers,
+          externalStaff,
+          leaveTypes,
+        });
+
+      setCsvFileName(
+        file.name
+      );
+
+      setCsvRows(
+        matchedRows
+      );
+
+      setShowCsvPreview(
+        true
+      );
+    } catch (error) {
+      console.error(
+        "CSV 讀取失敗：",
+        error
+      );
+
+      setErrorMessage(
+        error?.message ||
+        "CSV 讀取失敗。"
+      );
+    } finally {
+      setCsvLoading(false);
+    }
+  }
+
+
+  function handleCloseCsvPreview() {
+    if (csvImporting) {
+      return;
+    }
+
+    setShowCsvPreview(
+      false
+    );
+
+    setCsvRows([]);
+    setCsvFileName("");
+    setCsvImportError("");
+    setEditingCsvRow(null);
+
+    if (
+      csvInputRef.current
+    ) {
+      csvInputRef.current.value =
+        "";
+    }
+  }
+
+
+  function handleOpenCsvEdit(
+    row
+  ) {
+    setEditingCsvRow(
+      row
+    );
+
+    setCsvEditForm({
+      personName:
+        row.personName || "",
+
+      leaveTypeName:
+        row.leaveTypeName || "",
+
+      startValue:
+        row.start?.inputValue ||
+        "",
+
+      endValue:
+        row.end?.inputValue ||
+        "",
+
+      leaveReason:
+        row.leaveReason || "",
+    });
+  }
+
+
+  function handleCloseCsvEdit() {
+    setEditingCsvRow(
+      null
+    );
+
+    setCsvEditForm({
+      personName: "",
+      leaveTypeName: "",
+      startValue: "",
+      endValue: "",
+      leaveReason: "",
+    });
+  }
+
+
+  function updateCsvEditForm(
+    field,
+    value
+  ) {
+    setCsvEditForm(
+      (current) => ({
+        ...current,
+        [field]: value,
+      })
+    );
+  }
+
+
+  function handleSaveCsvEdit() {
+    if (!editingCsvRow) {
+      return;
+    }
+
+
+    const updatedRow =
+      updateLeaveCsvPreviewRow({
+        originalRow:
+          editingCsvRow,
+
+        personName:
+          csvEditForm.personName,
+
+        leaveTypeName:
+          csvEditForm.leaveTypeName,
+
+        leaveReason:
+          csvEditForm.leaveReason,
+
+        startValue:
+          csvEditForm.startValue,
+
+        endValue:
+          csvEditForm.endValue,
+
+        teachers,
+
+        externalStaff,
+
+        leaveTypes,
+      });
+
+
+    setCsvRows(
+      (current) =>
+        current.map(
+          (row) =>
+            row.rowNumber ===
+            editingCsvRow.rowNumber
+              ? updatedRow
+              : row
+        )
+    );
+
+
+    handleCloseCsvEdit();
+  }
+
+
+  async function handleConfirmCsvImport() {
+    if (
+      csvImporting ||
+      csvImportableCount === 0
+    ) {
+      return;
+    }
+
+    try {
+      setCsvImporting(
+        true
+      );
+
+      setCsvImportError("");
+      setErrorMessage("");
+      setSuccessMessage("");
+
+
+      const result =
+        await importLeaveCsvRows(
+          csvRows
+        );
+
+
+      await loadData();
+
+
+      const summaryParts = [];
+
+
+      summaryParts.push(
+        `成功匯入 ${result.imported} 筆`
+      );
+
+
+      if (
+        result.skippedDuplicate >
+        0
+      ) {
+        summaryParts.push(
+          `重複跳過 ${result.skippedDuplicate} 筆`
+        );
+      }
+
+
+      if (
+        result.skippedError >
+        0
+      ) {
+        summaryParts.push(
+          `異常跳過 ${result.skippedError} 筆`
+        );
+      }
+
+
+      if (
+        result.createdExternal >
+        0
+      ) {
+        summaryParts.push(
+          `新增其他人員 ${result.createdExternal} 位`
+        );
+      }
+
+
+      if (
+        result.failed.length >
+        0
+      ) {
+        summaryParts.push(
+          `匯入失敗 ${result.failed.length} 筆`
+        );
+      }
+
+
+      setSuccessMessage(
+        `${summaryParts.join(
+          "・"
+        )}。`
+      );
+
+
+      if (
+        result.failed.length >
+        0
+      ) {
+        setCsvImportError(
+          result.failed
+            .map(
+              (item) =>
+                `第 ${item.rowNumber} 列 ${item.personName}：${item.message}`
+            )
+            .join("\n")
+        );
+
+        return;
+      }
+
+
+      setShowCsvPreview(
+        false
+      );
+
+      setCsvRows([]);
+      setCsvFileName("");
+      setEditingCsvRow(null);
+
+
+      if (
+        csvInputRef.current
+      ) {
+        csvInputRef.current.value =
+          "";
+      }
+    } catch (error) {
+      console.error(
+        "CSV 匯入失敗：",
+        error
+      );
+
+      setCsvImportError(
+        error?.message ||
+        "CSV 匯入失敗。"
+      );
+    } finally {
+      setCsvImporting(
+        false
+      );
+    }
+  }
+
+
   function renderOverview() {
     return (
       <section className="leave-section">
@@ -634,20 +1050,50 @@ function LeaveManagementPage() {
             </h2>
 
             <p>
-              登記老師或其他人員的休假紀錄。
+              可手動新增，
+              也可以直接匯入每月 CSV 清單。
             </p>
           </div>
 
 
-          <button
-            type="button"
-            className="leave-primary-button"
-            onClick={
-              handleOpenForm
-            }
-          >
-            ＋ 新增休假
-          </button>
+          <div className="leave-record-toolbar">
+            <input
+              ref={
+                csvInputRef
+              }
+              className="leave-hidden-file-input"
+              type="file"
+              accept=".csv,text/csv"
+              onChange={
+                handleCsvFileChange
+              }
+            />
+
+            <button
+              type="button"
+              className="leave-secondary-button"
+              onClick={
+                handleOpenCsvPicker
+              }
+              disabled={
+                csvLoading
+              }
+            >
+              {csvLoading
+                ? "讀取中…"
+                : "匯入 CSV"}
+            </button>
+
+            <button
+              type="button"
+              className="leave-primary-button"
+              onClick={
+                handleOpenForm
+              }
+            >
+              ＋ 新增休假
+            </button>
+          </div>
         </div>
 
 
@@ -659,7 +1105,8 @@ function LeaveManagementPage() {
 
 
         {errorMessage &&
-          !showForm && (
+          !showForm &&
+          !showCsvPreview && (
           <div className="leave-message leave-message--error">
             {errorMessage}
           </div>
@@ -688,19 +1135,31 @@ function LeaveManagementPage() {
             </strong>
 
             <p>
-              新增第一筆休假後，
-              就會從這裡開始累積統計。
+              可以手動新增，
+              也可以直接匯入每月 CSV。
             </p>
 
-            <button
-              type="button"
-              className="leave-secondary-button"
-              onClick={
-                handleOpenForm
-              }
-            >
-              新增第一筆休假
-            </button>
+            <div className="leave-empty-actions">
+              <button
+                type="button"
+                className="leave-secondary-button"
+                onClick={
+                  handleOpenCsvPicker
+                }
+              >
+                匯入 CSV
+              </button>
+
+              <button
+                type="button"
+                className="leave-primary-button"
+                onClick={
+                  handleOpenForm
+                }
+              >
+                ＋ 新增休假
+              </button>
+            </div>
           </div>
         ) : (
           <div className="leave-record-table-wrap">
@@ -712,7 +1171,7 @@ function LeaveManagementPage() {
                   <th>日期</th>
                   <th>時數</th>
                   <th>臨時請假</th>
-                  <th>備註</th>
+                  <th>原因／備註</th>
                   <th />
                 </tr>
               </thead>
@@ -784,7 +1243,8 @@ function LeaveManagementPage() {
 
 
                       <td>
-                        {record.note ||
+                        {record.leave_reason ||
+                          record.note ||
                           "—"}
                       </td>
 
@@ -1370,6 +1830,610 @@ function LeaveManagementPage() {
             </div>
           </div>
         )}
+
+
+        {showCsvPreview && (
+          <div
+            className="leave-modal-backdrop"
+            onMouseDown={
+              handleCloseCsvPreview
+            }
+          >
+            <div
+              className="leave-csv-modal"
+              onMouseDown={(
+                event
+              ) =>
+                event.stopPropagation()
+              }
+            >
+              <div className="leave-modal-header">
+                <div>
+                  <span>
+                    CSV IMPORT
+                  </span>
+
+                  <h3>
+                    匯入休假清單
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  className="leave-modal-close"
+                  onClick={
+                    handleCloseCsvPreview
+                  }
+                  disabled={
+                    csvImporting
+                  }
+                >
+                  ×
+                </button>
+              </div>
+
+
+              <div className="leave-csv-content">
+                <div className="leave-csv-file-info">
+                  <div>
+                    <strong>
+                      {csvFileName}
+                    </strong>
+
+                    <span>
+                      已讀取 {csvSummary.total} 筆休假資料
+                    </span>
+                  </div>
+                </div>
+
+
+                <div className="leave-csv-summary-grid">
+                  <div className="leave-csv-summary-card">
+                    <span>
+                      老師已配對
+                    </span>
+
+                    <strong>
+                      {csvSummary.teacher}
+                    </strong>
+                  </div>
+
+                  <div className="leave-csv-summary-card">
+                    <span>
+                      其他人員
+                    </span>
+
+                    <strong>
+                      {csvSummary.external}
+                    </strong>
+                  </div>
+
+                  <div className="leave-csv-summary-card">
+                    <span>
+                      未配對
+                    </span>
+
+                    <strong>
+                      {csvSummary.unmatched}
+                    </strong>
+                  </div>
+
+                  <div className="leave-csv-summary-card">
+                    <span>
+                      異常
+                    </span>
+
+                    <strong>
+                      {csvSummary.error}
+                    </strong>
+                  </div>
+                </div>
+
+
+                <div className="leave-csv-note">
+                  <strong>
+                    匯入規則
+                  </strong>
+
+                  <p>
+                    每一筆都可以先修改再匯入。
+                    老師管理中已有的人會直接配對；
+                    未配對的人只會加入休假管理其他人員，
+                    不會新增到老師管理。
+                  </p>
+                </div>
+
+
+                {csvImportError && (
+                  <div className="leave-message leave-message--error">
+                    {csvImportError
+                      .split("\n")
+                      .map(
+                        (
+                          line,
+                          index
+                        ) => (
+                          <div
+                            key={
+                              index
+                            }
+                          >
+                            {line}
+                          </div>
+                        )
+                      )}
+                  </div>
+                )}
+
+
+                <div className="leave-csv-table-wrap">
+                  <table className="leave-csv-table">
+                    <thead>
+                      <tr>
+                        <th>
+                          姓名
+                        </th>
+
+                        <th>
+                          配對
+                        </th>
+
+                        <th>
+                          假別
+                        </th>
+
+                        <th>
+                          日期時間
+                        </th>
+
+                        <th>
+                          時數
+                        </th>
+
+                        <th>
+                          原因
+                        </th>
+
+                        <th>
+                          狀態
+                        </th>
+
+                        <th />
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {csvRows.map(
+                        (
+                          row
+                        ) => (
+                          <tr
+                            key={`${row.rowNumber}-${row.importKey}`}
+                            className={
+                              row.errors.length >
+                              0
+                                ? "leave-csv-row leave-csv-row--error"
+                                : row.warnings.length >
+                                    0
+                                  ? "leave-csv-row leave-csv-row--warning"
+                                  : "leave-csv-row"
+                            }
+                          >
+                            <td>
+                              <strong>
+                                {
+                                  row.personName
+                                }
+                              </strong>
+
+                              <small>
+                                CSV 第 {row.rowNumber} 列
+                              </small>
+                            </td>
+
+                            <td>
+                              {row.personStatus ===
+                              "TEACHER" ? (
+                                <span className="leave-csv-status leave-csv-status--matched">
+                                  老師管理
+                                </span>
+                              ) : row.personStatus ===
+                                "EXTERNAL" ? (
+                                <span className="leave-csv-status leave-csv-status--external">
+                                  其他人員
+                                </span>
+                              ) : (
+                                <span className="leave-csv-status leave-csv-status--unmatched">
+                                  新增其他人員
+                                </span>
+                              )}
+
+                              {row.matchedName && (
+                                <small>
+                                  {
+                                    row.matchedName
+                                  }
+                                </small>
+                              )}
+                            </td>
+
+                            <td>
+                              {
+                                row.leaveTypeName ||
+                                "—"
+                              }
+                            </td>
+
+                            <td>
+                              {row.start &&
+                              row.end ? (
+                                <>
+                                  <strong>
+                                    {
+                                      row.start
+                                        .display
+                                    }
+                                  </strong>
+
+                                  <small>
+                                    ～
+                                    {
+                                      row.end
+                                        .display
+                                    }
+                                  </small>
+                                </>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+
+                            <td>
+                              <strong>
+                                {
+                                  formatCsvLeaveHours(
+                                    row.totalHours
+                                  )
+                                }
+                              </strong>
+
+                              {row.dayCount >
+                                1 && (
+                                <small>
+                                  {row.dayCount} 天
+                                </small>
+                              )}
+                            </td>
+
+                            <td>
+                              {
+                                row.leaveReason ||
+                                "—"
+                              }
+                            </td>
+
+                            <td>
+                              {row.errors.length >
+                              0 ? (
+                                <div className="leave-csv-issues">
+                                  {row.errors.map(
+                                    (
+                                      item,
+                                      index
+                                    ) => (
+                                      <span
+                                        key={`error-${index}`}
+                                        className="leave-csv-issue leave-csv-issue--error"
+                                      >
+                                        {
+                                          item
+                                        }
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              ) : row.warnings.length >
+                                0 ? (
+                                <div className="leave-csv-issues">
+                                  {row.warnings.map(
+                                    (
+                                      item,
+                                      index
+                                    ) => (
+                                      <span
+                                        key={`warning-${index}`}
+                                        className="leave-csv-issue leave-csv-issue--warning"
+                                      >
+                                        {
+                                          item
+                                        }
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="leave-csv-status leave-csv-status--ok">
+                                  可匯入
+                                </span>
+                              )}
+                            </td>
+
+                            <td>
+                              <button
+                                type="button"
+                                className="leave-edit-button"
+                                onClick={() =>
+                                  handleOpenCsvEdit(
+                                    row
+                                  )
+                                }
+                                disabled={
+                                  csvImporting
+                                }
+                              >
+                                修改
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+
+                <div className="leave-csv-footer">
+                  <div>
+                    <strong>
+                      可匯入
+                    </strong>
+
+                    <span>
+                      {csvImportableCount} 筆
+                    </span>
+                  </div>
+
+                  <div className="leave-csv-footer-actions">
+                    <button
+                      type="button"
+                      className="leave-secondary-button"
+                      onClick={
+                        handleCloseCsvPreview
+                      }
+                      disabled={
+                        csvImporting
+                      }
+                    >
+                      取消
+                    </button>
+
+                    <button
+                      type="button"
+                      className="leave-primary-button"
+                      onClick={
+                        handleConfirmCsvImport
+                      }
+                      disabled={
+                        csvImporting ||
+                        csvImportableCount ===
+                          0
+                      }
+                    >
+                      {csvImporting
+                        ? "匯入中…"
+                        : `確認匯入 ${csvImportableCount} 筆`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {editingCsvRow && (
+          <div
+            className="leave-csv-edit-backdrop"
+            onMouseDown={
+              handleCloseCsvEdit
+            }
+          >
+            <div
+              className="leave-csv-edit-modal"
+              onMouseDown={(
+                event
+              ) =>
+                event.stopPropagation()
+              }
+            >
+              <div className="leave-modal-header">
+                <div>
+                  <span>
+                    CSV RECORD
+                  </span>
+
+                  <h3>
+                    修改匯入資料
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  className="leave-modal-close"
+                  onClick={
+                    handleCloseCsvEdit
+                  }
+                >
+                  ×
+                </button>
+              </div>
+
+
+              <div className="leave-form">
+                <label className="leave-field leave-field--full">
+                  <span>
+                    姓名
+                  </span>
+
+                  <input
+                    type="text"
+                    value={
+                      csvEditForm.personName
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateCsvEditForm(
+                        "personName",
+                        event.target.value
+                      )
+                    }
+                  />
+                </label>
+
+
+                <label className="leave-field leave-field--full">
+                  <span>
+                    假別
+                  </span>
+
+                  <select
+                    value={
+                      csvEditForm.leaveTypeName
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateCsvEditForm(
+                        "leaveTypeName",
+                        event.target.value
+                      )
+                    }
+                  >
+                    <option value="">
+                      請選擇假別
+                    </option>
+
+                    {leaveTypes.map(
+                      (
+                        leaveType
+                      ) => (
+                        <option
+                          key={
+                            leaveType.id
+                          }
+                          value={
+                            leaveType.name
+                          }
+                        >
+                          {
+                            leaveType.name
+                          }
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+
+
+                <label className="leave-field">
+                  <span>
+                    開始日期時間
+                  </span>
+
+                  <input
+                    type="datetime-local"
+                    value={
+                      csvEditForm.startValue
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateCsvEditForm(
+                        "startValue",
+                        event.target.value
+                      )
+                    }
+                  />
+                </label>
+
+
+                <label className="leave-field">
+                  <span>
+                    結束日期時間
+                  </span>
+
+                  <input
+                    type="datetime-local"
+                    value={
+                      csvEditForm.endValue
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateCsvEditForm(
+                        "endValue",
+                        event.target.value
+                      )
+                    }
+                  />
+                </label>
+
+
+                <label className="leave-field leave-field--full">
+                  <span>
+                    請假原因
+                  </span>
+
+                  <textarea
+                    rows="3"
+                    value={
+                      csvEditForm.leaveReason
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updateCsvEditForm(
+                        "leaveReason",
+                        event.target.value
+                      )
+                    }
+                  />
+                </label>
+
+
+                <div className="leave-csv-edit-preview leave-field--full">
+                  <span>
+                    修改後會自動重新計算日期、時數與人員配對。
+                  </span>
+                </div>
+
+
+                <div className="leave-form-actions leave-field--full">
+                  <button
+                    type="button"
+                    className="leave-secondary-button"
+                    onClick={
+                      handleCloseCsvEdit
+                    }
+                  >
+                    取消
+                  </button>
+
+                  <button
+                    type="button"
+                    className="leave-primary-button"
+                    onClick={
+                      handleSaveCsvEdit
+                    }
+                  >
+                    套用修改
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     );
   }
@@ -1428,7 +2492,9 @@ function LeaveManagementPage() {
             {leaveTypes.length >
             0 ? (
               leaveTypes.map(
-                (leaveType) => (
+                (
+                  leaveType
+                ) => (
                   <span
                     key={
                       leaveType.id
@@ -1442,10 +2508,21 @@ function LeaveManagementPage() {
               )
             ) : (
               <>
-                <span>事假</span>
-                <span>病假</span>
-                <span>特休</span>
-                <span>其他</span>
+                <span>
+                  事假
+                </span>
+
+                <span>
+                  病假
+                </span>
+
+                <span>
+                  特休
+                </span>
+
+                <span>
+                  其他
+                </span>
               </>
             )}
           </div>
@@ -1511,7 +2588,7 @@ function LeaveManagementPage() {
               type="button"
               className={
                 activeTab ===
-                tab.key
+                  tab.key
                   ? "leave-tab leave-tab--active"
                   : "leave-tab"
               }
