@@ -605,16 +605,17 @@ function SchoolEventPanel({
             : teachers.map((teacher) => teacher.id);
 
         await syncCalendarEventAssignment(
-          {
-            id: savedEventId,
-            title: payload.title,
-            notes: payload.notes,
-            start_date: payload.start_date,
-            reminder_days_before:
-              payload.reminder_days_before,
-          },
-          teacherIds
-        );
+  {
+    id: savedEventId,
+    title: payload.title,
+    notes: payload.notes,
+    start_date: payload.start_date,
+    end_date: payload.end_date,
+    reminder_days_before:
+      payload.reminder_days_before,
+  },
+  teacherIds
+);
       } else if (savedEventId) {
         await removeCalendarEventAssignment(
           savedEventId
