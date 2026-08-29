@@ -236,6 +236,8 @@ const [monthTasks, setMonthTasks] = useState([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const [currentTeacherId, setCurrentTeacherId] = useState("");
   const [monthOverrides, setMonthOverrides] = useState([]);
+  const [specialWorkdaySettings, setSpecialWorkdaySettings] = useState([]);
+  const [savingSpecialWorkdayId, setSavingSpecialWorkdayId] = useState("");
   const [expandedDate, setExpandedDate] = useState("");
 
   useEffect(() => {
@@ -520,6 +522,22 @@ async function refreshSemesterStatus(
 
       setMonthOverrides(overrideRows || []);
 
+      const specialWorkdayIds = (overrideRows || [])
+        .filter((row) => row.override_type === "SPECIAL_WORKDAY")
+        .map((row) => row.id);
+
+      if (specialWorkdayIds.length > 0) {
+        const { data: specialRows, error: specialError } = await supabase
+          .from("cleaning_special_workday_settings")
+          .select("*")
+          .in("day_override_id", specialWorkdayIds);
+
+        if (specialError) throw specialError;
+        setSpecialWorkdaySettings(specialRows || []);
+      } else {
+        setSpecialWorkdaySettings([]);
+      }
+
       const settingMap = new Map(
         (settingsRows || []).map((row) => [row.teacher_id, row])
       );
@@ -568,6 +586,46 @@ async function refreshSemesterStatus(
     } catch (error) {
       console.error("讀取今日清潔失敗：", error);
       setErrorMessage(`讀取今日清潔失敗：${error.message}`);
+    }
+  }
+
+  async function toggleSpecialWorkdayCleaning(override, arrangeCleaning) {
+    if (!override?.id) return;
+
+    try {
+      clearMessages();
+      setSavingSpecialWorkdayId(override.id);
+
+      const { data, error } = await supabase
+        .from("cleaning_special_workday_settings")
+        .upsert(
+          {
+            day_override_id: override.id,
+            arrange_cleaning: arrangeCleaning,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "day_override_id" }
+        )
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setSpecialWorkdaySettings((current) => [
+        ...current.filter((row) => row.day_override_id !== override.id),
+        data,
+      ]);
+
+      setSuccessMessage(
+        arrangeCleaning
+          ? `${getOverrideLabel(override)}：已設定安排清潔。`
+          : `${getOverrideLabel(override)}：已設定不安排清潔。`
+      );
+    } catch (error) {
+      console.error("更新特殊上班日清潔設定失敗：", error);
+      setErrorMessage(`更新特殊上班日清潔設定失敗：${error.message}`);
+    } finally {
+      setSavingSpecialWorkdayId("");
     }
   }
 
@@ -1129,6 +1187,16 @@ async function refreshSemesterStatus(
   const expandedTasks = expandedDate
     ? visibleTasksByDate.get(expandedDate) || []
     : [];
+
+  const expandedOverride = expandedDate
+    ? overrideMap.get(expandedDate)
+    : null;
+
+  const expandedSpecialWorkdaySetting = expandedOverride
+    ? specialWorkdaySettings.find(
+        (row) => row.day_override_id === expandedOverride.id
+      )
+    : null;
 
   function getVisibleTaskText(task, includeTeacher = true) {
     const itemName =
@@ -1828,6 +1896,33 @@ async function refreshSemesterStatus(
                     關閉
                   </button>
                 </div>
+
+
+                {expandedOverride?.override_type === "SPECIAL_WORKDAY" && (
+                  <div className="cleaningSpecialWorkdaySetting">
+                    <div>
+                      <strong>{getOverrideLabel(expandedOverride)}</strong>
+                      <span>特殊上班日預設不安排清潔，需要時再單獨開啟。</span>
+                    </div>
+
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={
+                          expandedSpecialWorkdaySetting?.arrange_cleaning === true
+                        }
+                        disabled={savingSpecialWorkdayId === expandedOverride.id}
+                        onChange={(event) =>
+                          toggleSpecialWorkdayCleaning(
+                            expandedOverride,
+                            event.target.checked
+                          )
+                        }
+                      />
+                      <span>安排清潔</span>
+                    </label>
+                  </div>
+                )}
 
                 {expandedTasks.length === 0 ? (
                   <div className="cleaningEmpty">這天沒有清潔工作。</div>

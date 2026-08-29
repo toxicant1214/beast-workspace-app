@@ -896,7 +896,7 @@
 }
 
 .cleaningCalendarTask.is-done span::before {
-  content: "✓ ";
+  content: "�� ";
 }
 
 .cleaningCalendarDay__more {
@@ -1031,8 +1031,8 @@
   }
 }
 /* =========================================================
-   學期排班 + 月曆假日顯示
-   將本段加到 CleaningPage.css 最下方
+   摮豢��垍号 + �����𠯫憿舐內
+   撠�𧋦畾萄��� CleaningPage.css ��銝𧢲䲮
    ========================================================= */
 
 .cleaningSemesterPanel {
@@ -1123,7 +1123,7 @@
   border-top: 1px solid rgba(62, 72, 65, 0.1);
 }
 
-/* 假日名稱不再塞在日期右側，改成日期下方的小標籤 */
+/* ��𠯫�滨迂銝滚�憛𧼮銁�交��喳�嚗峕㺿�鞉𠯫�煺��寧�撠𤩺�蝐� */
 .cleaningCalendarDay__header {
   min-height: 28px;
   display: flex;
@@ -1180,6 +1180,53 @@
   }
 
   .cleaningMonth__toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* ===== Special workday cleaning setting ===== */
+.cleaningSpecialWorkdaySetting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 13px 14px;
+  border: 1px solid #e1e7e2;
+  border-radius: 12px;
+  background: #f8faf7;
+}
+
+.cleaningSpecialWorkdaySetting > div {
+  display: grid;
+  gap: 4px;
+}
+
+.cleaningSpecialWorkdaySetting > div span {
+  color: #78827c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cleaningSpecialWorkdaySetting label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: #4f6257;
+  cursor: pointer;
+}
+
+.cleaningSpecialWorkdaySetting input {
+  width: 18px;
+  height: 18px;
+  accent-color: #6f8b78;
+}
+
+@media (max-width: 640px) {
+  .cleaningSpecialWorkdaySetting {
     align-items: flex-start;
     flex-direction: column;
   }
