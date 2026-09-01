@@ -35,6 +35,7 @@ export async function getTeacherAssignments() {
     console.error("取得老師任務失敗：", error);
     throw error;
   }
+
   console.log(data);
   return data ?? [];
 }
@@ -90,15 +91,15 @@ export async function createTeacherAssignment(assignmentData) {
   };
 
   const { data: assignment, error: assignmentError } = await supabase
-  .from(ASSIGNMENT_TABLE)
-  .insert([assignmentPayload])
-  .select("*")
-  .single();
+    .from(ASSIGNMENT_TABLE)
+    .insert([assignmentPayload])
+    .select("*")
+    .single();
 
-if (assignmentError) {
-  console.error("新增老師任務失敗：", assignmentError);
-  throw assignmentError;
-}
+  if (assignmentError) {
+    console.error("新增老師任務失敗：", assignmentError);
+    throw assignmentError;
+  }
 
   const memberPayload = assignmentData.teacherIds.map((teacherId) => ({
     assignment_id: assignment.id,
@@ -125,6 +126,185 @@ if (assignmentError) {
   }
 
   return assignment;
+}
+
+/**
+ * 修改手動建立的老師任務
+ *
+ * 行事曆同步任務（calendar_event_id 不為 null）不允許從這裡修改，
+ * 必須回到行事曆修改後再同步。
+ */
+export async function updateTeacherAssignment(
+  assignmentId,
+  assignmentData
+) {
+  if (!assignmentId) {
+    throw new Error("缺少任務 ID");
+  }
+
+  const title = assignmentData.title?.trim();
+
+  if (!title) {
+    throw new Error("請輸入任務名稱");
+  }
+
+  if (
+    !Array.isArray(assignmentData.teacherIds) ||
+    assignmentData.teacherIds.length === 0
+  ) {
+    throw new Error("請至少指派一位老師");
+  }
+
+  const cleanTeacherIds = [
+    ...new Set(assignmentData.teacherIds.filter(Boolean)),
+  ];
+
+  const reminderOffsets = Array.isArray(
+    assignmentData.reminderOffsets
+  )
+    ? [
+        ...new Set(
+          assignmentData.reminderOffsets
+            .map((offset) => Number(offset))
+            .filter(
+              (offset) =>
+                Number.isInteger(offset) && offset > 0
+            )
+        ),
+      ].sort((a, b) => b - a)
+    : [];
+
+  const {
+    data: existingAssignment,
+    error: existingAssignmentError,
+  } = await supabase
+    .from(ASSIGNMENT_TABLE)
+    .select("id, calendar_event_id")
+    .eq("id", assignmentId)
+    .single();
+
+  if (existingAssignmentError) {
+    console.error(
+      "查詢老師任務失敗：",
+      existingAssignmentError
+    );
+    throw existingAssignmentError;
+  }
+
+  if (existingAssignment?.calendar_event_id) {
+    throw new Error(
+      "這筆任務由行事曆同步，請回到行事曆修改。"
+    );
+  }
+
+  const {
+    data: existingMembers,
+    error: memberQueryError,
+  } = await supabase
+    .from(MEMBER_TABLE)
+    .select(`
+      id,
+      teacher_id,
+      teacher_completed,
+      admin_confirmed
+    `)
+    .eq("assignment_id", assignmentId);
+
+  if (memberQueryError) {
+    console.error(
+      "查詢老師任務成員失敗：",
+      memberQueryError
+    );
+    throw memberQueryError;
+  }
+
+  const members = existingMembers ?? [];
+  const desiredTeacherSet = new Set(cleanTeacherIds);
+
+  const protectedRemovedMembers = members.filter(
+    (member) =>
+      !desiredTeacherSet.has(member.teacher_id) &&
+      (member.teacher_completed === true ||
+        member.admin_confirmed === true)
+  );
+
+  if (protectedRemovedMembers.length > 0) {
+    throw new Error(
+      "已有老師回報或完成確認，不能直接取消該老師的指派。請先保留該老師，避免完成紀錄被刪除。"
+    );
+  }
+
+  const assignmentPayload = {
+    title,
+    description: assignmentData.description?.trim() || null,
+    deadline: assignmentData.deadline || null,
+    priority: assignmentData.priority || "normal",
+    reminder_offsets: reminderOffsets,
+  };
+
+  const { data: updatedAssignment, error: updateError } =
+    await supabase
+      .from(ASSIGNMENT_TABLE)
+      .update(assignmentPayload)
+      .eq("id", assignmentId)
+      .select("*")
+      .single();
+
+  if (updateError) {
+    console.error("修改老師任務失敗：", updateError);
+    throw updateError;
+  }
+
+  const existingTeacherSet = new Set(
+    members.map((member) => member.teacher_id)
+  );
+
+  const teacherIdsToAdd = cleanTeacherIds.filter(
+    (teacherId) => !existingTeacherSet.has(teacherId)
+  );
+
+  if (teacherIdsToAdd.length > 0) {
+    const newMembers = teacherIdsToAdd.map((teacherId) => ({
+      assignment_id: assignmentId,
+      teacher_id: teacherId,
+      teacher_completed: false,
+      teacher_completed_at: null,
+      admin_confirmed: false,
+      admin_confirmed_at: null,
+    }));
+
+    const { error: addError } = await supabase
+      .from(MEMBER_TABLE)
+      .insert(newMembers);
+
+    if (addError) {
+      console.error("新增老師任務成員失敗：", addError);
+      throw addError;
+    }
+  }
+
+  const memberIdsToRemove = members
+    .filter(
+      (member) =>
+        !desiredTeacherSet.has(member.teacher_id) &&
+        member.teacher_completed !== true &&
+        member.admin_confirmed !== true
+    )
+    .map((member) => member.id);
+
+  if (memberIdsToRemove.length > 0) {
+    const { error: removeError } = await supabase
+      .from(MEMBER_TABLE)
+      .delete()
+      .in("id", memberIdsToRemove);
+
+    if (removeError) {
+      console.error("移除老師任務成員失敗：", removeError);
+      throw removeError;
+    }
+  }
+
+  return updatedAssignment;
 }
 
 /**
@@ -264,6 +444,7 @@ export async function deleteTeacherAssignment(assignmentId) {
 
   return true;
 }
+
 /**
  * 將行事曆「任務型」事件同步到老師任務系統
  */
@@ -292,19 +473,26 @@ export async function syncCalendarEventAssignment(
   );
 
   const reminderOffsets =
-  Number.isInteger(daysBefore) &&
-  daysBefore > 0
-    ? [daysBefore * 24 * 60]
-    : [];
+    Number.isInteger(daysBefore) &&
+    daysBefore > 0
+      ? [daysBefore * 24 * 60]
+      : [];
 
   const assignmentPayload = {
     title,
     description:
       calendarEvent.notes?.trim() || null,
+
+    // 有結束日：結束日當晚 23:00 截止
+    // 沒有結束日：開始日當晚 23:00 截止
     deadline:
-  calendarEvent.end_date || calendarEvent.start_date
-    ? `${calendarEvent.end_date || calendarEvent.start_date}T23:00:00+08:00`
-    : null,
+      calendarEvent.end_date || calendarEvent.start_date
+        ? `${
+            calendarEvent.end_date ||
+            calendarEvent.start_date
+          }T23:00:00+08:00`
+        : null,
+
     priority: "normal",
     status: "active",
     reminder_offsets: reminderOffsets,
@@ -484,7 +672,6 @@ export async function syncCalendarEventAssignment(
 
   return assignmentId;
 }
-
 
 /**
  * 當行事曆不再設定為「需要完成」，

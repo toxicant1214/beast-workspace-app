@@ -8,6 +8,7 @@ import {
   markTeacherAssignmentCompleted,
   undoConfirmTeacherAssignment,
   undoTeacherAssignmentCompleted,
+  updateTeacherAssignment,
 } from "../services/teacherAssignmentService";
 import {
   hasActionPermission,
@@ -64,6 +65,24 @@ const createEmptyForm = () => ({
   customReminderValue: "",
   customReminderUnit: "days",
 });
+
+function toDateTimeLocalValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const pad = (number) => String(number).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate()
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 function formatDeadline(value) {
   if (!value) {
@@ -205,6 +224,7 @@ function TeacherAssignmentPage({ currentTeacher }) {
   const [teachers, setTeachers] = useState([]);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingAssignmentId, setEditingAssignmentId] = useState("");
   const [formData, setFormData] = useState(createEmptyForm());
 
   const [loading, setLoading] = useState(true);
@@ -392,7 +412,46 @@ const overdueAssignmentCount = useMemo(
       return;
     }
 
+    setEditingAssignmentId("");
     setFormData(createEmptyForm());
+    setErrorMessage("");
+    setIsFormOpen(true);
+  }
+
+  function openEditForm(assignment) {
+    if (!canCreate) {
+      setErrorMessage("你沒有修改老師任務的權限。");
+      return;
+    }
+
+    if (assignment.calendar_event_id) {
+      setErrorMessage(
+        "這筆任務由行事曆同步，請回到行事曆修改。"
+      );
+      return;
+    }
+
+    const members = assignment.teacher_assignment_members ?? [];
+
+    setEditingAssignmentId(assignment.id);
+    setFormData({
+      title: assignment.title || "",
+      description: assignment.description || "",
+      deadline: toDateTimeLocalValue(assignment.deadline),
+      priority: assignment.priority || "normal",
+      teacherIds: members
+        .map((member) => member.teacher_id)
+        .filter(Boolean),
+      reminderOffsets: Array.isArray(assignment.reminder_offsets)
+        ? assignment.reminder_offsets
+            .map((offset) => Number(offset))
+            .filter(
+              (offset) => Number.isInteger(offset) && offset > 0
+            )
+        : [],
+      customReminderValue: "",
+      customReminderUnit: "days",
+    });
     setErrorMessage("");
     setIsFormOpen(true);
   }
@@ -403,6 +462,7 @@ const overdueAssignmentCount = useMemo(
     }
 
     setIsFormOpen(false);
+    setEditingAssignmentId("");
     setFormData(createEmptyForm());
     setErrorMessage("");
   }
@@ -499,7 +559,11 @@ const overdueAssignmentCount = useMemo(
     event.preventDefault();
 
     if (!canCreate) {
-      setErrorMessage("你沒有新增老師任務的權限。");
+      setErrorMessage(
+        editingAssignmentId
+          ? "你沒有修改老師任務的權限。"
+          : "你沒有新增老師任務的權限。"
+      );
       return;
     }
 
@@ -517,19 +581,31 @@ const overdueAssignmentCount = useMemo(
       setSaving(true);
       setErrorMessage("");
 
-      await createTeacherAssignment({
+      const payload = {
         ...formData,
         deadline: formData.deadline
           ? new Date(formData.deadline).toISOString()
           : null,
-      });
+      };
+
+      if (editingAssignmentId) {
+        await updateTeacherAssignment(
+          editingAssignmentId,
+          payload
+        );
+      } else {
+        await createTeacherAssignment(payload);
+      }
 
       await loadPageData();
       closeCreateForm();
     } catch (error) {
       console.error(error);
       setErrorMessage(
-        error?.message || "新增老師任務失敗，請稍後再試。"
+        error?.message ||
+          (editingAssignmentId
+            ? "修改老師任務失敗，請稍後再試。"
+            : "新增老師任務失敗，請稍後再試。")
       );
     } finally {
       setSaving(false);
@@ -775,18 +851,49 @@ const overdueAssignmentCount = useMemo(
     <h2>{assignment.title}</h2>
   </div>
 
-                    {canDelete && (
-                      <button
-                        type="button"
-                        className="teacher-assignment-card__delete"
-                        onClick={() =>
-                          handleDeleteAssignment(assignment)
-                        }
-                        disabled={processingId === assignment.id}
-                      >
-                        刪除
-                      </button>
-                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      {canCreate && !assignment.calendar_event_id && (
+                        <button
+                          type="button"
+                          className="teacher-assignment-page__refresh-button"
+                          onClick={() => openEditForm(assignment)}
+                          disabled={processingId === assignment.id}
+                        >
+                          編輯
+                        </button>
+                      )}
+
+                      {assignment.calendar_event_id && adminMode && (
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            color: "#7b8490",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          由行事曆同步
+                        </span>
+                      )}
+
+                      {canDelete && (
+                        <button
+                          type="button"
+                          className="teacher-assignment-card__delete"
+                          onClick={() =>
+                            handleDeleteAssignment(assignment)
+                          }
+                          disabled={processingId === assignment.id}
+                        >
+                          刪除
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {assignment.description && (
@@ -995,9 +1102,9 @@ const overdueAssignmentCount = useMemo(
           >
             <div className="teacher-assignment-modal__header">
               <div>
-                <p>New Assignment</p>
+                <p>{editingAssignmentId ? "Edit Assignment" : "New Assignment"}</p>
                 <h2 id="teacher-assignment-form-title">
-                  新增老師任務
+                  {editingAssignmentId ? "編輯老師任務" : "新增老師任務"}
                 </h2>
               </div>
 
@@ -1237,7 +1344,13 @@ const overdueAssignmentCount = useMemo(
                   className="teacher-assignment-form__save"
                   disabled={saving || teachers.length === 0}
                 >
-                  {saving ? "建立中…" : "建立任務"}
+                  {saving
+                    ? editingAssignmentId
+                      ? "儲存中…"
+                      : "建立中…"
+                    : editingAssignmentId
+                      ? "儲存修改"
+                      : "建立任務"}
                 </button>
               </div>
             </form>

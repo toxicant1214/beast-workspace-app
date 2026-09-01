@@ -147,6 +147,14 @@ def get_today_cleaning_by_teacher_id(
         )
     )
 
+    rule_ids = list(
+        dict.fromkeys(
+            task.get("cleaning_rule_id")
+            for task in tasks
+            if task.get("cleaning_rule_id")
+        )
+    )
+
     item_map = {}
 
     if item_ids:
@@ -174,6 +182,33 @@ def get_today_cleaning_by_teacher_id(
             )
         }
 
+    rule_map = {}
+
+    if rule_ids:
+        rule_response = (
+            supabase
+            .table("cleaning_rules")
+            .select(
+                """
+                id,
+                assignment_scope
+                """
+            )
+            .in_(
+                "id",
+                rule_ids,
+            )
+            .execute()
+        )
+
+        rule_map = {
+            rule["id"]: rule
+            for rule in (
+                rule_response.data
+                or []
+            )
+        }
+
     result = []
 
     for task in tasks:
@@ -183,12 +218,22 @@ def get_today_cleaning_by_teacher_id(
             )
         ) or {}
 
+        rule = rule_map.get(
+            task.get(
+                "cleaning_rule_id"
+            )
+        ) or {}
+
         result.append(
             {
                 **task,
                 "cleaning_item_name":
                     item.get("name")
                     or "清潔工作",
+                "assignment_scope":
+                    rule.get(
+                        "assignment_scope"
+                    ),
             }
         )
 
@@ -589,9 +634,38 @@ def build_teacher_daily_summary(
                 or "清潔工作"
             )
 
-            lines.append(
-                f"・{item_name}"
+            assignment_scope = (
+                task.get(
+                    "assignment_scope"
+                )
             )
+
+            note = (
+                task.get("note")
+                or ""
+            ).strip()
+
+            if (
+                assignment_scope
+                == "OWN_AREA"
+            ):
+                lines.append(
+                    f"・共同任務｜{item_name}"
+                )
+
+                if note:
+                    lines.append(
+                        f"  {note}"
+                    )
+            else:
+                lines.append(
+                    f"・{item_name}"
+                )
+
+                if note:
+                    lines.append(
+                        f"  {note}"
+                    )
     else:
         lines.append(
             "今日無輪值，請協助維持教室與個人區域整潔。"
