@@ -554,7 +554,7 @@
   gap: 16px;
 }
 
-/* ===== �芣迫�齿��坿身摰� ===== */
+/* ===== 嚙質𧦠餈恬蕭朣選蕭嚙賢踎頨急麯嚙� ===== */
 
 .teacher-assignment-form__reminders {
   margin: 2px 0 20px;
@@ -926,7 +926,7 @@
   align-items: center;
   gap: 12px;
 }
-/* ===== ��葦摰峕�甇瑞� ===== */
+/* ===== 嚙踝蕭�行麯撜𤏪蕭���嚙� ===== */
 
 .teacher-assignment-member__info {
   cursor: pointer !important;
@@ -1089,7 +1089,7 @@
   font-weight: 600;
 }
 
-/* ===== 隞餃�撌乩��堆����讠蜇閬質���� ===== */
+/* ===== �鮋�嚙賣�銋抬蕭嚙賢�嚙踝蕭嚙踝蕭霈㰘��祈釭嚙踝蕭嚙踝蕭 ===== */
 .teacher-assignment-summary__card {
   width: 100%;
   text-align: left;
@@ -1224,5 +1224,298 @@
 
   .teacher-assignment-summary__card small {
     line-height: 1.45;
+  }
+}
+/* ===== 2026-09 ��葦隞餃�撌乩��堆�擃睃�摨行��� ===== */
+.teacher-assignment-workbench {
+  border: 1px solid #e8e0d7;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.72);
+  overflow: hidden;
+}
+
+.teacher-assignment-statusbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 160px)) minmax(170px, 1fr);
+  gap: 0;
+  border-bottom: 1px solid #e8e0d7;
+  background: rgba(250, 247, 242, 0.7);
+}
+
+.teacher-assignment-statusbar button {
+  min-height: 66px;
+  padding: 12px 18px;
+  border-right: 1px solid #e8e0d7;
+  background: transparent;
+  color: #756b60;
+  text-align: left;
+}
+
+.teacher-assignment-statusbar button:hover,
+.teacher-assignment-statusbar button.is-active {
+  background: #ffffff;
+}
+
+.teacher-assignment-statusbar button.is-active {
+  box-shadow: inset 0 -3px 0 #6f8775;
+}
+
+.teacher-assignment-statusbar button span {
+  font-size: 12px;
+}
+
+.teacher-assignment-statusbar button strong {
+  margin-left: 9px;
+  color: #4c463f;
+  font-size: 22px;
+}
+
+.teacher-assignment-statusbar__completed {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  border-right: 0 !important;
+}
+
+.teacher-assignment-statusbar__completed b {
+  margin-left: 12px;
+  color: #8b8175;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.teacher-assignment-compact-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee7df;
+}
+
+.teacher-assignment-compact-toolbar h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #4c463f;
+}
+
+.teacher-assignment-compact-toolbar p {
+  margin: 4px 0 0;
+  color: #998e82;
+  font-size: 12px;
+}
+
+.teacher-assignment-compact-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.teacher-assignment-compact-toolbar__actions input {
+  width: 260px;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid #ddd4ca;
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+  color: #514a43;
+}
+
+.teacher-assignment-compact-list {
+  padding: 0 20px 18px;
+}
+
+.teacher-assignment-compact-card {
+  border-bottom: 1px solid #eee7df;
+}
+
+.teacher-assignment-compact-card:last-child {
+  border-bottom: 0;
+}
+
+.teacher-assignment-compact-card__summary {
+  display: grid;
+  grid-template-columns: 150px minmax(240px, 1fr) 220px 90px 28px;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 66px;
+  padding: 10px 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.teacher-assignment-compact-card__summary:hover {
+  background: rgba(247, 243, 238, 0.72);
+}
+
+.teacher-assignment-compact-card.is-overdue .teacher-assignment-compact-card__summary {
+  background: rgba(255, 245, 243, 0.72);
+}
+
+.teacher-assignment-compact-card__priority-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.teacher-assignment-compact-card__title {
+  min-width: 0;
+}
+
+.teacher-assignment-compact-card__title strong {
+  display: block;
+  overflow: hidden;
+  color: #4d463f;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teacher-assignment-compact-card__title small {
+  display: block;
+  margin-top: 3px;
+  color: #9b9186;
+  font-size: 11px;
+}
+
+.teacher-assignment-compact-card__deadline span,
+.teacher-assignment-compact-card__progress-text span {
+  display: block;
+  margin-bottom: 2px;
+  color: #a0968b;
+  font-size: 10px;
+}
+
+.teacher-assignment-compact-card__deadline strong {
+  color: #625a51;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.teacher-assignment-compact-card__progress-text {
+  text-align: right;
+}
+
+.teacher-assignment-compact-card__progress-text strong {
+  color: #58705f;
+  font-size: 14px;
+}
+
+.teacher-assignment-compact-card__chevron {
+  color: #9a8f83;
+  font-size: 18px;
+  text-align: center;
+}
+
+.teacher-assignment-compact-card__details {
+  margin: 0 6px 14px;
+  padding: 16px;
+  border: 1px solid #e9e1d8;
+  border-radius: 14px;
+  background: #fdfbf8;
+}
+
+.teacher-assignment-compact-card__details-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.teacher-assignment-compact-card__details-head > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.teacher-assignment-compact-card__details .teacher-assignment-card__description {
+  margin-top: 0;
+}
+
+.teacher-assignment-compact-card__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+@media (max-width: 1050px) {
+  .teacher-assignment-compact-card__summary {
+    grid-template-columns: 120px minmax(180px, 1fr) 190px 75px 24px;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 760px) {
+  .teacher-assignment-statusbar {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .teacher-assignment-statusbar button {
+    min-width: 135px;
+  }
+
+  .teacher-assignment-statusbar__completed {
+    justify-content: flex-start;
+    min-width: 180px !important;
+  }
+
+  .teacher-assignment-compact-toolbar,
+  .teacher-assignment-compact-toolbar__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .teacher-assignment-compact-toolbar__actions input {
+    width: 100%;
+  }
+
+  .teacher-assignment-compact-list {
+    padding: 0 14px 14px;
+  }
+
+  .teacher-assignment-compact-card__summary {
+    grid-template-columns: 1fr auto;
+    gap: 7px 12px;
+    padding: 12px 4px;
+  }
+
+  .teacher-assignment-compact-card__priority-wrap,
+  .teacher-assignment-compact-card__title,
+  .teacher-assignment-compact-card__deadline {
+    grid-column: 1;
+  }
+
+  .teacher-assignment-compact-card__progress-text,
+  .teacher-assignment-compact-card__chevron {
+    grid-column: 2;
+  }
+
+  .teacher-assignment-compact-card__priority-wrap {
+    grid-row: 1;
+  }
+
+  .teacher-assignment-compact-card__title {
+    grid-row: 2;
+  }
+
+  .teacher-assignment-compact-card__deadline {
+    grid-row: 3;
+  }
+
+  .teacher-assignment-compact-card__progress-text {
+    grid-row: 2;
+  }
+
+  .teacher-assignment-compact-card__chevron {
+    grid-row: 3;
+  }
+
+  .teacher-assignment-compact-card__details-head {
+    flex-direction: column;
   }
 }
