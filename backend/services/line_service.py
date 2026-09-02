@@ -1,12 +1,36 @@
 import os
 
 import requests
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 
 load_dotenv()
 
 LINE_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+
+
+def format_taipei_datetime(value):
+    """將 Supabase 回傳的時間統一顯示為台灣時間。"""
+    if not value:
+        return "未設定"
+
+    try:
+        dt = datetime.fromisoformat(
+            str(value).replace("Z", "+00:00")
+        )
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=TAIPEI_TZ)
+        else:
+            dt = dt.astimezone(TAIPEI_TZ)
+
+        return dt.strftime("%Y-%m-%d %H:%M")
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def get_headers():
@@ -724,10 +748,7 @@ def reply_teacher_assignment_cards(
         else:
             priority_text = "一般"
 
-        if deadline:
-            deadline_text = str(deadline).replace("T", " ")[:16]
-        else:
-            deadline_text = "未設定"
+        deadline_text = format_taipei_datetime(deadline)
 
         body_contents = [
             {
