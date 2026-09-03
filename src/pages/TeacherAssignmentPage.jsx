@@ -152,6 +152,41 @@ function isAssignmentOverdue(assignment) {
 
   return !allConfirmed && new Date(assignment.deadline) < new Date();
 }
+
+function isAssignmentCompleted(assignment) {
+  const members = assignment.teacher_assignment_members ?? [];
+  return members.length > 0 && members.every((member) => member.admin_confirmed);
+}
+
+function isAssignmentWaitingConfirm(assignment) {
+  if (isAssignmentCompleted(assignment)) return false;
+  const members = assignment.teacher_assignment_members ?? [];
+  return members.some(
+    (member) => member.teacher_completed && !member.admin_confirmed
+  );
+}
+
+function getAssignmentCompletedAt(assignment) {
+  const members = assignment.teacher_assignment_members ?? [];
+  const timestamps = members
+    .map((member) => member.admin_confirmed_at)
+    .filter(Boolean)
+    .map((value) => new Date(value).getTime())
+    .filter(Number.isFinite);
+
+  return timestamps.length > 0 ? Math.max(...timestamps) : 0;
+}
+
+function sortAssignmentsByDeadline(a, b) {
+  const aTime = a.deadline ? new Date(a.deadline).getTime() : Number.POSITIVE_INFINITY;
+  const bTime = b.deadline ? new Date(b.deadline).getTime() : Number.POSITIVE_INFINITY;
+
+  if (aTime !== bTime) return aTime - bTime;
+
+  const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+  const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+  return aCreated - bCreated;
+}
 function getMemberStatus(member, deadline) {
   const completionTiming = getCompletionTiming(
     member.teacher_completed_at,
@@ -232,8 +267,9 @@ function TeacherAssignmentPage({ currentTeacher }) {
   const [processingId, setProcessingId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [expandedMemberIds, setExpandedMemberIds] = useState([]);
+  const [expandedAssignmentIds, setExpandedAssignmentIds] = useState([]);
   const [teacherKeyword, setTeacherKeyword] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("in_progress");
   const adminMode = isAdmin(currentTeacher);
   const canViewAll =
     adminMode ||
@@ -287,101 +323,81 @@ function TeacherAssignmentPage({ currentTeacher }) {
   }, [assignments, canViewAll, currentTeacher?.id]);
 
   const filteredAssignments = useMemo(() => {
-  const keyword = teacherKeyword.trim().toLowerCase();
+    const keyword = teacherKeyword.trim().toLowerCase();
 
-  return visibleAssignments.filter((assignment) => {
-    const members = assignment.teacher_assignment_members ?? [];
+    const result = visibleAssignments.filter((assignment) => {
+      const members = assignment.teacher_assignment_members ?? [];
+      const matchesKeyword =
+        !keyword ||
+        assignment.title?.toLowerCase().includes(keyword) ||
+        assignment.description?.toLowerCase().includes(keyword) ||
+        members.some((member) => {
+          const teacher = member.teachers;
+          return [
+            teacher?.chinese_name,
+            teacher?.english_name,
+            teacher?.position,
+          ]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(keyword));
+        });
 
-    const matchesTeacher =
-      !adminMode ||
-      !keyword ||
-      members.some((member) => {
-        const teacher = member.teachers;
+      const completed = isAssignmentCompleted(assignment);
+      const waitingConfirm = isAssignmentWaitingConfirm(assignment);
+      const overdue = isAssignmentOverdue(assignment);
 
-        return [
-          teacher?.chinese_name,
-          teacher?.english_name,
-          teacher?.position,
-        ]
-          .filter(Boolean)
-          .some((value) => value.toLowerCase().includes(keyword));
-      });
+      const matchesStatus =
+        (statusFilter === "in_progress" && !completed && !waitingConfirm) ||
+        (statusFilter === "waiting_confirm" && waitingConfirm) ||
+        (statusFilter === "overdue" && overdue) ||
+        (statusFilter === "completed" && completed);
 
-    const isOverdue = isAssignmentOverdue(assignment);
+      return matchesKeyword && matchesStatus;
+    });
 
-    const isCompleted =
-      members.length > 0 &&
-      members.every((member) => member.admin_confirmed);
+    if (statusFilter === "completed") {
+      return [...result].sort(
+        (a, b) => getAssignmentCompletedAt(b) - getAssignmentCompletedAt(a)
+      );
+    }
 
-    const isWaitingConfirm =
-  members.some(
-    (member) =>
-      member.teacher_completed &&
-      !member.admin_confirmed
-  );
+    return [...result].sort(sortAssignmentsByDeadline);
+  }, [visibleAssignments, teacherKeyword, statusFilter]);
 
-    const isInProgress =
-      !isOverdue &&
-      !isCompleted &&
-      !isWaitingConfirm;
-
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "in_progress" && isInProgress) ||
-      (statusFilter === "waiting_confirm" && isWaitingConfirm) ||
-      (statusFilter === "completed" && isCompleted) ||
-      (statusFilter === "overdue" && isOverdue);
-
-    return matchesTeacher && matchesStatus;
-  });
-}, [
-  visibleAssignments,
-  teacherKeyword,
-  statusFilter,
-  adminMode,
-]);
-  const activeAssignmentCount = useMemo(
+  const inProgressAssignmentCount = useMemo(
     () =>
-      visibleAssignments.filter((assignment) => assignment.status === "active")
-        .length,
+      visibleAssignments.filter(
+        (assignment) =>
+          !isAssignmentCompleted(assignment) &&
+          !isAssignmentWaitingConfirm(assignment)
+      ).length,
     [visibleAssignments]
   );
 
   const waitingConfirmationCount = useMemo(
     () =>
-      visibleAssignments.reduce((total, assignment) => {
-        const members = assignment.teacher_assignment_members ?? [];
-
-        return (
-          total +
-          members.filter(
-            (member) =>
-              member.teacher_completed && !member.admin_confirmed
-          ).length
-        );
-      }, 0),
+      visibleAssignments.filter((assignment) =>
+        isAssignmentWaitingConfirm(assignment)
+      ).length,
     [visibleAssignments]
   );
 
-  const incompleteMemberCount = useMemo(
+  const completedAssignmentCount = useMemo(
     () =>
-      visibleAssignments.reduce((total, assignment) => {
-        const members = assignment.teacher_assignment_members ?? [];
-
-        return (
-          total +
-          members.filter((member) => !member.admin_confirmed).length
-        );
-      }, 0),
+      visibleAssignments.filter((assignment) =>
+        isAssignmentCompleted(assignment)
+      ).length,
     [visibleAssignments]
   );
-const overdueAssignmentCount = useMemo(
-  () =>
-    visibleAssignments.filter((assignment) =>
-      isAssignmentOverdue(assignment)
-    ).length,
-  [visibleAssignments]
-);
+
+  const overdueAssignmentCount = useMemo(
+    () =>
+      visibleAssignments.filter((assignment) =>
+        isAssignmentOverdue(assignment)
+      ).length,
+    [visibleAssignments]
+  );
+
   useEffect(() => {
     loadPageData();
   }, []);
@@ -483,6 +499,14 @@ const overdueAssignmentCount = useMemo(
       : [...previous, memberId]
   );
 }
+
+  function toggleAssignmentExpanded(assignmentId) {
+    setExpandedAssignmentIds((previous) =>
+      previous.includes(assignmentId)
+        ? previous.filter((id) => id !== assignmentId)
+        : [...previous, assignmentId]
+    );
+  }
     function toggleTeacher(teacherId) {
     setFormData((previous) => {
       const alreadySelected = previous.teacherIds.includes(teacherId);
@@ -727,71 +751,79 @@ const overdueAssignmentCount = useMemo(
 
       {!adminMode && <LineBindingCard />}
 
-      <section className="teacher-assignment-summary">
-        <article className="teacher-assignment-summary__card">
-          <span>進行中任務</span>
-          <strong>{activeAssignmentCount}</strong>
-          <small>目前建立的老師任務</small>
-        </article>
-
-        <article className="teacher-assignment-summary__card">
-  <span>逾期任務</span>
-  <strong>{overdueAssignmentCount}</strong>
-  <small>已超過截止時間</small>
-</article>
-
-        <article className="teacher-assignment-summary__card">
-          <span>等待主管確認</span>
-          <strong>{waitingConfirmationCount}</strong>
-          <small>老師已回報完成</small>
-        </article>
-
-        <article className="teacher-assignment-summary__card">
-          <span>尚未正式完成</span>
-          <strong>{incompleteMemberCount}</strong>
-          <small>依每位老師分別計算</small>
-        </article>
-      </section>
-
-      <section className="teacher-assignment-list">
-        <div className="teacher-assignment-list__toolbar">
-          <div>
-            <h2>任務列表</h2>
-            <p>
-              {adminMode
-                ? "老師完成回報後，仍需由主管確認。"
-                : "這裡只會顯示指派給你的任務。"}
-            </p>
-          </div>
-          {adminMode && (
-  <div className="teacher-assignment-list__search">
-  <input
-    type="search"
-    value={teacherKeyword}
-    onChange={(event) => setTeacherKeyword(event.target.value)}
-    placeholder="搜尋老師姓名、英文名或職稱"
-  />
-
-  <select
-    value={statusFilter}
-    onChange={(event) => setStatusFilter(event.target.value)}
-  >
-    <option value="all">全部任務</option>
-    <option value="in_progress">進行中</option>
-    <option value="waiting_confirm">待主管確認</option>
-    <option value="completed">已完成</option>
-    <option value="overdue">已逾期</option>
-  </select>
-</div>
-)}
+      <section className="teacher-assignment-workbar">
+        <div className="teacher-assignment-workbar__main">
           <button
             type="button"
-            className="teacher-assignment-page__refresh-button"
-            onClick={loadPageData}
-            disabled={loading}
+            className={statusFilter === "in_progress" ? "is-active" : ""}
+            onClick={() => setStatusFilter("in_progress")}
           >
-            {loading ? "讀取中…" : "重新整理"}
+            進行中 <strong>{inProgressAssignmentCount}</strong>
           </button>
+          <button
+            type="button"
+            className={statusFilter === "waiting_confirm" ? "is-active" : ""}
+            onClick={() => setStatusFilter("waiting_confirm")}
+          >
+            待主管確認 <strong>{waitingConfirmationCount}</strong>
+          </button>
+          <button
+            type="button"
+            className={statusFilter === "overdue" ? "is-active is-alert" : ""}
+            onClick={() => setStatusFilter("overdue")}
+          >
+            已逾期 <strong>{overdueAssignmentCount}</strong>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className={
+            statusFilter === "completed"
+              ? "teacher-assignment-workbar__completed is-active"
+              : "teacher-assignment-workbar__completed"
+          }
+          onClick={() => setStatusFilter("completed")}
+        >
+          已完成 <strong>{completedAssignmentCount}</strong> <span>›</span>
+        </button>
+      </section>
+
+      <section className="teacher-assignment-list is-compact">
+        <div className="teacher-assignment-list__toolbar is-compact">
+          <div>
+            <h2>
+              {statusFilter === "completed"
+                ? "已完成任務"
+                : statusFilter === "waiting_confirm"
+                  ? "待主管確認"
+                  : statusFilter === "overdue"
+                    ? "逾期任務"
+                    : "任務列表"}
+            </h2>
+            <p>
+              {statusFilter === "completed"
+                ? "已完成任務獨立收納，需要時再回來查。"
+                : "依截止日期自動排序；新增或修改時間後會立即重新排列。"}
+            </p>
+          </div>
+
+          <div className="teacher-assignment-list__controls">
+            <input
+              type="search"
+              value={teacherKeyword}
+              onChange={(event) => setTeacherKeyword(event.target.value)}
+              placeholder="搜尋任務、內容或老師"
+            />
+            <button
+              type="button"
+              className="teacher-assignment-page__refresh-button"
+              onClick={loadPageData}
+              disabled={loading}
+            >
+              {loading ? "讀取中…" : "重新整理"}
+            </button>
+          </div>
         </div>
 
         {errorMessage && !isFormOpen && (
@@ -809,274 +841,273 @@ const overdueAssignmentCount = useMemo(
             <strong>
               {adminMode ? "目前尚未建立老師任務" : "目前沒有指派給你的任務"}
             </strong>
-            <p>
-              {adminMode
-                ? "按右上角「新增任務」，開始指派第一項工作。"
-                : "有新任務時，會顯示在這裡。"}
-            </p>
+          </div>
+        ) : filteredAssignments.length === 0 ? (
+          <div className="teacher-assignment-page__empty is-compact">
+            <strong>這個區域目前沒有任務</strong>
+            <p>可以切換上方分類，或調整搜尋條件。</p>
           </div>
         ) : (
-          <div className="teacher-assignment-grid">
+          <div className="teacher-assignment-compact-list">
             {filteredAssignments.map((assignment) => {
-  const members =
-    assignment.teacher_assignment_members ?? [];
-
-  const overdue = isAssignmentOverdue(assignment);
-
-  const confirmedCount = members.filter(
-    (member) => member.admin_confirmed
-  ).length;
+              const members = assignment.teacher_assignment_members ?? [];
+              const overdue = isAssignmentOverdue(assignment);
+              const completed = isAssignmentCompleted(assignment);
+              const waitingConfirm = isAssignmentWaitingConfirm(assignment);
+              const confirmedCount = members.filter(
+                (member) => member.admin_confirmed
+              ).length;
+              const teacherCompletedCount = members.filter(
+                (member) => member.teacher_completed
+              ).length;
+              const expanded = expandedAssignmentIds.includes(assignment.id);
 
               return (
                 <article
-                  className="teacher-assignment-card"
+                  className={
+                    expanded
+                      ? "teacher-assignment-compact-card is-expanded"
+                      : "teacher-assignment-compact-card"
+                  }
                   key={assignment.id}
                 >
-                  <div className="teacher-assignment-card__header">
-  <div>
-    <div className="teacher-assignment-card__badges">
-      <span
-        className={`teacher-assignment-card__priority is-${assignment.priority}`}
-      >
-        {getPriorityLabel(assignment.priority)}
-      </span>
-
-      {overdue && (
-        <span className="teacher-assignment-card__overdue">
-          已逾期
-        </span>
-      )}
-    </div>
-
-    <h2>{assignment.title}</h2>
-  </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
+                  <button
+                    type="button"
+                    className="teacher-assignment-compact-card__row"
+                    onClick={() => toggleAssignmentExpanded(assignment.id)}
+                  >
+                    <span
+                      className={`teacher-assignment-card__priority is-${assignment.priority}`}
                     >
-                      {canCreate && !assignment.calendar_event_id && (
-                        <button
-                          type="button"
-                          className="teacher-assignment-page__refresh-button"
-                          onClick={() => openEditForm(assignment)}
-                          disabled={processingId === assignment.id}
-                        >
-                          編輯
-                        </button>
-                      )}
+                      {getPriorityLabel(assignment.priority)}
+                    </span>
 
-                      {assignment.calendar_event_id && adminMode && (
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            color: "#7b8490",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          由行事曆同步
-                        </span>
-                      )}
+                    <span className="teacher-assignment-compact-card__title">
+                      <strong>{assignment.title}</strong>
+                      <small>
+                        {assignment.calendar_event_id ? "行事曆同步" : "老師任務"}
+                      </small>
+                    </span>
 
-                      {canDelete && (
-                        <button
-                          type="button"
-                          className="teacher-assignment-card__delete"
-                          onClick={() =>
-                            handleDeleteAssignment(assignment)
-                          }
-                          disabled={processingId === assignment.id}
-                        >
-                          刪除
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                    <span
+                      className={
+                        overdue
+                          ? "teacher-assignment-compact-card__deadline is-overdue"
+                          : "teacher-assignment-compact-card__deadline"
+                      }
+                    >
+                      <small>截止</small>
+                      <strong>{formatDeadline(assignment.deadline)}</strong>
+                    </span>
 
-                  {assignment.description && (
-                    <p className="teacher-assignment-card__description">
-                      {assignment.description}
-                    </p>
-                  )}
-
-                  <div className="teacher-assignment-card__meta">
-                    <span>截止時間</span>
-                    <strong>
-                      {formatDeadline(assignment.deadline)}
-                    </strong>
-                  </div>
-
-                  <div className="teacher-assignment-card__progress">
-                    <div>
-                      <span>正式完成進度</span>
+                    <span className="teacher-assignment-compact-card__progress-text">
+                      <small>正式完成</small>
                       <strong>
                         {confirmedCount} / {members.length}
                       </strong>
-                    </div>
+                    </span>
 
-                    <div className="teacher-assignment-card__progress-bar">
-                      <span
-                        style={{
-                          width:
-                            members.length === 0
-                              ? "0%"
-                              : `${Math.round(
-                                  (confirmedCount /
-                                    members.length) *
-                                    100
-                                )}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
+                    <span className="teacher-assignment-compact-card__status">
+                      {completed
+                        ? "已完成"
+                        : waitingConfirm
+                          ? `待確認 ${teacherCompletedCount}/${members.length}`
+                          : overdue
+                            ? "已逾期"
+                            : "進行中"}
+                    </span>
 
-                  <div className="teacher-assignment-members">
-                    {members.map((member) => {
-                      const teacher = member.teachers;
-                      const isProcessing =
-                        processingId === member.id;
-                      const isOwnAssignment =
-                        member.teacher_id === currentTeacher?.id;
-                      const mayComplete =
-                        adminMode || (canCompleteOwn && isOwnAssignment);
-                      const isHistoryExpanded =
-                        expandedMemberIds.includes(member.id);
-                      const memberStatus = getMemberStatus(
-  member,
-  assignment.deadline
-);
-                      return (
-                        <div
-  className="teacher-assignment-member"
-  key={member.id}
-  onClick={() => toggleMemberHistory(member.id)}
->
-                          <div className="teacher-assignment-member__identity">
-                            <div className="teacher-assignment-member__avatar">
-                              {teacher?.chinese_name?.slice(0, 1) || "師"}
-                            </div>
+                    <span className="teacher-assignment-compact-card__chevron">
+                      {expanded ? "⌃" : "⌄"}
+                    </span>
+                  </button>
 
-                            <div className="teacher-assignment-member__info">
-                              <strong>
-                                {isHistoryExpanded ? "▼ " : "▶ "}
-                                {teacher?.chinese_name || "未知老師"}
-                              </strong>
+                  {expanded && (
+                    <div className="teacher-assignment-compact-card__details">
+                      <div className="teacher-assignment-compact-card__details-head">
+                        <div>
+                          <span>截止時間</span>
+                          <strong>{formatDeadline(assignment.deadline)}</strong>
+                        </div>
 
-                              <span>
-                                {teacher?.position || "未設定職務"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="teacher-assignment-member__status">
-  <span className={memberStatus.className}>
-    {memberStatus.text}
-  </span>
-</div>
-
-                          <div
-  className="teacher-assignment-member__actions"
-  onClick={(event) => event.stopPropagation()}
->
-                            {mayComplete && (
-                              <button
-                                type="button"
-                                className={
-                                  member.teacher_completed
-                                    ? "teacher-complete-button is-completed"
-                                    : "teacher-complete-button"
-                                }
-                                onClick={() =>
-                                  handleTeacherComplete(member)
-                                }
-                                disabled={
-                                  isProcessing ||
-                                  member.admin_confirmed
-                                }
-                              >
-                                {member.teacher_completed
-                                  ? "取消回報"
-                                  : adminMode
-                                    ? "老師完成"
-                                    : "我已完成"}
-                              </button>
-                            )}
-
-                            {canAdminConfirm && (
-                              <button
-                                type="button"
-                                className={
-                                  member.admin_confirmed
-                                    ? "admin-confirm-button is-confirmed"
-                                    : "admin-confirm-button"
-                                }
-                                onClick={() =>
-                                  handleAdminConfirm(member)
-                                }
-                                disabled={
-                                  isProcessing ||
-                                  !member.teacher_completed
-                                }
-                              >
-                                {member.admin_confirmed
-                                  ? "取消確認"
-                                  : "主管確認"}
-                              </button>
-                            )}
-                          </div>
-
-                          {adminMode && isHistoryExpanded && (
-                            <div className="teacher-assignment-member__history">
-                              <div className="teacher-assignment-member__history-item">
-                                <span>任務建立</span>
-                                <strong>
-                                  {formatHistoryTime(
-                                    assignment.created_at
-                                  )}
-                                </strong>
-                              </div>
-
-                              <div className="teacher-assignment-member__history-item">
-  <span>老師完成</span>
-
-  <div className="teacher-assignment-member__history-result">
-    {member.teacher_completed_at &&
-      assignment.deadline && (
-        <small>
-          （
-          {getCompletionTiming(
-            member.teacher_completed_at,
-            assignment.deadline
-          )}
-          ）
-        </small>
-      )}
-
-    <strong>
-      {formatHistoryTime(
-        member.teacher_completed_at
-      )}
-    </strong>
-  </div>
-</div>
-
-                              <div className="teacher-assignment-member__history-item">
-                                <span>主管確認</span>
-                                <strong>
-                                  {formatHistoryTime(
-                                    member.admin_confirmed_at
-                                  )}
-                                </strong>
-                              </div>
-                            </div>
+                        <div className="teacher-assignment-compact-card__actions">
+                          {canCreate && !assignment.calendar_event_id && (
+                            <button
+                              type="button"
+                              className="teacher-assignment-page__refresh-button"
+                              onClick={() => openEditForm(assignment)}
+                              disabled={processingId === assignment.id}
+                            >
+                              編輯
+                            </button>
+                          )}
+                          {assignment.calendar_event_id && adminMode && (
+                            <span>由行事曆同步</span>
+                          )}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              className="teacher-assignment-card__delete"
+                              onClick={() => handleDeleteAssignment(assignment)}
+                              disabled={processingId === assignment.id}
+                            >
+                              刪除
+                            </button>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+
+                      {assignment.description && (
+                        <p className="teacher-assignment-card__description">
+                          {assignment.description}
+                        </p>
+                      )}
+
+                      <div className="teacher-assignment-card__progress">
+                        <div>
+                          <span>正式完成進度</span>
+                          <strong>
+                            {confirmedCount} / {members.length}
+                          </strong>
+                        </div>
+                        <div className="teacher-assignment-card__progress-bar">
+                          <span
+                            style={{
+                              width:
+                                members.length === 0
+                                  ? "0%"
+                                  : `${Math.round(
+                                      (confirmedCount / members.length) * 100
+                                    )}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="teacher-assignment-members">
+                        {members.map((member) => {
+                          const teacher = member.teachers;
+                          const isProcessing = processingId === member.id;
+                          const isOwnAssignment =
+                            member.teacher_id === currentTeacher?.id;
+                          const mayComplete =
+                            adminMode || (canCompleteOwn && isOwnAssignment);
+                          const isHistoryExpanded =
+                            expandedMemberIds.includes(member.id);
+                          const memberStatus = getMemberStatus(
+                            member,
+                            assignment.deadline
+                          );
+
+                          return (
+                            <div
+                              className="teacher-assignment-member"
+                              key={member.id}
+                              onClick={() => toggleMemberHistory(member.id)}
+                            >
+                              <div className="teacher-assignment-member__identity">
+                                <div className="teacher-assignment-member__avatar">
+                                  {teacher?.chinese_name?.slice(0, 1) || "師"}
+                                </div>
+                                <div className="teacher-assignment-member__info">
+                                  <strong>
+                                    {isHistoryExpanded ? "▼ " : "▶ "}
+                                    {teacher?.chinese_name || "未知老師"}
+                                  </strong>
+                                  <span>{teacher?.position || "未設定職務"}</span>
+                                </div>
+                              </div>
+
+                              <div className="teacher-assignment-member__status">
+                                <span className={memberStatus.className}>
+                                  {memberStatus.text}
+                                </span>
+                              </div>
+
+                              <div
+                                className="teacher-assignment-member__actions"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {mayComplete && (
+                                  <button
+                                    type="button"
+                                    className={
+                                      member.teacher_completed
+                                        ? "teacher-complete-button is-completed"
+                                        : "teacher-complete-button"
+                                    }
+                                    onClick={() => handleTeacherComplete(member)}
+                                    disabled={isProcessing || member.admin_confirmed}
+                                  >
+                                    {member.teacher_completed
+                                      ? "取消回報"
+                                      : adminMode
+                                        ? "老師完成"
+                                        : "我已完成"}
+                                  </button>
+                                )}
+
+                                {canAdminConfirm && (
+                                  <button
+                                    type="button"
+                                    className={
+                                      member.admin_confirmed
+                                        ? "admin-confirm-button is-confirmed"
+                                        : "admin-confirm-button"
+                                    }
+                                    onClick={() => handleAdminConfirm(member)}
+                                    disabled={isProcessing || !member.teacher_completed}
+                                  >
+                                    {member.admin_confirmed
+                                      ? "取消確認"
+                                      : "主管確認"}
+                                  </button>
+                                )}
+                              </div>
+
+                              {adminMode && isHistoryExpanded && (
+                                <div className="teacher-assignment-member__history">
+                                  <div className="teacher-assignment-member__history-item">
+                                    <span>任務建立</span>
+                                    <strong>
+                                      {formatHistoryTime(assignment.created_at)}
+                                    </strong>
+                                  </div>
+                                  <div className="teacher-assignment-member__history-item">
+                                    <span>老師完成</span>
+                                    <div className="teacher-assignment-member__history-result">
+                                      {member.teacher_completed_at &&
+                                        assignment.deadline && (
+                                          <small>
+                                            （
+                                            {getCompletionTiming(
+                                              member.teacher_completed_at,
+                                              assignment.deadline
+                                            )}
+                                            ）
+                                          </small>
+                                        )}
+                                      <strong>
+                                        {formatHistoryTime(
+                                          member.teacher_completed_at
+                                        )}
+                                      </strong>
+                                    </div>
+                                  </div>
+                                  <div className="teacher-assignment-member__history-item">
+                                    <span>主管確認</span>
+                                    <strong>
+                                      {formatHistoryTime(member.admin_confirmed_at)}
+                                    </strong>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </article>
               );
             })}
