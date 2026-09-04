@@ -296,6 +296,63 @@ function getTimeMinutes(
 }
 
 
+function getWeekdayCount(
+  start,
+  end
+) {
+  const startDate =
+    new Date(
+      start.year,
+      start.month - 1,
+      start.day
+    );
+
+  const endDate =
+    new Date(
+      end.year,
+      end.month - 1,
+      end.day
+    );
+
+  if (
+    Number.isNaN(
+      startDate.getTime()
+    ) ||
+    Number.isNaN(
+      endDate.getTime()
+    ) ||
+    endDate < startDate
+  ) {
+    return 0;
+  }
+
+  let weekdayCount = 0;
+
+  const cursor =
+    new Date(startDate);
+
+  while (
+    cursor <= endDate
+  ) {
+    const weekday =
+      cursor.getDay();
+
+    if (
+      weekday !== 0 &&
+      weekday !== 6
+    ) {
+      weekdayCount += 1;
+    }
+
+    cursor.setDate(
+      cursor.getDate() + 1
+    );
+  }
+
+  return weekdayCount;
+}
+
+
 function calculateLeaveHours(
   start,
   end
@@ -379,16 +436,26 @@ function calculateLeaveHours(
   }
 
 
+  const weekdayCount =
+    getWeekdayCount(
+      start,
+      end
+    );
+
   const totalHours =
-    dayCount * 8;
+    weekdayCount * 8;
 
 
   return {
-    dayCount,
+    dayCount:
+      weekdayCount,
     totalHours,
     error: null,
     warning:
-      `跨日休假依 ${dayCount} 天 × 8 小時計算`,
+      weekdayCount ===
+      dayCount
+        ? `跨日休假依 ${weekdayCount} 個工作日 × 8 小時計算`
+        : `跨日休假已排除週六、週日：${dayCount} 個曆日中計 ${weekdayCount} 個工作日，共 ${totalHours} 小時`,
     calculationType:
       "MULTI_DAY",
   };
