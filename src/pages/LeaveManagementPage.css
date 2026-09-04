@@ -1878,3 +1878,40 @@
     justify-content: flex-end;
   }
 }
+
+/* =========================
+   Leave overview semester filter
+========================= */
+
+.leave-overview-filter--semester {
+  min-width: 320px;
+}
+
+.leave-overview-filter--semester select {
+  max-width: 380px;
+}
+
+@media (max-width: 1100px) {
+  .leave-overview-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .leave-overview-filters {
+    flex-wrap: wrap;
+  }
+
+  .leave-overview-filter--semester {
+    min-width: 280px;
+  }
+}
+
+@media (max-width: 820px) {
+  .leave-overview-filter--semester {
+    min-width: 0;
+  }
+
+  .leave-overview-filter--semester select {
+    max-width: none;
+  }
+}

@@ -8,6 +8,8 @@ import {
 import { jsPDF } from "jspdf";
 import * as XLSX from "xlsx";
 
+import { supabase } from "../lib/supabase";
+
 import {
   createExternalStaff,
   createLeaveRecord,
@@ -322,6 +324,16 @@ function LeaveManagementPage() {
   ] = useState("all");
 
   const [
+    semesters,
+    setSemesters,
+  ] = useState([]);
+
+  const [
+    selectedSemesterId,
+    setSelectedSemesterId,
+  ] = useState("");
+
+  const [
     expandedRecordMonths,
     setExpandedRecordMonths,
   ] = useState([]);
@@ -403,6 +415,83 @@ function LeaveManagementPage() {
   }, []);
 
 
+  useEffect(() => {
+    async function loadSemesters() {
+      try {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from("calendar_semesters")
+          .select(`
+            id,
+            name,
+            start_date,
+            end_date,
+            status,
+            created_at
+          `)
+          .order(
+            "start_date",
+            {
+              ascending: false,
+            }
+          );
+
+        if (error) {
+          throw error;
+        }
+
+        const rows =
+          data || [];
+
+        setSemesters(rows);
+
+        if (
+          rows.length === 0
+        ) {
+          setSelectedSemesterId(
+            ""
+          );
+          return;
+        }
+
+        const today =
+          getTodayString();
+
+        const currentSemester =
+          rows.find(
+            (semester) =>
+              today >=
+                semester.start_date &&
+              today <=
+                semester.end_date
+          );
+
+        const confirmedSemester =
+          rows.find(
+            (semester) =>
+              semester.status ===
+              "CONFIRMED"
+          );
+
+        setSelectedSemesterId(
+          currentSemester?.id ||
+          confirmedSemester?.id ||
+          rows[0].id
+        );
+      } catch (error) {
+        console.error(
+          "讀取休假學期資料失敗：",
+          error
+        );
+      }
+    }
+
+    loadSemesters();
+  }, []);
+
+
   const activeExternalStaff =
     useMemo(
       () =>
@@ -411,6 +500,21 @@ function LeaveManagementPage() {
             person.is_active
         ),
       [externalStaff]
+    );
+
+
+  const selectedSemester =
+    useMemo(
+      () =>
+        semesters.find(
+          (semester) =>
+            semester.id ===
+            selectedSemesterId
+        ) || null,
+      [
+        semesters,
+        selectedSemesterId,
+      ]
     );
 
 
@@ -1243,63 +1347,135 @@ function LeaveManagementPage() {
   }
 
 
-  function getSemesterRange(
-    monthKey
+  function countWeekdaysBetween(
+    startDate,
+    endDate
   ) {
-    const [
-      yearText,
-      monthText,
-    ] =
-      String(monthKey).split("-");
-
-    const year =
-      Number(yearText);
-
-    const month =
-      Number(monthText);
-
     if (
-      !year ||
-      !month
+      !startDate ||
+      !endDate ||
+      endDate < startDate
     ) {
-      return null;
+      return 0;
     }
 
-    if (
-      month >= 8
+    const cursor =
+      new Date(
+        `${startDate}T00:00:00`
+      );
+
+    const finalDate =
+      new Date(
+        `${endDate}T00:00:00`
+      );
+
+    let count = 0;
+
+    while (
+      cursor <= finalDate
     ) {
-      return {
-        start:
-          `${year}-08`,
-        end:
-          `${year + 1}-01`,
-        label:
-          `${year} 年 8 月～${year + 1} 年 1 月`,
-      };
+      const weekday =
+        cursor.getDay();
+
+      if (
+        weekday !== 0 &&
+        weekday !== 6
+      ) {
+        count += 1;
+      }
+
+      cursor.setDate(
+        cursor.getDate() + 1
+      );
     }
 
-    if (
-      month === 1
-    ) {
-      return {
-        start:
-          `${year - 1}-08`,
-        end:
-          `${year}-01`,
-        label:
-          `${year - 1} 年 8 月～${year} 年 1 月`,
-      };
-    }
-
-    return {
-      start:
-        `${year}-02`,
-      end:
-        `${year}-07`,
-      label:
-        `${year} 年 2 月～${year} 年 7 月`,
-    };
+    return count;
   }
+
+
+  function getRecordHoursInsideSemester(
+    record,
+    semester
+  ) {
+    if (
+      !record ||
+      !semester
+    ) {
+      return 0;
+    }
+
+    const recordStart =
+      record.start_date;
+
+    const recordEnd =
+      record.end_date;
+
+    if (
+      !recordStart ||
+      !recordEnd ||
+      recordEnd <
+        semester.start_date ||
+      recordStart >
+        semester.end_date
+    ) {
+      return 0;
+    }
+
+    const overlapStart =
+      recordStart >
+      semester.start_date
+        ? recordStart
+        : semester.start_date;
+
+    const overlapEnd =
+      recordEnd <
+      semester.end_date
+        ? recordEnd
+        : semester.end_date;
+
+    if (
+      recordStart ===
+        recordEnd
+    ) {
+      return (
+        overlapStart ===
+          recordStart
+          ? Number(
+              record.leave_hours ||
+                0
+            )
+          : 0
+      );
+    }
+
+    const weekdayCount =
+      countWeekdaysBetween(
+        overlapStart,
+        overlapEnd
+      );
+
+    return (
+      weekdayCount * 8
+    );
+  }
+
+
+  function formatSemesterDateRange(
+    semester
+  ) {
+    if (!semester) {
+      return "—";
+    }
+
+    return `${semester.start_date.replaceAll(
+      "-",
+      "/"
+    )}－${semester.end_date.replaceAll(
+      "-",
+      "/"
+    )}`;
+  }
+
 
 
   const overviewStats =
@@ -1320,29 +1496,23 @@ function LeaveManagementPage() {
           );
         });
 
-      const semester =
-        getSemesterRange(
-          overviewMonth
-        );
-
       const semesterRecords =
-        semester
+        selectedSemester
           ? records.filter(
               (record) => {
-                const recordMonth =
-                  String(
-                    record.start_date ||
-                      ""
-                  ).slice(0, 7);
-
-                return (
-                  recordMonth >=
-                    semester.start &&
-                  recordMonth <=
-                    semester.end &&
-                  recordMatchesOverviewPerson(
+                if (
+                  !recordMatchesOverviewPerson(
                     record
                   )
+                ) {
+                  return false;
+                }
+
+                return !(
+                  record.end_date <
+                    selectedSemester.start_date ||
+                  record.start_date >
+                    selectedSemester.end_date
                 );
               }
             )
@@ -1359,6 +1529,17 @@ function LeaveManagementPage() {
               ),
             0
           );
+
+      const semesterHours =
+        semesterRecords.reduce(
+          (total, record) =>
+            total +
+            getRecordHoursInsideSemester(
+              record,
+              selectedSemester
+            ),
+          0
+        );
 
       return {
         selectedMonthRecords:
@@ -1387,24 +1568,34 @@ function LeaveManagementPage() {
               record.is_last_minute
           ).length,
 
-        semesterHours:
-          sumHours(
-            semesterRecords
-          ),
+        semesterHours,
 
         semesterLastMinuteCount:
           semesterRecords.filter(
             (record) =>
-              record.is_last_minute
+              record.is_last_minute &&
+              getRecordHoursInsideSemester(
+                record,
+                selectedSemester
+              ) > 0
           ).length,
 
-        semester,
+        semesterRecordCount:
+          semesterRecords.filter(
+            (record) =>
+              getRecordHoursInsideSemester(
+                record,
+                selectedSemester
+              ) > 0
+          ).length,
       };
     }, [
       records,
       overviewMonth,
       overviewPerson,
+      selectedSemester,
     ]);
+
 
 
   function renderOverview() {
@@ -1548,6 +1739,49 @@ function LeaveManagementPage() {
                 )}
               </select>
             </label>
+
+            <label className="leave-overview-filter leave-overview-filter--semester">
+              <span>
+                查看學期
+              </span>
+
+              <select
+                value={
+                  selectedSemesterId
+                }
+                onChange={(
+                  event
+                ) =>
+                  setSelectedSemesterId(
+                    event.target.value
+                  )
+                }
+              >
+                {semesters.map(
+                  (semester) => (
+                    <option
+                      key={
+                        semester.id
+                      }
+                      value={
+                        semester.id
+                      }
+                    >
+                      {
+                        semester.name
+                      }
+                      ｜{
+                        semester.start_date
+                      }
+                      ～
+                      {
+                        semester.end_date
+                      }
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
           </div>
         </div>
 
@@ -1563,13 +1797,17 @@ function LeaveManagementPage() {
             )}
           </span>
 
-          {overviewStats.semester && (
+          {selectedSemester && (
             <small>
-              同學期：
+              學期：
               {
-                overviewStats
-                  .semester
-                  .label
+                selectedSemester.name
+              }
+              ・
+              {
+                formatSemesterDateRange(
+                  selectedSemester
+                )
               }
             </small>
           )}
@@ -1620,7 +1858,7 @@ function LeaveManagementPage() {
 
           <div className="leave-summary-card">
             <span>
-              同學期休假時數
+              所選學期休假時數
             </span>
 
             <strong>
@@ -1633,17 +1871,17 @@ function LeaveManagementPage() {
             </strong>
 
             <small>
-              {
-                overviewStats
-                  .semester
-                  ?.label || "—"
-              }
+              {selectedSemester
+                ? `${selectedSemester.name}・${formatSemesterDateRange(
+                    selectedSemester
+                  )}`
+                : "尚未設定學期"}
             </small>
           </div>
 
           <div className="leave-summary-card">
             <span>
-              同學期臨時假
+              所選學期臨時假
             </span>
 
             <strong>
