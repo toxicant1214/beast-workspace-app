@@ -157,11 +157,16 @@ export async function getLeaveRecords({
         leave_type_id,
         start_date,
         end_date,
+        start_datetime,
+        end_datetime,
         leave_hours,
         input_unit,
         input_value,
         is_last_minute,
+        leave_reason,
         note,
+        source,
+        import_key,
         created_at,
         updated_at,
         teachers (
@@ -509,6 +514,8 @@ export async function deleteLeaveRecord(
     throw error;
   }
 }
+
+
 export async function importLeaveCsvRows(
   rows
 ) {
