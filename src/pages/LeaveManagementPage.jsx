@@ -240,6 +240,11 @@ function LeaveManagementPage() {
     getCurrentMonthString()
   );
 
+  const [
+    expandedRecordMonths,
+    setExpandedRecordMonths,
+  ] = useState([]);
+
 
   const csvInputRef =
     useRef(null);
@@ -364,6 +369,105 @@ function LeaveManagementPage() {
         teachers,
       ]
     );
+
+
+  const groupedRecordMonths =
+    useMemo(() => {
+      const groups = new Map();
+
+      records.forEach((record) => {
+        const monthKey =
+          String(record.start_date || "")
+            .slice(0, 7);
+
+        if (!monthKey) {
+          return;
+        }
+
+        if (!groups.has(monthKey)) {
+          groups.set(monthKey, []);
+        }
+
+        groups.get(monthKey).push(record);
+      });
+
+      return Array.from(
+        groups.entries()
+      )
+        .sort(
+          ([monthA], [monthB]) =>
+            monthB.localeCompare(monthA)
+        )
+        .map(
+          ([monthKey, monthRecords]) => ({
+            monthKey,
+            label:
+              getMonthLabel(monthKey),
+            records:
+              [...monthRecords].sort(
+                (a, b) =>
+                  String(b.start_date || "")
+                    .localeCompare(
+                      String(a.start_date || "")
+                    )
+              ),
+          })
+        );
+    }, [records]);
+
+
+  useEffect(() => {
+    if (
+      groupedRecordMonths.length === 0
+    ) {
+      setExpandedRecordMonths([]);
+      return;
+    }
+
+    const currentMonth =
+      getCurrentMonthString();
+
+    const defaultMonth =
+      groupedRecordMonths.some(
+        (group) =>
+          group.monthKey ===
+          currentMonth
+      )
+        ? currentMonth
+        : groupedRecordMonths[0]
+            .monthKey;
+
+    setExpandedRecordMonths(
+      (current) =>
+        current.length > 0
+          ? current.filter((monthKey) =>
+              groupedRecordMonths.some(
+                (group) =>
+                  group.monthKey ===
+                  monthKey
+              )
+            )
+          : [defaultMonth]
+    );
+  }, [groupedRecordMonths]);
+
+
+  function toggleRecordMonth(
+    monthKey
+  ) {
+    setExpandedRecordMonths(
+      (current) =>
+        current.includes(monthKey)
+          ? current.filter(
+              (item) =>
+                item !== monthKey
+            )
+          : [
+              ...current,
+              monthKey,
+            ]
+    );
+  }
 
 
   function updateForm(
@@ -868,29 +972,6 @@ function LeaveManagementPage() {
   }
 
 
-  function handleRemoveCsvRow(
-    row
-  ) {
-    setCsvRows(
-      (current) =>
-        current.filter(
-          (item) =>
-            item.rowNumber !==
-            row.rowNumber
-        )
-    );
-
-    if (
-      editingCsvRow?.rowNumber ===
-      row.rowNumber
-    ) {
-      handleCloseCsvEdit();
-    }
-
-    setCsvImportError("");
-  }
-
-
   async function handleConfirmCsvImport() {
     if (
       csvImporting ||
@@ -1216,125 +1297,170 @@ function LeaveManagementPage() {
             </div>
           </div>
         ) : (
-          <div className="leave-record-table-wrap">
-            <table className="leave-record-table">
-              <thead>
-                <tr>
-                  <th>人員</th>
-                  <th>假別</th>
-                  <th>日期</th>
-                  <th>時數</th>
-                  <th>臨時請假</th>
-                  <th>原因／備註</th>
-                  <th />
-                </tr>
-              </thead>
+          <div className="leave-record-month-folders">
+            {groupedRecordMonths.map(
+              (group) => {
+                const isExpanded =
+                  expandedRecordMonths.includes(
+                    group.monthKey
+                  );
 
-
-              <tbody>
-                {records.map(
-                  (record) => (
-                    <tr
-                      key={
-                        record.id
+                return (
+                  <section
+                    className={
+                      isExpanded
+                        ? "leave-record-month-folder is-open"
+                        : "leave-record-month-folder"
+                    }
+                    key={
+                      group.monthKey
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="leave-record-month-folder__header"
+                      onClick={() =>
+                        toggleRecordMonth(
+                          group.monthKey
+                        )
                       }
                     >
-                      <td>
+                      <div>
+                        <span className="leave-record-month-folder__caret">
+                          {isExpanded
+                            ? "⌄"
+                            : "›"}
+                        </span>
+
                         <strong>
-                          {
-                            getRecordPersonName(
-                              record
-                            )
-                          }
+                          {group.label}
                         </strong>
+                      </div>
 
-                        {record
-                          .leave_external_staff
-                          ?.department && (
-                          <small>
-                            {
-                              record
-                                .leave_external_staff
-                                .department
-                            }
-                          </small>
-                        )}
-                      </td>
+                      <span className="leave-record-month-folder__count">
+                        {group.records.length} 筆
+                      </span>
+                    </button>
 
+                    {isExpanded && (
+                      <div className="leave-record-table-wrap">
+                        <table className="leave-record-table">
+                          <thead>
+                            <tr>
+                              <th>人員</th>
+                              <th>假別</th>
+                              <th>日期</th>
+                              <th>時數</th>
+                              <th>臨時請假</th>
+                              <th>原因／備註</th>
+                              <th />
+                            </tr>
+                          </thead>
 
-                      <td>
-                        {
-                          record
-                            .leave_types
-                            ?.name ||
-                          "—"
-                        }
-                      </td>
+                          <tbody>
+                            {group.records.map(
+                              (record) => (
+                                <tr
+                                  key={
+                                    record.id
+                                  }
+                                >
+                                  <td>
+                                    <strong>
+                                      {
+                                        getRecordPersonName(
+                                          record
+                                        )
+                                      }
+                                    </strong>
 
+                                    {record
+                                      .leave_external_staff
+                                      ?.department && (
+                                      <small>
+                                        {
+                                          record
+                                            .leave_external_staff
+                                            .department
+                                        }
+                                      </small>
+                                    )}
+                                  </td>
 
-                      <td>
-                        {record.start_date ===
-                        record.end_date
-                          ? record.start_date
-                          : `${record.start_date} ～ ${record.end_date}`}
-                      </td>
+                                  <td>
+                                    {
+                                      record
+                                        .leave_types
+                                        ?.name ||
+                                      "—"
+                                    }
+                                  </td>
 
+                                  <td>
+                                    {record.start_date ===
+                                    record.end_date
+                                      ? record.start_date
+                                      : `${record.start_date} ～ ${record.end_date}`}
+                                  </td>
 
-                      <td>
-                        {
-                          formatLeaveHours(
-                            record.leave_hours
-                          )
-                        }
-                      </td>
+                                  <td>
+                                    {
+                                      formatLeaveHours(
+                                        record.leave_hours
+                                      )
+                                    }
+                                  </td>
 
+                                  <td>
+                                    {record.is_last_minute
+                                      ? "是"
+                                      : "—"}
+                                  </td>
 
-                      <td>
-                        {record.is_last_minute
-                          ? "是"
-                          : "—"}
-                      </td>
+                                  <td>
+                                    {record.leave_reason ||
+                                      record.note ||
+                                      "—"}
+                                  </td>
 
+                                  <td>
+                                    <div className="leave-row-actions">
+                                      <button
+                                        type="button"
+                                        className="leave-edit-button"
+                                        onClick={() =>
+                                          handleEditRecord(
+                                            record
+                                          )
+                                        }
+                                      >
+                                        修改
+                                      </button>
 
-                      <td>
-                        {record.leave_reason ||
-                          record.note ||
-                          "—"}
-                      </td>
-
-
-                      <td>
-                        <div className="leave-row-actions">
-                          <button
-                            type="button"
-                            className="leave-edit-button"
-                            onClick={() =>
-                              handleEditRecord(
-                                record
+                                      <button
+                                        type="button"
+                                        className="leave-delete-button"
+                                        onClick={() =>
+                                          handleDelete(
+                                            record
+                                          )
+                                        }
+                                      >
+                                        刪除
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
                               )
-                            }
-                          >
-                            修改
-                          </button>
-
-                          <button
-                            type="button"
-                            className="leave-delete-button"
-                            onClick={() =>
-                              handleDelete(
-                                record
-                              )
-                            }
-                          >
-                            刪除
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </section>
+                );
+              }
+            )}
           </div>
         )}
 
@@ -2226,21 +2352,6 @@ function LeaveManagementPage() {
                                 }
                               >
                                 修改
-                              </button>
-
-                              <button
-                                type="button"
-                                className="leave-delete-button"
-                                onClick={() =>
-                                  handleRemoveCsvRow(
-                                    row
-                                  )
-                                }
-                                disabled={
-                                  csvImporting
-                                }
-                              >
-                                移除
                               </button>
                             </td>
                           </tr>
