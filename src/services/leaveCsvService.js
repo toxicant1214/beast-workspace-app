@@ -16,6 +16,8 @@ function cleanText(value) {
   )
     .replace(/\u00a0/g, " ")
     .replace(/\u3000/g, " ")
+    .replace(/：/g, ":")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -51,112 +53,19 @@ function getChineseOnlyName(
 }
 
 
-function parseDateTime(
-  value
-) {
-  if (
-    value instanceof Date &&
-    !Number.isNaN(value.getTime())
-  ) {
-    const year = value.getFullYear();
-    const month = value.getMonth() + 1;
-    const day = value.getDate();
-    const hour = value.getHours();
-    const minute = value.getMinutes();
-
-    return buildDateTimeInfo({
-      year,
-      month,
-      day,
-      hour,
-      minute,
-    });
-  }
-
-  let text = cleanText(value)
-    .replace(/：/g, ":")
-    .replace(/\s+/g, " ");
-
-  if (!text) {
-    return null;
-  }
-
-  let meridiem = null;
-
-  if (/^(上午|下午)\s*/.test(text)) {
-    const match = text.match(/^(上午|下午)\s*/);
-    meridiem = match?.[1] || null;
-    text = text.replace(/^(上午|下午)\s*/, "");
-  }
-
-  if (/(上午|下午)$/.test(text)) {
-    const match = text.match(/(上午|下午)$/);
-    meridiem = match?.[1] || meridiem;
-    text = text.replace(/\s*(上午|下午)$/, "");
-  }
-
-  let match = text.match(
-    /^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})(?:[ T](上午|下午)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
-  );
-
-  if (!match) {
-    match = text.match(
-      /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})(?:[ T](上午|下午)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
-    );
-
-    if (match) {
-      match = [
-        match[0],
-        match[3],
-        match[1],
-        match[2],
-        match[4],
-        match[5],
-        match[6],
-        match[7],
-      ];
-    }
-  }
-
-  if (!match) {
-    return null;
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-
-  const inlineMeridiem = match[4] || null;
-  const activeMeridiem = inlineMeridiem || meridiem;
-
-  let hour = Number(match[5] || 0);
-  const minute = Number(match[6] || 0);
-
-  if (activeMeridiem === "下午" && hour < 12) {
-    hour += 12;
-  }
-
-  if (activeMeridiem === "上午" && hour === 12) {
-    hour = 0;
-  }
-
-  return buildDateTimeInfo({
-    year,
-    month,
-    day,
-    hour,
-    minute,
-  });
-}
-
-
 function buildDateTimeInfo({
   year,
   month,
   day,
-  hour,
-  minute,
+  hour = 0,
+  minute = 0,
 }) {
+  year = Number(year);
+  month = Number(month);
+  day = Number(day);
+  hour = Number(hour);
+  minute = Number(minute);
+
   if (
     !Number.isInteger(year) ||
     !Number.isInteger(month) ||
@@ -178,13 +87,17 @@ function buildDateTimeInfo({
   const checkDate = new Date(
     year,
     month - 1,
-    day
+    day,
+    hour,
+    minute
   );
 
   if (
     checkDate.getFullYear() !== year ||
     checkDate.getMonth() !== month - 1 ||
-    checkDate.getDate() !== day
+    checkDate.getDate() !== day ||
+    checkDate.getHours() !== hour ||
+    checkDate.getMinutes() !== minute
   ) {
     return null;
   }
@@ -197,42 +110,145 @@ function buildDateTimeInfo({
     minute,
 
     dateString:
-      `${year}-${pad2(
-        month
-      )}-${pad2(day)}`,
+      `${year}-${pad2(month)}-${pad2(day)}`,
 
     timeString:
-      `${pad2(
-        hour
-      )}:${pad2(minute)}`,
+      `${pad2(hour)}:${pad2(minute)}`,
 
     inputValue:
-      `${year}-${pad2(
-        month
-      )}-${pad2(
-        day
-      )}T${pad2(
-        hour
-      )}:${pad2(
-        minute
-      )}`,
+      `${year}-${pad2(month)}-${pad2(day)}T${pad2(hour)}:${pad2(minute)}`,
 
     display:
-      `${year}/${month}/${day} ${pad2(
-        hour
-      )}:${pad2(minute)}`,
+      `${year}/${month}/${day} ${pad2(hour)}:${pad2(minute)}`,
 
     isoLocal:
-      `${year}-${pad2(
-        month
-      )}-${pad2(
-        day
-      )}T${pad2(
-        hour
-      )}:${pad2(
-        minute
-      )}:00+08:00`,
+      `${year}-${pad2(month)}-${pad2(day)}T${pad2(hour)}:${pad2(minute)}:00+08:00`,
   };
+}
+
+
+function parseDateTime(
+  value
+) {
+  if (
+    value instanceof Date &&
+    !Number.isNaN(value.getTime())
+  ) {
+    return buildDateTimeInfo({
+      year: value.getFullYear(),
+      month: value.getMonth() + 1,
+      day: value.getDate(),
+      hour: value.getHours(),
+      minute: value.getMinutes(),
+    });
+  }
+
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    const parsed =
+      XLSX.SSF.parse_date_code(
+        value
+      );
+
+    if (parsed) {
+      return buildDateTimeInfo({
+        year: parsed.y,
+        month: parsed.m,
+        day: parsed.d,
+        hour: parsed.H || 0,
+        minute: parsed.M || 0,
+      });
+    }
+  }
+
+  let text =
+    cleanText(value);
+
+  if (!text) {
+    return null;
+  }
+
+  text = text
+    .replace(/\s*(上午|AM)\s*/gi, " AM ")
+    .replace(/\s*(下午|PM)\s*/gi, " PM ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  let match = null;
+  let year;
+  let month;
+  let day;
+  let hour = 0;
+  let minute = 0;
+  let meridiem = "";
+
+  match = text.match(
+    /^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})(?:[ T ]+(?:(AM|PM)\s*)?(\d{1,2}):(\d{1,2})(?::\d{1,2})?\s*(AM|PM)?)?$/i
+  );
+
+  if (match) {
+    year = Number(match[1]);
+    month = Number(match[2]);
+    day = Number(match[3]);
+    meridiem =
+      (match[4] || match[7] || "")
+        .toUpperCase();
+    hour = Number(match[5] || 0);
+    minute = Number(match[6] || 0);
+  }
+
+  if (!match) {
+    match = text.match(
+      /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})(?:[ T ]+(?:(AM|PM)\s*)?(\d{1,2}):(\d{1,2})(?::\d{1,2})?\s*(AM|PM)?)?$/i
+    );
+
+    if (match) {
+      month = Number(match[1]);
+      day = Number(match[2]);
+
+      const parsedYear =
+        Number(match[3]);
+
+      year =
+        parsedYear < 100
+          ? 2000 + parsedYear
+          : parsedYear;
+
+      meridiem =
+        (match[4] || match[7] || "")
+          .toUpperCase();
+
+      hour = Number(
+        match[5] || 0
+      );
+
+      minute = Number(
+        match[6] || 0
+      );
+    }
+  }
+
+  if (!match) {
+    return null;
+  }
+
+  if (meridiem === "PM" && hour < 12) {
+    hour += 12;
+  }
+
+  if (meridiem === "AM" && hour === 12) {
+    hour = 0;
+  }
+
+  return buildDateTimeInfo({
+    year,
+    month,
+    day,
+    hour,
+    minute,
+  });
 }
 
 
@@ -324,10 +340,6 @@ function calculateLeaveHours(
     getTimeMinutes(end);
 
 
-  /*
-   * 同一天：
-   * 直接按照開始與結束時間計算。
-   */
   if (dayCount === 1) {
     const durationMinutes =
       endMinutes -
@@ -367,10 +379,6 @@ function calculateLeaveHours(
   }
 
 
-  /*
-   * 跨日：
-   * 目前以每一天 8 小時計算。
-   */
   const totalHours =
     dayCount * 8;
 
@@ -901,7 +909,7 @@ export async function parseLeaveCsvFile(
       sheet,
       {
         defval: "",
-        raw: false,
+        raw: true,
       }
     );
 
@@ -997,11 +1005,6 @@ export function matchLeaveCsvRows({
 }
 
 
-/*
- * CSV 預覽畫面修改單筆資料後，
- * 用這個函式重新解析、重新算時數、
- * 重新判斷假別與老師配對。
- */
 export function updateLeaveCsvPreviewRow({
   originalRow,
   personName,
