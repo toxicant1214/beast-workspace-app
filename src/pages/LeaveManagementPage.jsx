@@ -5,6 +5,9 @@ import {
   useState,
 } from "react";
 
+import { jsPDF } from "jspdf";
+import * as XLSX from "xlsx";
+
 import {
   createExternalStaff,
   createLeaveRecord,
@@ -3280,6 +3283,755 @@ function LeaveManagementPage() {
     );
 
 
+  function getMonthlyReportExportRows() {
+    return monthlyDetailRecords.map(
+      (record) => ({
+        姓名:
+          getRecordPersonName(
+            record
+          ),
+        所屬:
+          record
+            .leave_external_staff
+            ?.department ||
+          "Workspace 老師",
+        假別:
+          record
+            .leave_types
+            ?.name ||
+          "—",
+        開始日期:
+          record.start_date ||
+          "",
+        結束日期:
+          record.end_date ||
+          "",
+        開始時間:
+          formatDateTimeForReport(
+            record.start_datetime
+          ),
+        結束時間:
+          formatDateTimeForReport(
+            record.end_datetime
+          ),
+        時數:
+          Number(
+            record.leave_hours ||
+              0
+          ),
+        顯示時數:
+          formatLeaveHours(
+            record.leave_hours
+          ),
+        臨時請假:
+          record.is_last_minute
+            ? "是"
+            : "否",
+        原因備註:
+          record.leave_reason ||
+          record.note ||
+          "",
+      })
+    );
+  }
+
+
+  function exportMonthlyLeaveExcel() {
+    const workbook =
+      XLSX.utils.book_new();
+
+    const detailRows =
+      getMonthlyReportExportRows();
+
+    const detailSheet =
+      XLSX.utils.json_to_sheet(
+        detailRows
+      );
+
+    detailSheet["!cols"] = [
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 28 },
+    ];
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      detailSheet,
+      "逐筆休假明細"
+    );
+
+    const personRows =
+      monthlyReport.rows.map(
+        (person) => ({
+          姓名:
+            person.name,
+          所屬:
+            person.department,
+          事假:
+            person.personalDisplay,
+          病假:
+            person.sickDisplay,
+          特休:
+            person.annualDisplay,
+          其他:
+            person.otherDisplay,
+          本月次數:
+            person.leaveCount,
+          本月合計:
+            person.totalDisplay,
+        })
+      );
+
+    const personSheet =
+      XLSX.utils.json_to_sheet(
+        personRows
+      );
+
+    personSheet["!cols"] = [
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 14 },
+    ];
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      personSheet,
+      "人員統計"
+    );
+
+    const summaryRows = [
+      {
+        統計項目:
+          "當月請假人數",
+        數值:
+          monthlyReport.summary
+            .peopleOnLeave,
+      },
+      {
+        統計項目:
+          "未請假老師",
+        數值:
+          monthlyReport.summary
+            .noLeaveTeacherCount,
+      },
+      {
+        統計項目:
+          "本月休假次數",
+        數值:
+          monthlyReport.summary
+            .totalLeaveCount,
+      },
+      {
+        統計項目:
+          "本月休假合計",
+        數值:
+          monthlyReport.summary
+            .totalDisplay,
+      },
+      {
+        統計項目:
+          "事假",
+        數值:
+          monthlyReport.summary
+            .personalDisplay,
+      },
+      {
+        統計項目:
+          "病假",
+        數值:
+          monthlyReport.summary
+            .sickDisplay,
+      },
+      {
+        統計項目:
+          "特休",
+        數值:
+          monthlyReport.summary
+            .annualDisplay,
+      },
+      {
+        統計項目:
+          "其他",
+        數值:
+          monthlyReport.summary
+            .otherDisplay,
+      },
+      {
+        統計項目:
+          "單月 3 次以上",
+        數值:
+          monthlyReport.summary
+            .frequentLeaveCount,
+      },
+    ];
+
+    const summarySheet =
+      XLSX.utils.json_to_sheet(
+        summaryRows
+      );
+
+    summarySheet["!cols"] = [
+      { wch: 20 },
+      { wch: 20 },
+    ];
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      summarySheet,
+      "月報摘要"
+    );
+
+    XLSX.writeFile(
+      workbook,
+      `${reportMonth}_休假月報.xlsx`
+    );
+  }
+
+
+  async function exportMonthlyLeavePdf() {
+    const pdf =
+      new jsPDF({
+        orientation:
+          "landscape",
+        unit:
+          "mm",
+        format:
+          "a4",
+        compress:
+          true,
+      });
+
+    const fontResponse =
+      await fetch(
+        "https://cdn.jsdelivr.net/gh/ButTaiwan/iansui@main/fonts/ttf/Iansui-Regular.ttf"
+      );
+
+    if (!fontResponse.ok) {
+      throw new Error(
+        `芫荽體載入失敗（${fontResponse.status}）`
+      );
+    }
+
+    const fontBytes =
+      new Uint8Array(
+        await fontResponse.arrayBuffer()
+      );
+
+    let binary = "";
+    const chunkSize =
+      0x8000;
+
+    for (
+      let offset = 0;
+      offset < fontBytes.length;
+      offset += chunkSize
+    ) {
+      binary +=
+        String.fromCharCode(
+          ...fontBytes.subarray(
+            offset,
+            Math.min(
+              offset +
+                chunkSize,
+              fontBytes.length
+            )
+          )
+        );
+    }
+
+    pdf.addFileToVFS(
+      "Iansui-Regular.ttf",
+      btoa(binary)
+    );
+
+    pdf.addFont(
+      "Iansui-Regular.ttf",
+      "Iansui",
+      "normal"
+    );
+
+    pdf.setFont(
+      "Iansui",
+      "normal"
+    );
+
+    const pageWidth =
+      pdf.internal.pageSize
+        .getWidth();
+
+    const pageHeight =
+      pdf.internal.pageSize
+        .getHeight();
+
+    const marginX = 9;
+    const marginTop = 9;
+    const marginBottom = 9;
+    const contentWidth =
+      pageWidth -
+      marginX * 2;
+
+    const columns = [
+      {
+        key: "name",
+        label: "姓名",
+        width: 22,
+      },
+      {
+        key: "type",
+        label: "假別",
+        width: 18,
+      },
+      {
+        key: "date",
+        label: "日期",
+        width: 42,
+      },
+      {
+        key: "start",
+        label: "開始",
+        width: 26,
+      },
+      {
+        key: "end",
+        label: "結束",
+        width: 26,
+      },
+      {
+        key: "hours",
+        label: "時數",
+        width: 20,
+      },
+      {
+        key: "lastMinute",
+        label: "臨時",
+        width: 16,
+      },
+      {
+        key: "reason",
+        label: "原因／備註",
+        width:
+          contentWidth -
+          170,
+      },
+    ];
+
+    function drawPageHeader(
+      continuation = false
+    ) {
+      pdf.setTextColor(
+        105,
+        105,
+        105
+      );
+
+      pdf.setFontSize(7.5);
+
+      pdf.text(
+        "BEAST WORKSPACE｜LEAVE MONTHLY REPORT",
+        marginX,
+        marginTop
+      );
+
+      pdf.setTextColor(
+        35,
+        35,
+        35
+      );
+
+      pdf.setFontSize(16);
+
+      pdf.text(
+        `${getMonthLabel(
+          reportMonth
+        )}休假月報${
+          continuation
+            ? "（續）"
+            : ""
+        }`,
+        marginX,
+        marginTop + 8
+      );
+
+      pdf.setFontSize(7.5);
+
+      pdf.setTextColor(
+        110,
+        110,
+        110
+      );
+
+      pdf.text(
+        `列印日期：${new Intl.DateTimeFormat(
+          "zh-TW"
+        ).format(new Date())}`,
+        pageWidth -
+          marginX,
+        marginTop + 8,
+        {
+          align:
+            "right",
+        }
+      );
+
+      return (
+        marginTop + 14
+      );
+    }
+
+    function drawTableHeader(
+      y
+    ) {
+      const rowHeight = 8;
+
+      pdf.setFillColor(
+        245,
+        245,
+        243
+      );
+
+      pdf.setDrawColor(
+        210,
+        210,
+        206
+      );
+
+      pdf.setTextColor(
+        65,
+        65,
+        65
+      );
+
+      pdf.setFontSize(7);
+
+      let x = marginX;
+
+      columns.forEach(
+        (column) => {
+          pdf.rect(
+            x,
+            y,
+            column.width,
+            rowHeight,
+            "FD"
+          );
+
+          pdf.text(
+            column.label,
+            x + 1.8,
+            y + 5.1
+          );
+
+          x +=
+            column.width;
+        }
+      );
+
+      return (
+        y +
+        rowHeight
+      );
+    }
+
+    function drawCellText(
+      value,
+      x,
+      y,
+      width,
+      rowHeight
+    ) {
+      const text =
+        String(
+          value ?? ""
+        );
+
+      const lines =
+        pdf.splitTextToSize(
+          text,
+          Math.max(
+            width - 3,
+            4
+          )
+        );
+
+      const visibleLines =
+        lines.slice(0, 2);
+
+      pdf.text(
+        visibleLines,
+        x + 1.5,
+        y + 4.3,
+        {
+          maxWidth:
+            width - 3,
+        }
+      );
+    }
+
+    let y =
+      drawPageHeader();
+
+    y =
+      drawTableHeader(
+        y
+      );
+
+    pdf.setFontSize(6.7);
+
+    const rows =
+      monthlyDetailRecords.map(
+        (record) => ({
+          name:
+            getRecordPersonName(
+              record
+            ),
+          type:
+            record
+              .leave_types
+              ?.name ||
+            "—",
+          date:
+            record.start_date ===
+            record.end_date
+              ? record.start_date
+              : `${record.start_date}～${record.end_date}`,
+          start:
+            formatDateTimeForReport(
+              record.start_datetime
+            ),
+          end:
+            formatDateTimeForReport(
+              record.end_datetime
+            ),
+          hours:
+            formatLeaveHours(
+              record.leave_hours
+            ),
+          lastMinute:
+            record.is_last_minute
+              ? "是"
+              : "—",
+          reason:
+            record.leave_reason ||
+            record.note ||
+            "—",
+        })
+      );
+
+    rows.forEach(
+      (
+        row,
+        rowIndex
+      ) => {
+        const rowHeight = 10;
+
+        if (
+          y +
+            rowHeight >
+          pageHeight -
+            marginBottom -
+            24
+        ) {
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+
+          y =
+            drawPageHeader(
+              true
+            );
+
+          y =
+            drawTableHeader(
+              y
+            );
+        }
+
+        pdf.setDrawColor(
+          220,
+          220,
+          216
+        );
+
+        let x = marginX;
+
+        columns.forEach(
+          (column) => {
+            pdf.rect(
+              x,
+              y,
+              column.width,
+              rowHeight
+            );
+
+            drawCellText(
+              row[
+                column.key
+              ],
+              x,
+              y,
+              column.width,
+              rowHeight
+            );
+
+            x +=
+              column.width;
+          }
+        );
+
+        y +=
+          rowHeight;
+
+        if (
+          rowIndex ===
+          rows.length - 1
+        ) {
+          y += 4;
+        }
+      }
+    );
+
+    if (
+      y + 48 >
+      pageHeight -
+        marginBottom
+    ) {
+      pdf.addPage(
+        "a4",
+        "landscape"
+      );
+
+      y =
+        drawPageHeader();
+    }
+
+    pdf.setTextColor(
+      35,
+      35,
+      35
+    );
+
+    pdf.setFontSize(11);
+
+    pdf.text(
+      "當月統計",
+      marginX,
+      y
+    );
+
+    y += 6;
+
+    pdf.setFontSize(7.5);
+
+    const summaryLines = [
+      `請假人數：${monthlyReport.summary.peopleOnLeave} 人`,
+      `休假次數：${monthlyReport.summary.totalLeaveCount} 次`,
+      `休假合計：${monthlyReport.summary.totalDisplay}`,
+      `事假：${monthlyReport.summary.personalDisplay}`,
+      `病假：${monthlyReport.summary.sickDisplay}`,
+      `特休：${monthlyReport.summary.annualDisplay}`,
+      `其他：${monthlyReport.summary.otherDisplay}`,
+      `單月 3 次以上：${monthlyReport.summary.frequentLeaveCount} 人`,
+    ];
+
+    summaryLines.forEach(
+      (
+        line,
+        index
+      ) => {
+        const col =
+          index % 4;
+
+        const row =
+          Math.floor(
+            index / 4
+          );
+
+        const blockWidth =
+          contentWidth / 4;
+
+        pdf.text(
+          line,
+          marginX +
+            col *
+              blockWidth,
+          y +
+            row * 6
+        );
+      }
+    );
+
+    y += 18;
+
+    if (
+      monthlyReport.rows.length >
+      0
+    ) {
+      pdf.setFontSize(10);
+
+      pdf.text(
+        "人員統計",
+        marginX,
+        y
+      );
+
+      y += 6;
+
+      pdf.setFontSize(7);
+
+      monthlyReport.rows.forEach(
+        (person) => {
+          if (
+            y >
+            pageHeight -
+              marginBottom -
+              6
+          ) {
+            pdf.addPage(
+              "a4",
+              "landscape"
+            );
+
+            y =
+              drawPageHeader(
+                true
+              );
+          }
+
+          pdf.text(
+            `${person.name}｜${person.department}｜事假 ${person.personalDisplay}｜病假 ${person.sickDisplay}｜特休 ${person.annualDisplay}｜其他 ${person.otherDisplay}｜${person.leaveCount} 次｜合計 ${person.totalDisplay}`,
+            marginX,
+            y,
+            {
+              maxWidth:
+                contentWidth,
+            }
+          );
+
+          y += 5;
+        }
+      );
+    }
+
+    pdf.save(
+      `${reportMonth}_休假月報.pdf`
+    );
+  }
+
+
   function renderMonthlyReport() {
     const summary =
       monthlyReport.summary;
@@ -3302,10 +4054,41 @@ function LeaveManagementPage() {
             </p>
           </div>
 
-          <div className="leave-report-month-nav">
-            <span>
-              報表月份
-            </span>
+          <div className="leave-report-toolbar">
+            <div className="leave-report-export-actions">
+              <button
+                type="button"
+                className="leave-secondary-button"
+                onClick={
+                  exportMonthlyLeaveExcel
+                }
+                disabled={
+                  monthlyDetailRecords.length ===
+                  0
+                }
+              >
+                匯出 Excel
+              </button>
+
+              <button
+                type="button"
+                className="leave-secondary-button"
+                onClick={
+                  exportMonthlyLeavePdf
+                }
+                disabled={
+                  monthlyDetailRecords.length ===
+                  0
+                }
+              >
+                匯出 PDF
+              </button>
+            </div>
+
+            <div className="leave-report-month-nav">
+              <span>
+                報表月份
+              </span>
 
             <div>
               <button
@@ -3346,6 +4129,7 @@ function LeaveManagementPage() {
                 ›
               </button>
             </div>
+          </div>
           </div>
         </div>
 

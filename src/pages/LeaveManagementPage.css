@@ -1842,3 +1842,39 @@
     width: 100%;
   }
 }
+
+/* =========================
+   Monthly report export
+========================= */
+
+.leave-report-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.leave-report-export-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.leave-report-export-actions
+  .leave-secondary-button {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .leave-report-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .leave-report-toolbar {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .leave-report-export-actions {
+    justify-content: flex-end;
+  }
+}
