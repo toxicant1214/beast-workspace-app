@@ -416,42 +416,6 @@ function LeaveManagementPage() {
     }, [records]);
 
 
-  useEffect(() => {
-    if (
-      groupedRecordMonths.length === 0
-    ) {
-      setExpandedRecordMonths([]);
-      return;
-    }
-
-    const currentMonth =
-      getCurrentMonthString();
-
-    const defaultMonth =
-      groupedRecordMonths.some(
-        (group) =>
-          group.monthKey ===
-          currentMonth
-      )
-        ? currentMonth
-        : groupedRecordMonths[0]
-            .monthKey;
-
-    setExpandedRecordMonths(
-      (current) =>
-        current.length > 0
-          ? current.filter((monthKey) =>
-              groupedRecordMonths.some(
-                (group) =>
-                  group.monthKey ===
-                  monthKey
-              )
-            )
-          : [defaultMonth]
-    );
-  }, [groupedRecordMonths]);
-
-
   function toggleRecordMonth(
     monthKey
   ) {
