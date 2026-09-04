@@ -241,6 +241,18 @@ function LeaveManagementPage() {
   );
 
   const [
+    overviewMonth,
+    setOverviewMonth,
+  ] = useState(
+    getCurrentMonthString()
+  );
+
+  const [
+    overviewPerson,
+    setOverviewPerson,
+  ] = useState("all");
+
+  const [
     expandedRecordMonths,
     setExpandedRecordMonths,
   ] = useState([]);
@@ -1068,71 +1080,641 @@ function LeaveManagementPage() {
   }
 
 
+  const overviewMonthOptions =
+    useMemo(() => {
+      const months = new Set([
+        getCurrentMonthString(),
+      ]);
+
+      records.forEach((record) => {
+        const monthKey =
+          String(
+            record.start_date || ""
+          ).slice(0, 7);
+
+        if (monthKey) {
+          months.add(monthKey);
+        }
+      });
+
+      return Array.from(months)
+        .sort((a, b) =>
+          b.localeCompare(a)
+        );
+    }, [records]);
+
+
+  const overviewPersonOptions =
+    useMemo(() => {
+      const options = [];
+
+      teachers.forEach((teacher) => {
+        options.push({
+          value:
+            `teacher:${teacher.id}`,
+          label:
+            getTeacherName(teacher),
+          group:
+            "Workspace 老師",
+        });
+      });
+
+      activeExternalStaff.forEach(
+        (person) => {
+          options.push({
+            value:
+              `external:${person.id}`,
+            label:
+              person.department
+                ? `${person.name}｜${person.department}`
+                : person.name,
+            group:
+              "其他人員",
+          });
+        }
+      );
+
+      return options;
+    }, [
+      teachers,
+      activeExternalStaff,
+    ]);
+
+
+  function recordMatchesOverviewPerson(
+    record
+  ) {
+    if (
+      overviewPerson === "all"
+    ) {
+      return true;
+    }
+
+    const [
+      personType,
+      personId,
+    ] =
+      overviewPerson.split(":");
+
+    if (
+      personType === "teacher"
+    ) {
+      return (
+        String(
+          record.teacher_id || ""
+        ) === String(personId)
+      );
+    }
+
+    return (
+      String(
+        record.external_staff_id || ""
+      ) === String(personId)
+    );
+  }
+
+
+  function getSemesterRange(
+    monthKey
+  ) {
+    const [
+      yearText,
+      monthText,
+    ] =
+      String(monthKey).split("-");
+
+    const year =
+      Number(yearText);
+
+    const month =
+      Number(monthText);
+
+    if (
+      !year ||
+      !month
+    ) {
+      return null;
+    }
+
+    if (
+      month >= 8
+    ) {
+      return {
+        start:
+          `${year}-08`,
+        end:
+          `${year + 1}-01`,
+        label:
+          `${year} 年 8 月～${year + 1} 年 1 月`,
+      };
+    }
+
+    if (
+      month === 1
+    ) {
+      return {
+        start:
+          `${year - 1}-08`,
+        end:
+          `${year}-01`,
+        label:
+          `${year - 1} 年 8 月～${year} 年 1 月`,
+      };
+    }
+
+    return {
+      start:
+        `${year}-02`,
+      end:
+        `${year}-07`,
+      label:
+        `${year} 年 2 月～${year} 年 7 月`,
+    };
+  }
+
+
+  const overviewStats =
+    useMemo(() => {
+      const selectedMonthRecords =
+        records.filter((record) => {
+          const recordMonth =
+            String(
+              record.start_date || ""
+            ).slice(0, 7);
+
+          return (
+            recordMonth ===
+              overviewMonth &&
+            recordMatchesOverviewPerson(
+              record
+            )
+          );
+        });
+
+      const semester =
+        getSemesterRange(
+          overviewMonth
+        );
+
+      const semesterRecords =
+        semester
+          ? records.filter(
+              (record) => {
+                const recordMonth =
+                  String(
+                    record.start_date ||
+                      ""
+                  ).slice(0, 7);
+
+                return (
+                  recordMonth >=
+                    semester.start &&
+                  recordMonth <=
+                    semester.end &&
+                  recordMatchesOverviewPerson(
+                    record
+                  )
+                );
+              }
+            )
+          : [];
+
+      const sumHours =
+        (rows) =>
+          rows.reduce(
+            (total, record) =>
+              total +
+              Number(
+                record.leave_hours ||
+                  0
+              ),
+            0
+          );
+
+      return {
+        selectedMonthRecords:
+          [...selectedMonthRecords]
+            .sort(
+              (a, b) =>
+                String(
+                  b.start_date ||
+                    ""
+                ).localeCompare(
+                  String(
+                    a.start_date ||
+                      ""
+                  )
+                )
+            ),
+
+        monthHours:
+          sumHours(
+            selectedMonthRecords
+          ),
+
+        monthLastMinuteCount:
+          selectedMonthRecords.filter(
+            (record) =>
+              record.is_last_minute
+          ).length,
+
+        semesterHours:
+          sumHours(
+            semesterRecords
+          ),
+
+        semesterLastMinuteCount:
+          semesterRecords.filter(
+            (record) =>
+              record.is_last_minute
+          ).length,
+
+        semester,
+      };
+    }, [
+      records,
+      overviewMonth,
+      overviewPerson,
+    ]);
+
+
   function renderOverview() {
+    const selectedPersonLabel =
+      overviewPerson === "all"
+        ? "全部人員"
+        : overviewPersonOptions.find(
+            (option) =>
+              option.value ===
+              overviewPerson
+          )?.label ||
+          "指定人員";
+
     return (
       <section className="leave-section">
-        <div>
-          <h2>
-            休假總覽
-          </h2>
+        <div className="leave-overview-heading">
+          <div>
+            <h2>
+              休假總覽
+            </h2>
 
-          <p>
-            查看本月與本學期的休假狀況。
-          </p>
+            <p>
+              依月份與人員快速查看休假狀況。
+            </p>
+          </div>
+
+          <div className="leave-overview-filters">
+            <label className="leave-overview-filter">
+              <span>
+                查看月份
+              </span>
+
+              <select
+                value={
+                  overviewMonth
+                }
+                onChange={(
+                  event
+                ) =>
+                  setOverviewMonth(
+                    event.target.value
+                  )
+                }
+              >
+                {overviewMonthOptions.map(
+                  (monthKey) => (
+                    <option
+                      key={
+                        monthKey
+                      }
+                      value={
+                        monthKey
+                      }
+                    >
+                      {
+                        getMonthLabel(
+                          monthKey
+                        )
+                      }
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+
+            <label className="leave-overview-filter">
+              <span>
+                查看人員
+              </span>
+
+              <select
+                value={
+                  overviewPerson
+                }
+                onChange={(
+                  event
+                ) =>
+                  setOverviewPerson(
+                    event.target.value
+                  )
+                }
+              >
+                <option value="all">
+                  全部人員
+                </option>
+
+                <optgroup label="Workspace 老師">
+                  {overviewPersonOptions
+                    .filter(
+                      (option) =>
+                        option.group ===
+                        "Workspace 老師"
+                    )
+                    .map(
+                      (option) => (
+                        <option
+                          key={
+                            option.value
+                          }
+                          value={
+                            option.value
+                          }
+                        >
+                          {
+                            option.label
+                          }
+                        </option>
+                      )
+                    )}
+                </optgroup>
+
+                {overviewPersonOptions.some(
+                  (option) =>
+                    option.group ===
+                    "其他人員"
+                ) && (
+                  <optgroup label="其他人員">
+                    {overviewPersonOptions
+                      .filter(
+                        (option) =>
+                          option.group ===
+                          "其他人員"
+                      )
+                      .map(
+                        (option) => (
+                          <option
+                            key={
+                              option.value
+                            }
+                            value={
+                              option.value
+                            }
+                          >
+                            {
+                              option.label
+                            }
+                          </option>
+                        )
+                      )}
+                  </optgroup>
+                )}
+              </select>
+            </label>
+          </div>
+        </div>
+
+
+        <div className="leave-overview-context">
+          <strong>
+            {selectedPersonLabel}
+          </strong>
+
+          <span>
+            {getMonthLabel(
+              overviewMonth
+            )}
+          </span>
+
+          {overviewStats.semester && (
+            <small>
+              同學期：
+              {
+                overviewStats
+                  .semester
+                  .label
+              }
+            </small>
+          )}
         </div>
 
 
         <div className="leave-summary-grid">
           <div className="leave-summary-card">
             <span>
-              本月休假人數
+              所選月份休假時數
             </span>
 
             <strong>
-              —
+              {
+                formatLeaveHours(
+                  overviewStats
+                    .monthHours
+                )
+              }
             </strong>
+
+            <small>
+              {
+                overviewStats
+                  .selectedMonthRecords
+                  .length
+              }
+              次
+            </small>
           </div>
 
           <div className="leave-summary-card">
             <span>
-              本月休假次數
+              所選月份臨時假
             </span>
 
             <strong>
-              —
+              {
+                overviewStats
+                  .monthLastMinuteCount
+              }
             </strong>
+
+            <small>
+              次
+            </small>
           </div>
 
           <div className="leave-summary-card">
             <span>
-              本月休假時數
+              同學期休假時數
             </span>
 
             <strong>
-              —
+              {
+                formatLeaveHours(
+                  overviewStats
+                    .semesterHours
+                )
+              }
             </strong>
+
+            <small>
+              {
+                overviewStats
+                  .semester
+                  ?.label || "—"
+              }
+            </small>
           </div>
 
           <div className="leave-summary-card">
             <span>
-              本學期休假時數
+              同學期臨時假
             </span>
 
             <strong>
-              —
+              {
+                overviewStats
+                  .semesterLastMinuteCount
+              }
             </strong>
+
+            <small>
+              次
+            </small>
           </div>
         </div>
 
 
-        <div className="leave-placeholder">
-          <strong>
-            近期休假紀錄
-          </strong>
+        <div className="leave-overview-records-card">
+          <div className="leave-overview-records-heading">
+            <div>
+              <strong>
+                休假紀錄
+              </strong>
 
-          <p>
-            下一階段會將近期紀錄與統計放到這裡。
-          </p>
+              <span>
+                {
+                  getMonthLabel(
+                    overviewMonth
+                  )
+                }
+                ・
+                {
+                  selectedPersonLabel
+                }
+              </span>
+            </div>
+
+            <span>
+              {
+                overviewStats
+                  .selectedMonthRecords
+                  .length
+              }
+              筆
+            </span>
+          </div>
+
+          {overviewStats
+            .selectedMonthRecords
+            .length === 0 ? (
+            <div className="leave-overview-empty">
+              這個條件目前沒有休假紀錄。
+            </div>
+          ) : (
+            <div className="leave-record-table-wrap">
+              <table className="leave-record-table">
+                <thead>
+                  <tr>
+                    <th>人員</th>
+                    <th>假別</th>
+                    <th>日期</th>
+                    <th>時數</th>
+                    <th>臨時請假</th>
+                    <th>原因／備註</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {overviewStats
+                    .selectedMonthRecords
+                    .map(
+                      (record) => (
+                        <tr
+                          key={
+                            record.id
+                          }
+                        >
+                          <td>
+                            <strong>
+                              {
+                                getRecordPersonName(
+                                  record
+                                )
+                              }
+                            </strong>
+
+                            {record
+                              .leave_external_staff
+                              ?.department && (
+                              <small>
+                                {
+                                  record
+                                    .leave_external_staff
+                                    .department
+                                }
+                              </small>
+                            )}
+                          </td>
+
+                          <td>
+                            {
+                              record
+                                .leave_types
+                                ?.name ||
+                              "—"
+                            }
+                          </td>
+
+                          <td>
+                            {record.start_date ===
+                            record.end_date
+                              ? record.start_date
+                              : `${record.start_date} ～ ${record.end_date}`}
+                          </td>
+
+                          <td>
+                            {
+                              formatLeaveHours(
+                                record.leave_hours
+                              )
+                            }
+                          </td>
+
+                          <td>
+                            {record.is_last_minute
+                              ? "是"
+                              : "—"}
+                          </td>
+
+                          <td>
+                            {record.leave_reason ||
+                              record.note ||
+                              "—"}
+                          </td>
+                        </tr>
+                      )
+                    )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
     );
