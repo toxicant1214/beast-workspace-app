@@ -13,7 +13,10 @@ const REQUIRED_COLUMNS = [
 function cleanText(value) {
   return String(
     value ?? ""
-  ).trim();
+  )
+    .replace(/\u00a0/g, " ")
+    .replace(/\u3000/g, " ")
+    .trim();
 }
 
 
@@ -51,46 +54,115 @@ function getChineseOnlyName(
 function parseDateTime(
   value
 ) {
-  const text =
-    cleanText(value);
+  if (
+    value instanceof Date &&
+    !Number.isNaN(value.getTime())
+  ) {
+    const year = value.getFullYear();
+    const month = value.getMonth() + 1;
+    const day = value.getDate();
+    const hour = value.getHours();
+    const minute = value.getMinutes();
+
+    return buildDateTimeInfo({
+      year,
+      month,
+      day,
+      hour,
+      minute,
+    });
+  }
+
+  let text = cleanText(value)
+    .replace(/：/g, ":")
+    .replace(/\s+/g, " ");
 
   if (!text) {
     return null;
   }
 
+  let meridiem = null;
 
-  const match =
-    text.match(
-      /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?$/
+  if (/^(上午|下午)\s*/.test(text)) {
+    const match = text.match(/^(上午|下午)\s*/);
+    meridiem = match?.[1] || null;
+    text = text.replace(/^(上午|下午)\s*/, "");
+  }
+
+  if (/(上午|下午)$/.test(text)) {
+    const match = text.match(/(上午|下午)$/);
+    meridiem = match?.[1] || meridiem;
+    text = text.replace(/\s*(上午|下午)$/, "");
+  }
+
+  let match = text.match(
+    /^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})(?:[ T](上午|下午)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
+  );
+
+  if (!match) {
+    match = text.match(
+      /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})(?:[ T](上午|下午)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
     );
 
+    if (match) {
+      match = [
+        match[0],
+        match[3],
+        match[1],
+        match[2],
+        match[4],
+        match[5],
+        match[6],
+        match[7],
+      ];
+    }
+  }
 
   if (!match) {
     return null;
   }
 
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
 
-  const year =
-    Number(match[1]);
+  const inlineMeridiem = match[4] || null;
+  const activeMeridiem = inlineMeridiem || meridiem;
 
-  const month =
-    Number(match[2]);
+  let hour = Number(match[5] || 0);
+  const minute = Number(match[6] || 0);
 
-  const day =
-    Number(match[3]);
+  if (activeMeridiem === "下午" && hour < 12) {
+    hour += 12;
+  }
 
-  const hour =
-    Number(
-      match[4] || 0
-    );
+  if (activeMeridiem === "上午" && hour === 12) {
+    hour = 0;
+  }
 
-  const minute =
-    Number(
-      match[5] || 0
-    );
+  return buildDateTimeInfo({
+    year,
+    month,
+    day,
+    hour,
+    minute,
+  });
+}
 
 
+function buildDateTimeInfo({
+  year,
+  month,
+  day,
+  hour,
+  minute,
+}) {
   if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
     month < 1 ||
     month > 12 ||
     day < 1 ||
@@ -103,26 +175,19 @@ function parseDateTime(
     return null;
   }
 
-
-  const checkDate =
-    new Date(
-      year,
-      month - 1,
-      day
-    );
-
+  const checkDate = new Date(
+    year,
+    month - 1,
+    day
+  );
 
   if (
-    checkDate.getFullYear() !==
-      year ||
-    checkDate.getMonth() !==
-      month - 1 ||
-    checkDate.getDate() !==
-      day
+    checkDate.getFullYear() !== year ||
+    checkDate.getMonth() !== month - 1 ||
+    checkDate.getDate() !== day
   ) {
     return null;
   }
-
 
   return {
     year,
