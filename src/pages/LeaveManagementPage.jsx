@@ -868,6 +868,29 @@ function LeaveManagementPage() {
   }
 
 
+  function handleRemoveCsvRow(
+    row
+  ) {
+    setCsvRows(
+      (current) =>
+        current.filter(
+          (item) =>
+            item.rowNumber !==
+            row.rowNumber
+        )
+    );
+
+    if (
+      editingCsvRow?.rowNumber ===
+      row.rowNumber
+    ) {
+      handleCloseCsvEdit();
+    }
+
+    setCsvImportError("");
+  }
+
+
   async function handleConfirmCsvImport() {
     if (
       csvImporting ||
@@ -2203,6 +2226,21 @@ function LeaveManagementPage() {
                                 }
                               >
                                 修改
+                              </button>
+
+                              <button
+                                type="button"
+                                className="leave-delete-button"
+                                onClick={() =>
+                                  handleRemoveCsvRow(
+                                    row
+                                  )
+                                }
+                                disabled={
+                                  csvImporting
+                                }
+                              >
+                                移除
                               </button>
                             </td>
                           </tr>
