@@ -30,6 +30,9 @@ from services.teacher_assignment_service import (
     complete_teacher_assignment_by_line_user_id,
     confirm_teacher_assignment_by_admin,
 )
+from services.announcement_service import (
+    confirm_announcement_by_line_user_id,
+)
 from services.workflow_service import (
     clear_workflow,
     get_workflow,
@@ -49,6 +52,7 @@ def handle_postback(event):
     action = values.get("action", [""])[0]
     task_id = values.get("task_id", [""])[0]
     member_id = values.get("member_id", [""])[0]
+    recipient_id = values.get("recipient_id", [""])[0]
     date_option = values.get("date_option", [""])[0]
     time_option = values.get("time_option", [""])[0]
     priority_option = values.get("priority", [""])[0]
@@ -554,6 +558,58 @@ def handle_postback(event):
             )
 
         return
+    # 老師直接在 LINE 內簽收公告
+    if action == "confirm_announcement" and recipient_id:
+        try:
+            result = confirm_announcement_by_line_user_id(
+                recipient_id=recipient_id,
+                line_user_id=line_user_id,
+            )
+        except ValueError as error:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    str(error),
+                )
+            return
+        except Exception as error:
+            print("LINE 公告簽收失敗：", error)
+
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "公告簽收失敗，請稍後再試。",
+                )
+            return
+
+        if not result:
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    "這則公告不存在，或不是發送給你的公告。",
+                )
+            return
+
+        announcement = result.get("announcement") or {}
+        title = announcement.get("title") or "工作公告"
+
+        if result.get("already_confirmed"):
+            if reply_token:
+                reply_message(
+                    reply_token,
+                    f"✅「{title}」已經完成確認，無需重複簽收。",
+                )
+            return
+
+        if reply_token:
+            reply_message(
+                reply_token,
+                f"✅ 已完成確認：{title}\n\n"
+                "Workspace 已記錄你的簽收時間。",
+            )
+
+        return
+
     # 老師透過 LINE 回報完成自己的任務
     if action == "complete_teacher_assignment" and member_id:
         result = complete_teacher_assignment_by_line_user_id(

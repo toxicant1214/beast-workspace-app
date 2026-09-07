@@ -20,6 +20,7 @@ from handlers.line_postback_handler import handle_postback
 from services import announcement_service
 
 from services.line_service import (
+    push_announcement_card,
     push_teacher_completion_card,
 )
 
@@ -128,6 +129,191 @@ def complete_teacher_assignment_from_web(
         "already_completed": False,
         "member": result.get("member"),
     }
+
+
+# =========================================================
+# 公告簽收｜正式發送 LINE 公告
+# =========================================================
+
+@app.route(
+    "/api/announcements/<announcement_id>/send",
+    methods=["POST"],
+)
+def send_announcement_to_line(
+    announcement_id,
+):
+    """
+    將已建立的公告個別 Push 給指定老師。
+
+    規則：
+    1. 先讀取公告與 recipients。
+    2. 只發給有 LINE userId 的指定老師。
+    3. 至少一位老師成功收到後，才標記公告 sent，
+       並由 service 建立 sent_at / 12 小時 deadline_at。
+    4. 回傳逐位老師的發送結果，方便 Workspace 顯示失敗名單。
+    """
+
+    try:
+        announcement = (
+            announcement_service
+            .get_announcement(
+                announcement_id
+            )
+        )
+
+        if not announcement:
+            return jsonify({
+                "success": False,
+                "message": "找不到這則公告",
+            }), 404
+
+        if announcement.get("status") == "sent":
+            return jsonify({
+                "success": False,
+                "message": "這則公告已經發送過了",
+            }), 400
+
+        recipients = (
+            announcement_service
+            .get_announcement_recipients(
+                announcement_id
+            )
+        )
+
+        if not recipients:
+            return jsonify({
+                "success": False,
+                "message": "這則公告沒有指定收件老師",
+            }), 400
+
+        title = (
+            announcement.get("title")
+            or "工作公告"
+        )
+
+        content = (
+            announcement.get("content")
+            or ""
+        )
+
+        # 先用預計期限顯示在 LINE 卡片。
+        # 正式 sent_at / deadline_at 會在至少一位 Push 成功後寫入。
+        from datetime import timedelta
+
+        planned_deadline = (
+            datetime.now(TAIPEI_TZ)
+            + timedelta(hours=12)
+        ).isoformat()
+
+        sent_results = []
+        successful_count = 0
+
+        for recipient in recipients:
+            teacher = (
+                recipient.get("teachers")
+                or {}
+            )
+
+            line_user_id = (
+                teacher.get("line_user_id")
+            )
+
+            teacher_name = (
+                teacher.get("chinese_name")
+                or teacher.get("english_name")
+                or "老師"
+            )
+
+            recipient_id = str(
+                recipient.get("id")
+                or ""
+            )
+
+            if not line_user_id:
+                sent_results.append({
+                    "recipient_id": recipient_id,
+                    "teacher_name": teacher_name,
+                    "success": False,
+                    "message": "老師尚未綁定 LINE",
+                })
+                continue
+
+            try:
+                push_announcement_card(
+                    line_user_id=line_user_id,
+                    teacher_name=teacher_name,
+                    recipient_id=recipient_id,
+                    title=title,
+                    content=content,
+                    deadline_at=planned_deadline,
+                )
+
+                successful_count += 1
+
+                sent_results.append({
+                    "recipient_id": recipient_id,
+                    "teacher_name": teacher_name,
+                    "success": True,
+                })
+
+            except Exception as error:
+                print(
+                    "[ANNOUNCEMENT] "
+                    f"LINE Push 失敗｜{teacher_name}：",
+                    error,
+                )
+
+                sent_results.append({
+                    "recipient_id": recipient_id,
+                    "teacher_name": teacher_name,
+                    "success": False,
+                    "message": str(error),
+                })
+
+        if successful_count == 0:
+            return jsonify({
+                "success": False,
+                "message": "公告未成功發送給任何老師",
+                "results": sent_results,
+            }), 502
+
+        sent_announcement = (
+            announcement_service
+            .mark_announcement_sent(
+                announcement_id
+            )
+        )
+
+        return jsonify({
+            "success": True,
+            "announcement":
+                sent_announcement,
+            "sent_count":
+                successful_count,
+            "failed_count":
+                len(recipients)
+                - successful_count,
+            "results":
+                sent_results,
+        })
+
+    except ValueError as error:
+        return jsonify({
+            "success": False,
+            "message": str(error),
+        }), 400
+
+    except Exception as error:
+        print(
+            "[ANNOUNCEMENT] "
+            "正式發送公告失敗：",
+            error,
+        )
+
+        return jsonify({
+            "success": False,
+            "message": "發送公告失敗",
+        }), 500
 
 
 # =========================================================

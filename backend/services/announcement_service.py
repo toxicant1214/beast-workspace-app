@@ -134,6 +134,34 @@ def get_announcement(announcement_id):
     return result.data[0]
 
 
+
+def get_announcement_recipients(announcement_id):
+    """
+    取得指定公告的所有收件老師，
+    供正式 LINE Push 發送流程使用。
+    """
+
+    result = (
+        supabase
+        .table("announcement_recipients")
+        .select(
+            """
+            *,
+            teachers (
+                id,
+                chinese_name,
+                english_name,
+                line_user_id
+            )
+            """
+        )
+        .eq("announcement_id", announcement_id)
+        .execute()
+    )
+
+    return result.data or []
+
+
 def get_recipient_by_token(access_token):
     result = (
         supabase
@@ -246,6 +274,122 @@ def confirm_announcement(access_token):
     )
 
     return get_recipient_by_token(access_token)
+
+
+def confirm_announcement_by_line_user_id(
+    recipient_id,
+    line_user_id,
+):
+    """
+    老師直接在 LINE 公告卡片按下確認時使用。
+
+    驗證目前按鈕的 LINE userId 確實屬於
+    這筆 announcement_recipient 的老師，
+    不沿用網頁版 scroll_completed_at 限制。
+    """
+
+    if not recipient_id or not line_user_id:
+        raise ValueError("公告簽收資料不完整")
+
+    result = (
+        supabase
+        .table("announcement_recipients")
+        .select(
+            """
+            *,
+            announcements (
+                id,
+                title,
+                content,
+                status,
+                sent_at,
+                deadline_at
+            ),
+            teachers (
+                id,
+                chinese_name,
+                english_name,
+                line_user_id
+            )
+            """
+        )
+        .eq("id", recipient_id)
+        .limit(1)
+        .execute()
+    )
+
+    if not result.data:
+        return None
+
+    recipient = result.data[0]
+    teacher = recipient.get("teachers") or {}
+    announcement = recipient.get("announcements") or {}
+
+    if teacher.get("line_user_id") != line_user_id:
+        return None
+
+    if announcement.get("status") != "sent":
+        raise ValueError("這則公告目前不可簽收")
+
+    if recipient.get("confirmed_at"):
+        return {
+            "already_confirmed": True,
+            "recipient": recipient,
+            "announcement": announcement,
+            "teacher": teacher,
+        }
+
+    (
+        supabase
+        .table("announcement_recipients")
+        .update({
+            "confirmed_at": iso_datetime(utc_now()),
+        })
+        .eq("id", recipient_id)
+        .is_("confirmed_at", "null")
+        .execute()
+    )
+
+    refreshed_result = (
+        supabase
+        .table("announcement_recipients")
+        .select(
+            """
+            *,
+            announcements (
+                id,
+                title,
+                content,
+                status,
+                sent_at,
+                deadline_at
+            ),
+            teachers (
+                id,
+                chinese_name,
+                english_name,
+                line_user_id
+            )
+            """
+        )
+        .eq("id", recipient_id)
+        .limit(1)
+        .execute()
+    )
+
+    if not refreshed_result.data:
+        raise RuntimeError("公告簽收完成，但重新讀取資料失敗")
+
+    refreshed = refreshed_result.data[0]
+
+    return {
+        "already_confirmed": False,
+        "recipient": refreshed,
+        "announcement":
+            refreshed.get("announcements") or {},
+        "teacher":
+            refreshed.get("teachers") or {},
+    }
 
 
 def get_unconfirmed_recipients(announcement_id):

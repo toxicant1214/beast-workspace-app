@@ -975,3 +975,162 @@ def push_teacher_completion_card(
         response.text,
     )
     response.raise_for_status()
+
+
+def push_announcement_card(
+    line_user_id,
+    teacher_name,
+    recipient_id,
+    title,
+    content,
+    deadline_at,
+):
+    """
+    主動推播需要簽收的工作公告給指定老師。
+
+    公告內容直接顯示在 LINE Flex Message，
+    老師可在 LINE 內按 postback 完成簽收，
+    不需要另外開啟網頁。
+    """
+
+    if not line_user_id:
+        raise ValueError("缺少老師 LINE User ID")
+
+    if not recipient_id:
+        raise ValueError("缺少公告收件人 ID")
+
+    title = (title or "工作公告").strip()
+    content = (content or "").strip()
+    teacher_name = (teacher_name or "老師").strip()
+    deadline_text = format_taipei_datetime(deadline_at)
+
+    body_contents = [
+        {
+            "type": "text",
+            "text": "📢 工作公告",
+            "weight": "bold",
+            "size": "sm",
+            "color": "#7A6F63",
+        },
+        {
+            "type": "text",
+            "text": title,
+            "weight": "bold",
+            "size": "xl",
+            "wrap": True,
+            "margin": "md",
+            "color": "#2F352F",
+        },
+        {
+            "type": "text",
+            "text": f"{teacher_name}老師您好，請完整閱讀以下公告。",
+            "size": "sm",
+            "wrap": True,
+            "margin": "md",
+            "color": "#777777",
+        },
+        {
+            "type": "separator",
+            "margin": "lg",
+        },
+    ]
+
+    if content:
+        body_contents.append(
+            {
+                "type": "text",
+                "text": content,
+                "size": "md",
+                "wrap": True,
+                "margin": "lg",
+                "color": "#3F463F",
+            }
+        )
+
+    body_contents.extend(
+        [
+            {
+                "type": "separator",
+                "margin": "lg",
+            },
+            {
+                "type": "text",
+                "text": f"⏰ 簽收期限：{deadline_text}",
+                "size": "sm",
+                "wrap": True,
+                "margin": "lg",
+                "color": "#8A6D3B",
+                "weight": "bold",
+            },
+            {
+                "type": "text",
+                "text": "按下確認即表示已閱讀並知悉以上公告內容。",
+                "size": "xs",
+                "wrap": True,
+                "margin": "sm",
+                "color": "#999999",
+            },
+        ]
+    )
+
+    url = "https://api.line.me/v2/bot/message/push"
+
+    data = {
+        "to": line_user_id,
+        "messages": [
+            {
+                "type": "flex",
+                "altText": f"📢 工作公告｜{title}",
+                "contents": {
+                    "type": "bubble",
+                    "size": "mega",
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "spacing": "sm",
+                        "paddingAll": "20px",
+                        "contents": body_contents,
+                    },
+                    "footer": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "paddingAll": "16px",
+                        "contents": [
+                            {
+                                "type": "button",
+                                "style": "primary",
+                                "height": "sm",
+                                "action": {
+                                    "type": "postback",
+                                    "label": "✓ 已閱讀並確認",
+                                    "data": (
+                                        "action=confirm_announcement"
+                                        f"&recipient_id={recipient_id}"
+                                    ),
+                                    "displayText": f"已閱讀並確認：{title}",
+                                },
+                            }
+                        ],
+                    },
+                },
+            }
+        ],
+    }
+
+    response = requests.post(
+        url,
+        headers=get_headers(),
+        json=data,
+        timeout=15,
+    )
+
+    print(
+        "LINE announcement push:",
+        line_user_id,
+        response.status_code,
+        response.text,
+    )
+    response.raise_for_status()
+
+    return response
+
