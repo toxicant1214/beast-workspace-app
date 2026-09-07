@@ -49,6 +49,36 @@ function parseLocalDate(value) {
   return new Date(`${value}T00:00:00`);
 }
 
+
+async function fetchAllRows(buildQuery, pageSize = 1000) {
+  const allRows = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + pageSize - 1;
+
+    const {
+      data,
+      error,
+    } = await buildQuery(from, to);
+
+    if (error) {
+      throw error;
+    }
+
+    const rows = data || [];
+    allRows.push(...rows);
+
+    if (rows.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return allRows;
+}
+
 function formatDate(dateValue) {
   if (!dateValue) return "—";
 
@@ -375,29 +405,39 @@ function SnackManagementPage({
       if (studentIds.length === 0) {
         setStudentSnackChoices([]);
       } else {
-        const {
-          data: choiceRows,
-          error: choiceError,
-        } = await supabase
-          .from("snack_student_choices")
-          .select(`
-            id,
-            semester_id,
-            student_id,
-            snack_item_id,
-            snack_item_option_id,
-            quantity,
-            notes,
-            created_at,
-            updated_at
-          `)
-          .eq("semester_id", selectedSemesterId)
-          .in("student_id", studentIds);
-
-        if (choiceError) throw choiceError;
+        const choiceRows =
+          await fetchAllRows(
+            (from, to) =>
+              supabase
+                .from("snack_student_choices")
+                .select(`
+                  id,
+                  semester_id,
+                  student_id,
+                  snack_item_id,
+                  snack_item_option_id,
+                  quantity,
+                  notes,
+                  created_at,
+                  updated_at
+                `)
+                .eq(
+                  "semester_id",
+                  selectedSemesterId
+                )
+                .in(
+                  "student_id",
+                  studentIds
+                )
+                .order(
+                  "id",
+                  { ascending: true }
+                )
+                .range(from, to)
+          );
 
         setStudentSnackChoices(
-          choiceRows || []
+          choiceRows
         );
       }
 
@@ -458,33 +498,44 @@ function SnackManagementPage({
       if (teacherIds.length === 0) {
         setTeacherSnackChoices([]);
       } else {
-        const {
-          data: teacherChoiceRows,
-          error: teacherChoiceError,
-        } = await supabase
-          .from("snack_teacher_choices")
-          .select(`
-            id,
-            semester_id,
-            teacher_id,
-            class_id,
-            snack_item_id,
-            snack_item_option_id,
-            quantity,
-            notes,
-            created_at,
-            updated_at
-          `)
-          .eq("semester_id", selectedSemesterId)
-          .in("teacher_id", teacherIds)
-          .in("class_id", classIds);
-
-        if (teacherChoiceError) {
-          throw teacherChoiceError;
-        }
+        const teacherChoiceRows =
+          await fetchAllRows(
+            (from, to) =>
+              supabase
+                .from("snack_teacher_choices")
+                .select(`
+                  id,
+                  semester_id,
+                  teacher_id,
+                  class_id,
+                  snack_item_id,
+                  snack_item_option_id,
+                  quantity,
+                  notes,
+                  created_at,
+                  updated_at
+                `)
+                .eq(
+                  "semester_id",
+                  selectedSemesterId
+                )
+                .in(
+                  "teacher_id",
+                  teacherIds
+                )
+                .in(
+                  "class_id",
+                  classIds
+                )
+                .order(
+                  "id",
+                  { ascending: true }
+                )
+                .range(from, to)
+          );
 
         setTeacherSnackChoices(
-          teacherChoiceRows || []
+          teacherChoiceRows
         );
       }
 
