@@ -114,6 +114,11 @@ function LineReminderPage() {
   ] = useState(null);
 
   const [
+    remindingId,
+    setRemindingId,
+  ] = useState(null);
+
+  const [
     successMessage,
     setSuccessMessage,
   ] = useState("");
@@ -511,6 +516,82 @@ function LineReminderPage() {
       );
     } finally {
       setSending(false);
+    }
+  }
+
+
+  async function handleRemind(
+    announcement
+  ) {
+    try {
+      setError("");
+      setSuccessMessage("");
+
+      if (!API_BASE_URL) {
+        throw new Error(
+          "尚未設定後端 API 網址。"
+        );
+      }
+
+      setRemindingId(
+        announcement.id
+      );
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/announcements/${announcement.id}/remind`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+          }
+        );
+
+      let result = null;
+
+      try {
+        result =
+          await response.json();
+      } catch {
+        result = null;
+      }
+
+      if (
+        !response.ok ||
+        !result?.success
+      ) {
+        throw new Error(
+          result?.message ||
+            "提醒未確認老師失敗。"
+        );
+      }
+
+      setSuccessMessage(
+        result.sent_count > 0
+          ? `已重新提醒 ${result.sent_count} 位尚未確認的老師${
+              result.failed_count
+                ? `，${result.failed_count} 位提醒失敗`
+                : ""
+            }。原簽收期限不變。`
+          : result.message ||
+              "目前沒有需要提醒的老師。"
+      );
+
+      await loadData();
+    } catch (remindError) {
+      console.error(
+        "提醒未確認老師失敗：",
+        remindError
+      );
+
+      setError(
+        remindError?.message ||
+          "提醒未確認老師失敗。"
+      );
+    } finally {
+      setRemindingId(null);
     }
   }
 
@@ -1103,23 +1184,30 @@ function LineReminderPage() {
                         type="button"
                         disabled={
                           stats.unconfirmed ===
-                          0
+                            0 ||
+                          remindingId ===
+                            announcement.id
                         }
-                        onClick={() => {
-                          window.alert(
-                            "提醒未確認老師的 LINE Push 會在下一步接上；目前簽收名單已經可以正常追蹤。"
-                          );
-                        }}
+                        onClick={() =>
+                          handleRemind(
+                            announcement
+                          )
+                        }
                         style={{
                           ...styles.remindButton,
                           opacity:
                             stats.unconfirmed ===
-                            0
+                              0 ||
+                            remindingId ===
+                              announcement.id
                               ? 0.45
                               : 1,
                         }}
                       >
-                        提醒未確認老師
+                        {remindingId ===
+                        announcement.id
+                          ? "提醒發送中…"
+                          : "提醒未確認老師"}
                       </button>
 
                       <button

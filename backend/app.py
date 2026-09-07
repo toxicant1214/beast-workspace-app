@@ -317,6 +317,157 @@ def send_announcement_to_line(
 
 
 # =========================================================
+# 公告簽收｜提醒尚未確認老師
+# =========================================================
+
+@app.route(
+    "/api/announcements/<announcement_id>/remind",
+    methods=["POST"],
+)
+def remind_unconfirmed_announcement_recipients(
+    announcement_id,
+):
+    """
+    再次 Push 同一則公告給尚未確認的老師。
+    不修改原本 sent_at / deadline_at。
+    """
+
+    try:
+        announcement = (
+            announcement_service
+            .get_announcement(
+                announcement_id
+            )
+        )
+
+        if not announcement:
+            return jsonify({
+                "success": False,
+                "message": "找不到這則公告",
+            }), 404
+
+        if announcement.get("status") != "sent":
+            return jsonify({
+                "success": False,
+                "message": "只有已發送的公告可以再次提醒",
+            }), 400
+
+        recipients = (
+            announcement_service
+            .get_unconfirmed_recipients(
+                announcement_id
+            )
+        )
+
+        if not recipients:
+            return jsonify({
+                "success": True,
+                "message": "所有老師都已完成確認",
+                "sent_count": 0,
+                "failed_count": 0,
+                "results": [],
+            })
+
+        title = announcement.get("title") or "工作公告"
+        content = announcement.get("content") or ""
+        original_deadline = announcement.get("deadline_at")
+
+        sent_results = []
+        successful_count = 0
+
+        for recipient in recipients:
+            teacher = recipient.get("teachers") or {}
+            line_user_id = teacher.get("line_user_id")
+            teacher_id = (
+                recipient.get("teacher_id")
+                or teacher.get("id")
+            )
+            teacher_name = (
+                teacher.get("chinese_name")
+                or teacher.get("english_name")
+                or "老師"
+            )
+            recipient_id = str(recipient.get("id") or "")
+
+            if not line_user_id:
+                sent_results.append({
+                    "recipient_id": recipient_id,
+                    "teacher_id": teacher_id,
+                    "teacher_name": teacher_name,
+                    "success": False,
+                    "message": "老師尚未綁定 LINE",
+                })
+                continue
+
+            try:
+                push_announcement_card(
+                    line_user_id=line_user_id,
+                    teacher_name=teacher_name,
+                    recipient_id=recipient_id,
+                    title=title,
+                    content=content,
+                    deadline_at=original_deadline,
+                )
+
+                announcement_service.record_reminder(
+                    announcement_id,
+                    teacher_id,
+                )
+
+                successful_count += 1
+                sent_results.append({
+                    "recipient_id": recipient_id,
+                    "teacher_id": teacher_id,
+                    "teacher_name": teacher_name,
+                    "success": True,
+                })
+
+            except Exception as error:
+                print(
+                    "[ANNOUNCEMENT] "
+                    f"提醒 Push 失敗｜{teacher_name}：",
+                    error,
+                )
+                sent_results.append({
+                    "recipient_id": recipient_id,
+                    "teacher_id": teacher_id,
+                    "teacher_name": teacher_name,
+                    "success": False,
+                    "message": str(error),
+                })
+
+        failed_count = len(recipients) - successful_count
+
+        if successful_count == 0:
+            return jsonify({
+                "success": False,
+                "message": "提醒未成功發送給任何老師",
+                "sent_count": 0,
+                "failed_count": failed_count,
+                "results": sent_results,
+            }), 502
+
+        return jsonify({
+            "success": True,
+            "message": f"已提醒 {successful_count} 位尚未確認的老師",
+            "sent_count": successful_count,
+            "failed_count": failed_count,
+            "deadline_at": original_deadline,
+            "results": sent_results,
+        })
+
+    except Exception as error:
+        print(
+            "[ANNOUNCEMENT] 提醒未確認老師失敗：",
+            error,
+        )
+        return jsonify({
+            "success": False,
+            "message": "提醒未確認老師失敗",
+        }), 500
+
+
+# =========================================================
 # 公告簽收｜刪除公告
 # =========================================================
 
