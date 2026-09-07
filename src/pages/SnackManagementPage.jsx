@@ -579,6 +579,12 @@ function SnackManagementPage({
       setSavingPreferenceKey(key);
       setErrorMessage("");
 
+      const existing =
+        getStudentSnackChoice(
+          studentId,
+          snackItem.id
+        );
+
       const numericQuantity =
         Number(quantity || 0);
 
@@ -588,23 +594,45 @@ function SnackManagementPage({
           : numericQuantity <= 0;
 
       if (shouldDelete) {
-        const { error } = await supabase
-          .from("snack_student_choices")
-          .delete()
-          .eq(
-            "semester_id",
-            selectedSemesterId
-          )
-          .eq(
-            "student_id",
-            studentId
-          )
-          .eq(
-            "snack_item_id",
-            snackItem.id
-          );
+        if (existing?.id) {
+          const { error } =
+            await supabase
+              .from(
+                "snack_student_choices"
+              )
+              .delete()
+              .eq(
+                "id",
+                existing.id
+              );
 
-        if (error) throw error;
+          if (error) {
+            throw error;
+          }
+        } else {
+          const { error } =
+            await supabase
+              .from(
+                "snack_student_choices"
+              )
+              .delete()
+              .eq(
+                "semester_id",
+                selectedSemesterId
+              )
+              .eq(
+                "student_id",
+                studentId
+              )
+              .eq(
+                "snack_item_id",
+                snackItem.id
+              );
+
+          if (error) {
+            throw error;
+          }
+        }
 
         setStudentSnackChoices(
           (current) =>
@@ -624,7 +652,7 @@ function SnackManagementPage({
         return;
       }
 
-      const payload = {
+      const basePayload = {
         semester_id:
           selectedSemesterId,
         student_id:
@@ -643,22 +671,62 @@ function SnackManagementPage({
           new Date().toISOString(),
       };
 
-      const {
-        data,
-        error,
-      } = await supabase
-        .from("snack_student_choices")
-        .upsert(
-          payload,
-          {
-            onConflict:
-              "semester_id,student_id,snack_item_id",
-          }
-        )
-        .select("*")
-        .single();
+      let savedRow = null;
 
-      if (error) throw error;
+      if (existing?.id) {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from(
+            "snack_student_choices"
+          )
+          .update({
+            snack_item_option_id:
+              basePayload.snack_item_option_id,
+            quantity:
+              basePayload.quantity,
+            updated_at:
+              basePayload.updated_at,
+          })
+          .eq(
+            "id",
+            existing.id
+          )
+          .select("*")
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        savedRow = data;
+      } else {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from(
+            "snack_student_choices"
+          )
+          .insert(
+            basePayload
+          )
+          .select("*")
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        savedRow = data;
+      }
+
+      if (!savedRow?.id) {
+        throw new Error(
+          "學生點心資料儲存後沒有取得回傳紀錄"
+        );
+      }
 
       setStudentSnackChoices(
         (current) => {
@@ -682,14 +750,14 @@ function SnackManagementPage({
                     studentId &&
                 choice.snack_item_id ===
                     snackItem.id
-                  ? data
+                  ? savedRow
                   : choice
             );
           }
 
           return [
             ...current,
-            data,
+            savedRow,
           ];
         }
       );
@@ -826,6 +894,13 @@ function SnackManagementPage({
       setSavingPreferenceKey(key);
       setErrorMessage("");
 
+      const existing =
+        getTeacherSnackChoice(
+          teacherId,
+          classId,
+          snackItem.id
+        );
+
       const numericQuantity =
         Number(quantity || 0);
 
@@ -835,30 +910,49 @@ function SnackManagementPage({
           : numericQuantity <= 0;
 
       if (shouldDelete) {
-        const { error } =
-          await supabase
-            .from(
-              "snack_teacher_choices"
-            )
-            .delete()
-            .eq(
-              "semester_id",
-              selectedSemesterId
-            )
-            .eq(
-              "teacher_id",
-              teacherId
-            )
-            .eq(
-              "class_id",
-              classId
-            )
-            .eq(
-              "snack_item_id",
-              snackItem.id
-            );
+        if (existing?.id) {
+          const { error } =
+            await supabase
+              .from(
+                "snack_teacher_choices"
+              )
+              .delete()
+              .eq(
+                "id",
+                existing.id
+              );
 
-        if (error) throw error;
+          if (error) {
+            throw error;
+          }
+        } else {
+          const { error } =
+            await supabase
+              .from(
+                "snack_teacher_choices"
+              )
+              .delete()
+              .eq(
+                "semester_id",
+                selectedSemesterId
+              )
+              .eq(
+                "teacher_id",
+                teacherId
+              )
+              .eq(
+                "class_id",
+                classId
+              )
+              .eq(
+                "snack_item_id",
+                snackItem.id
+              );
+
+          if (error) {
+            throw error;
+          }
+        }
 
         setTeacherSnackChoices(
           (current) =>
@@ -880,7 +974,7 @@ function SnackManagementPage({
         return;
       }
 
-      const payload = {
+      const basePayload = {
         semester_id:
           selectedSemesterId,
         teacher_id:
@@ -901,22 +995,62 @@ function SnackManagementPage({
           new Date().toISOString(),
       };
 
-      const {
-        data,
-        error,
-      } = await supabase
-        .from("snack_teacher_choices")
-        .upsert(
-          payload,
-          {
-            onConflict:
-              "semester_id,teacher_id,class_id,snack_item_id",
-          }
-        )
-        .select("*")
-        .single();
+      let savedRow = null;
 
-      if (error) throw error;
+      if (existing?.id) {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from(
+            "snack_teacher_choices"
+          )
+          .update({
+            snack_item_option_id:
+              basePayload.snack_item_option_id,
+            quantity:
+              basePayload.quantity,
+            updated_at:
+              basePayload.updated_at,
+          })
+          .eq(
+            "id",
+            existing.id
+          )
+          .select("*")
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        savedRow = data;
+      } else {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from(
+            "snack_teacher_choices"
+          )
+          .insert(
+            basePayload
+          )
+          .select("*")
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        savedRow = data;
+      }
+
+      if (!savedRow?.id) {
+        throw new Error(
+          "老師點心資料儲存後沒有取得回傳紀錄"
+        );
+      }
 
       setTeacherSnackChoices(
         (current) => {
@@ -944,14 +1078,14 @@ function SnackManagementPage({
                     classId &&
                 choice.snack_item_id ===
                     snackItem.id
-                  ? data
+                  ? savedRow
                   : choice
             );
           }
 
           return [
             ...current,
-            data,
+            savedRow,
           ];
         }
       );
