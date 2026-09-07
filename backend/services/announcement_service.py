@@ -1,13 +1,13 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+from dotenv import load_dotenv
 from supabase import create_client
 
+load_dotenv()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.environ.get(
-    "SUPABASE_SERVICE_ROLE_KEY"
-)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 supabase = create_client(
     SUPABASE_URL,
@@ -22,26 +22,10 @@ def utc_now():
 def iso_datetime(value):
     if value is None:
         return None
-
     return value.isoformat()
 
 
-# =========================================================
-# 公告建立
-# =========================================================
-
-def create_announcement(
-    title,
-    content,
-    teacher_ids,
-):
-    """
-    建立公告與收件人。
-
-    此時只建立 draft，
-    不代表 LINE 已經成功發送。
-    """
-
+def create_announcement(title, content, teacher_ids):
     if not title or not title.strip():
         raise ValueError("公告標題不可空白")
 
@@ -94,13 +78,11 @@ def create_announcement(
 
         if (
             not recipient_result.data
-            or len(recipient_result.data)
-            != len(recipient_rows)
+            or len(recipient_result.data) != len(recipient_rows)
         ):
             raise RuntimeError("建立公告收件人失敗")
 
     except Exception:
-        # 避免只留下沒有收件人的孤兒公告
         (
             supabase
             .table("announcements")
@@ -113,20 +95,7 @@ def create_announcement(
     return announcement
 
 
-# =========================================================
-# 正式標記公告已發送
-# =========================================================
-
-def mark_announcement_sent(
-    announcement_id,
-    sent_at=None,
-):
-    """
-    LINE Push 完成後呼叫。
-
-    簽收期限固定為實際發送時間 + 12 小時。
-    """
-
+def mark_announcement_sent(announcement_id, sent_at=None):
     sent_at = sent_at or utc_now()
     deadline_at = sent_at + timedelta(hours=12)
 
@@ -149,10 +118,6 @@ def mark_announcement_sent(
     return result.data[0]
 
 
-# =========================================================
-# 取得公告
-# =========================================================
-
 def get_announcement(announcement_id):
     result = (
         supabase
@@ -170,11 +135,6 @@ def get_announcement(announcement_id):
 
 
 def get_recipient_by_token(access_token):
-    """
-    公告頁使用個人 access token，
-    不直接相信網址上的 teacher_id。
-    """
-
     result = (
         supabase
         .table("announcement_recipients")
@@ -191,7 +151,9 @@ def get_recipient_by_token(access_token):
             ),
             teachers (
                 id,
-                name
+                chinese_name,
+                english_name,
+                line_user_id
             )
             """
         )
@@ -206,23 +168,16 @@ def get_recipient_by_token(access_token):
     return result.data[0]
 
 
-# =========================================================
-# 老師開啟公告
-# =========================================================
-
 def mark_opened(access_token):
-    recipient = get_recipient_by_token(
-        access_token
-    )
+    recipient = get_recipient_by_token(access_token)
 
     if not recipient:
         raise ValueError("找不到公告簽收資料")
 
-    # 只記第一次開啟時間
     if recipient.get("opened_at"):
         return recipient
 
-    result = (
+    (
         supabase
         .table("announcement_recipients")
         .update({
@@ -233,65 +188,39 @@ def mark_opened(access_token):
         .execute()
     )
 
-    if result.data:
-        return result.data[0]
+    return get_recipient_by_token(access_token)
 
-    return get_recipient_by_token(
-        access_token
-    )
-
-
-# =========================================================
-# 老師已看到公告底部
-# =========================================================
 
 def mark_scroll_completed(access_token):
-    recipient = get_recipient_by_token(
-        access_token
-    )
+    recipient = get_recipient_by_token(access_token)
 
     if not recipient:
         raise ValueError("找不到公告簽收資料")
 
-    # 同樣只記第一次
     if recipient.get("scroll_completed_at"):
         return recipient
 
-    result = (
+    (
         supabase
         .table("announcement_recipients")
         .update({
-            "scroll_completed_at":
-                iso_datetime(utc_now()),
+            "scroll_completed_at": iso_datetime(utc_now()),
         })
         .eq("id", recipient["id"])
         .is_("scroll_completed_at", "null")
         .execute()
     )
 
-    if result.data:
-        return result.data[0]
+    return get_recipient_by_token(access_token)
 
-    return get_recipient_by_token(
-        access_token
-    )
-
-
-# =========================================================
-# 簽收
-# =========================================================
 
 def confirm_announcement(access_token):
-    recipient = get_recipient_by_token(
-        access_token
-    )
+    recipient = get_recipient_by_token(access_token)
 
     if not recipient:
         raise ValueError("找不到公告簽收資料")
 
-    announcement = recipient.get(
-        "announcements"
-    )
+    announcement = recipient.get("announcements")
 
     if not announcement:
         raise ValueError("找不到公告")
@@ -299,43 +228,27 @@ def confirm_announcement(access_token):
     if announcement.get("status") != "sent":
         raise ValueError("這則公告目前不可簽收")
 
-    # 重複按確認，不新增第二筆、不覆蓋第一次時間
     if recipient.get("confirmed_at"):
         return recipient
 
-    # 必須先完成公告內容閱讀區
     if not recipient.get("scroll_completed_at"):
-        raise ValueError(
-            "請先完整查看公告內容後再確認"
-        )
+        raise ValueError("請先完整查看公告內容後再確認")
 
-    result = (
+    (
         supabase
         .table("announcement_recipients")
         .update({
-            "confirmed_at":
-                iso_datetime(utc_now()),
+            "confirmed_at": iso_datetime(utc_now()),
         })
         .eq("id", recipient["id"])
         .is_("confirmed_at", "null")
         .execute()
     )
 
-    if result.data:
-        return result.data[0]
-
-    return get_recipient_by_token(
-        access_token
-    )
+    return get_recipient_by_token(access_token)
 
 
-# =========================================================
-# 尚未簽收的人
-# =========================================================
-
-def get_unconfirmed_recipients(
-    announcement_id,
-):
+def get_unconfirmed_recipients(announcement_id):
     result = (
         supabase
         .table("announcement_recipients")
@@ -344,15 +257,13 @@ def get_unconfirmed_recipients(
             *,
             teachers (
                 id,
-                name,
+                chinese_name,
+                english_name,
                 line_user_id
             )
             """
         )
-        .eq(
-            "announcement_id",
-            announcement_id
-        )
+        .eq("announcement_id", announcement_id)
         .is_("confirmed_at", "null")
         .execute()
     )
@@ -360,24 +271,14 @@ def get_unconfirmed_recipients(
     return result.data or []
 
 
-# =========================================================
-# 提醒紀錄
-# =========================================================
-
-def record_reminder(
-    announcement_id,
-    teacher_id,
-):
+def record_reminder(announcement_id, teacher_id):
     result = (
         supabase
         .table("announcement_reminders")
         .insert({
-            "announcement_id":
-                announcement_id,
-            "teacher_id":
-                teacher_id,
-            "reminded_at":
-                iso_datetime(utc_now()),
+            "announcement_id": announcement_id,
+            "teacher_id": teacher_id,
+            "reminded_at": iso_datetime(utc_now()),
         })
         .execute()
     )
