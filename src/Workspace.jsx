@@ -24,6 +24,7 @@ import CleaningPage from "./pages/CleaningPage";
 import LineReminderPage from "./pages/LineReminderPage";
 import ScoreAnalysisPage from "./pages/ScoreAnalysisPage";
 import FinancePage from "./pages/FinancePage";
+import TeacherEvaluationPage from "./pages/TeacherEvaluationPage";
 import LoginPage from "./pages/LoginPage";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AnnouncementPublicPage from "./pages/AnnouncementPublicPage";
@@ -128,6 +129,11 @@ const PAGE_OPTIONS = [
   {
     label: "成績分析",
     key: "score_analysis",
+  },
+  {
+    label: "教師考核",
+    key: "teacher_evaluation",
+    adminOnly: true,
   },
   {
     label: "營運財務",
@@ -1122,6 +1128,20 @@ function Workspace() {
     ) {
       return (
         <ScoreAnalysisPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "教師考核"
+    ) {
+      return (
+        <TeacherEvaluationPage
           currentTeacher={
             currentTeacher
           }
