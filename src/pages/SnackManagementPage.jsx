@@ -542,11 +542,33 @@ function SnackManagementPage({
     optionId = null,
     quantity = 1,
   }) {
-    if (
-      !selectedSemesterId ||
-      !studentId ||
-      !snackItem?.id
-    ) {
+    const missing = [];
+
+    if (!selectedSemesterId) {
+      missing.push("semesterId");
+    }
+
+    if (!studentId) {
+      missing.push("studentId");
+    }
+
+    if (!snackItem?.id) {
+      missing.push("snackItemId");
+    }
+
+    if (missing.length > 0) {
+      const message =
+        `學生點心儲存資料不完整：${missing.join("、")}`;
+
+      console.error(message, {
+        selectedSemesterId,
+        studentId,
+        snackItem,
+        optionId,
+        quantity,
+      });
+
+      setErrorMessage(message);
       return;
     }
 
@@ -557,12 +579,6 @@ function SnackManagementPage({
       setSavingPreferenceKey(key);
       setErrorMessage("");
 
-      const existing =
-        getStudentSnackChoice(
-          studentId,
-          snackItem.id
-        );
-
       const numericQuantity =
         Number(quantity || 0);
 
@@ -572,22 +588,38 @@ function SnackManagementPage({
           : numericQuantity <= 0;
 
       if (shouldDelete) {
-        if (existing?.id) {
-          const { error } = await supabase
-            .from("snack_student_choices")
-            .delete()
-            .eq("id", existing.id);
-
-          if (error) throw error;
-
-          setStudentSnackChoices(
-            (current) =>
-              current.filter(
-                (choice) =>
-                  choice.id !== existing.id
-              )
+        const { error } = await supabase
+          .from("snack_student_choices")
+          .delete()
+          .eq(
+            "semester_id",
+            selectedSemesterId
+          )
+          .eq(
+            "student_id",
+            studentId
+          )
+          .eq(
+            "snack_item_id",
+            snackItem.id
           );
-        }
+
+        if (error) throw error;
+
+        setStudentSnackChoices(
+          (current) =>
+            current.filter(
+              (choice) =>
+                !(
+                  choice.semester_id ===
+                    selectedSemesterId &&
+                  choice.student_id ===
+                    studentId &&
+                  choice.snack_item_id ===
+                    snackItem.id
+                )
+            )
+        );
 
         return;
       }
@@ -595,7 +627,8 @@ function SnackManagementPage({
       const payload = {
         semester_id:
           selectedSemesterId,
-        student_id: studentId,
+        student_id:
+          studentId,
         snack_item_id:
           snackItem.id,
         snack_item_option_id:
@@ -632,6 +665,8 @@ function SnackManagementPage({
           const exists =
             current.some(
               (choice) =>
+                choice.semester_id ===
+                  selectedSemesterId &&
                 choice.student_id ===
                   studentId &&
                 choice.snack_item_id ===
@@ -641,6 +676,8 @@ function SnackManagementPage({
           if (exists) {
             return current.map(
               (choice) =>
+                choice.semester_id ===
+                    selectedSemesterId &&
                 choice.student_id ===
                     studentId &&
                 choice.snack_item_id ===
@@ -661,6 +698,7 @@ function SnackManagementPage({
         "儲存學生點心選擇失敗：",
         error
       );
+
       setErrorMessage(
         `儲存點心選擇失敗：${error.message}`
       );
@@ -746,12 +784,38 @@ function SnackManagementPage({
     optionId = null,
     quantity = 1,
   }) {
-    if (
-      !selectedSemesterId ||
-      !teacherId ||
-      !classId ||
-      !snackItem?.id
-    ) {
+    const missing = [];
+
+    if (!selectedSemesterId) {
+      missing.push("semesterId");
+    }
+
+    if (!teacherId) {
+      missing.push("teacherId");
+    }
+
+    if (!classId) {
+      missing.push("classId");
+    }
+
+    if (!snackItem?.id) {
+      missing.push("snackItemId");
+    }
+
+    if (missing.length > 0) {
+      const message =
+        `老師點心儲存資料不完整：${missing.join("、")}`;
+
+      console.error(message, {
+        selectedSemesterId,
+        teacherId,
+        classId,
+        snackItem,
+        optionId,
+        quantity,
+      });
+
+      setErrorMessage(message);
       return;
     }
 
@@ -762,13 +826,6 @@ function SnackManagementPage({
       setSavingPreferenceKey(key);
       setErrorMessage("");
 
-      const existing =
-        getTeacherSnackChoice(
-          teacherId,
-          classId,
-          snackItem.id
-        );
-
       const numericQuantity =
         Number(quantity || 0);
 
@@ -778,25 +835,47 @@ function SnackManagementPage({
           : numericQuantity <= 0;
 
       if (shouldDelete) {
-        if (existing?.id) {
-          const { error } =
-            await supabase
-              .from(
-                "snack_teacher_choices"
-              )
-              .delete()
-              .eq("id", existing.id);
+        const { error } =
+          await supabase
+            .from(
+              "snack_teacher_choices"
+            )
+            .delete()
+            .eq(
+              "semester_id",
+              selectedSemesterId
+            )
+            .eq(
+              "teacher_id",
+              teacherId
+            )
+            .eq(
+              "class_id",
+              classId
+            )
+            .eq(
+              "snack_item_id",
+              snackItem.id
+            );
 
-          if (error) throw error;
+        if (error) throw error;
 
-          setTeacherSnackChoices(
-            (current) =>
-              current.filter(
-                (choice) =>
-                  choice.id !== existing.id
-              )
-          );
-        }
+        setTeacherSnackChoices(
+          (current) =>
+            current.filter(
+              (choice) =>
+                !(
+                  choice.semester_id ===
+                    selectedSemesterId &&
+                  choice.teacher_id ===
+                    teacherId &&
+                  choice.class_id ===
+                    classId &&
+                  choice.snack_item_id ===
+                    snackItem.id
+                )
+            )
+        );
 
         return;
       }
@@ -804,8 +883,10 @@ function SnackManagementPage({
       const payload = {
         semester_id:
           selectedSemesterId,
-        teacher_id: teacherId,
-        class_id: classId,
+        teacher_id:
+          teacherId,
+        class_id:
+          classId,
         snack_item_id:
           snackItem.id,
         snack_item_option_id:
@@ -842,6 +923,8 @@ function SnackManagementPage({
           const exists =
             current.some(
               (choice) =>
+                choice.semester_id ===
+                  selectedSemesterId &&
                 choice.teacher_id ===
                   teacherId &&
                 choice.class_id ===
@@ -853,6 +936,8 @@ function SnackManagementPage({
           if (exists) {
             return current.map(
               (choice) =>
+                choice.semester_id ===
+                    selectedSemesterId &&
                 choice.teacher_id ===
                     teacherId &&
                 choice.class_id ===
@@ -864,7 +949,10 @@ function SnackManagementPage({
             );
           }
 
-          return [...current, data];
+          return [
+            ...current,
+            data,
+          ];
         }
       );
     } catch (error) {
@@ -872,6 +960,7 @@ function SnackManagementPage({
         "儲存老師點心選擇失敗：",
         error
       );
+
       setErrorMessage(
         `儲存老師點心選擇失敗：${error.message}`
       );
