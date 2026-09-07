@@ -26,6 +26,7 @@ import ScoreAnalysisPage from "./pages/ScoreAnalysisPage";
 import FinancePage from "./pages/FinancePage";
 import LoginPage from "./pages/LoginPage";
 import TeacherDashboard from "./pages/TeacherDashboard";
+import AnnouncementPublicPage from "./pages/AnnouncementPublicPage";
 
 import { supabase } from "./lib/supabase";
 
@@ -241,7 +242,30 @@ function buildViewerPermissionObject(
 }
 
 
+
+function getPublicAnnouncementToken() {
+  const pathname =
+    window.location.pathname;
+
+  const match =
+    pathname.match(
+      /^\/announcement\/([^/]+)\/?$/
+    );
+
+  if (!match) {
+    return "";
+  }
+
+  return decodeURIComponent(
+    match[1]
+  );
+}
+
+
 function Workspace() {
+  const publicAnnouncementToken =
+    getPublicAnnouncementToken();
+
   const [
     activePage,
     setActivePage,
@@ -1120,6 +1144,17 @@ function Workspace() {
       <DashboardPage
         currentTeacher={
           currentTeacher
+        }
+      />
+    );
+  }
+
+
+  if (publicAnnouncementToken) {
+    return (
+      <AnnouncementPublicPage
+        token={
+          publicAnnouncementToken
         }
       />
     );
