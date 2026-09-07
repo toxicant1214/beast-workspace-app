@@ -317,6 +317,101 @@ def send_announcement_to_line(
 
 
 # =========================================================
+# 公告簽收｜刪除公告
+# =========================================================
+
+@app.route(
+    "/api/announcements/<announcement_id>",
+    methods=["DELETE"],
+)
+def delete_announcement(
+    announcement_id,
+):
+    """
+    刪除指定公告。
+
+    announcement_reminders 與 announcement_recipients
+    先依公告 ID 清除，再刪除 announcements 主資料。
+    適合清除測試、誤發或不需要保留的公告。
+    """
+
+    try:
+        announcement = (
+            announcement_service
+            .get_announcement(
+                announcement_id
+            )
+        )
+
+        if not announcement:
+            return jsonify({
+                "success": False,
+                "message": "找不到這則公告",
+            }), 404
+
+        supabase_client = (
+            announcement_service
+            .supabase
+        )
+
+        (
+            supabase_client
+            .table(
+                "announcement_reminders"
+            )
+            .delete()
+            .eq(
+                "announcement_id",
+                announcement_id,
+            )
+            .execute()
+        )
+
+        (
+            supabase_client
+            .table(
+                "announcement_recipients"
+            )
+            .delete()
+            .eq(
+                "announcement_id",
+                announcement_id,
+            )
+            .execute()
+        )
+
+        (
+            supabase_client
+            .table("announcements")
+            .delete()
+            .eq(
+                "id",
+                announcement_id,
+            )
+            .execute()
+        )
+
+        return jsonify({
+            "success": True,
+            "message": "公告已刪除",
+            "announcement_id":
+                announcement_id,
+        })
+
+    except Exception as error:
+        print(
+            "[ANNOUNCEMENT] "
+            "刪除公告失敗：",
+            error,
+        )
+
+        return jsonify({
+            "success": False,
+            "message": "刪除公告失敗",
+        }), 500
+
+
+# =========================================================
 # 公告簽收｜老師公告頁
 # =========================================================
 

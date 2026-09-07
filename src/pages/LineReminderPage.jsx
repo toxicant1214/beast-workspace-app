@@ -109,6 +109,11 @@ function LineReminderPage() {
   ] = useState(false);
 
   const [
+    deletingId,
+    setDeletingId,
+  ] = useState(null);
+
+  const [
     successMessage,
     setSuccessMessage,
   ] = useState("");
@@ -510,6 +515,86 @@ function LineReminderPage() {
   }
 
 
+  async function handleDelete(
+    announcement
+  ) {
+    const confirmed =
+      window.confirm(
+        `確定要刪除「${announcement.title}」嗎？\n\n這會一併刪除這則公告的簽收與提醒紀錄，且無法復原。`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setError("");
+      setSuccessMessage("");
+      setDeletingId(
+        announcement.id
+      );
+
+      if (!API_BASE_URL) {
+        throw new Error(
+          "尚未設定後端 API 網址。"
+        );
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/announcements/${announcement.id}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+      let result = null;
+
+      try {
+        result =
+          await response.json();
+      } catch {
+        result = null;
+      }
+
+      if (
+        !response.ok ||
+        !result?.success
+      ) {
+        throw new Error(
+          result?.message ||
+            "刪除公告失敗。"
+        );
+      }
+
+      if (
+        expandedId ===
+        announcement.id
+      ) {
+        setExpandedId(null);
+      }
+
+      setSuccessMessage(
+        `已刪除「${announcement.title}」。`
+      );
+
+      await loadData();
+    } catch (deleteError) {
+      console.error(
+        "刪除工作公告失敗：",
+        deleteError
+      );
+
+      setError(
+        deleteError?.message ||
+          "刪除工作公告失敗。"
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+
   function getReminderCount(
     announcementId,
     teacherId
@@ -558,6 +643,9 @@ function LineReminderPage() {
         recipients.length -
         confirmed.length,
       onTime:
+        onTime.length,
+      late:
+        confirmed.length -
         onTime.length,
     };
   }
@@ -968,6 +1056,13 @@ function LineReminderPage() {
                         </strong>
                       </span>
 
+                      <span>
+                        逾期{" "}
+                        <strong>
+                          {stats.late}
+                        </strong>
+                      </span>
+
                       {announcement.deadline_at && (
                         <span>
                           期限{" "}
@@ -1025,6 +1120,32 @@ function LineReminderPage() {
                         }}
                       >
                         提醒未確認老師
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={
+                          deletingId ===
+                          announcement.id
+                        }
+                        onClick={() =>
+                          handleDelete(
+                            announcement
+                          )
+                        }
+                        style={{
+                          ...styles.deleteButton,
+                          opacity:
+                            deletingId ===
+                            announcement.id
+                              ? 0.5
+                              : 1,
+                        }}
+                      >
+                        {deletingId ===
+                        announcement.id
+                          ? "刪除中…"
+                          : "刪除公告"}
                       </button>
                     </div>
 
@@ -1549,8 +1670,8 @@ const styles = {
 
   actionRow: {
     display: "flex",
-    justifyContent:
-      "space-between",
+    flexWrap: "wrap",
+    alignItems: "center",
     gap: "10px",
     marginTop: "18px",
   },
@@ -1560,6 +1681,19 @@ const styles = {
     borderRadius: "10px",
     background: "#f4efe6",
     color: "#6e604d",
+    padding: "9px 13px",
+    fontSize: "12px",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+
+  deleteButton: {
+    marginLeft: "auto",
+    border:
+      "1px solid #ead8d4",
+    borderRadius: "10px",
+    background: "#fff",
+    color: "#a05d55",
     padding: "9px 13px",
     fontSize: "12px",
     fontFamily: "inherit",
