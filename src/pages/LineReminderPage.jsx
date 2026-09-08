@@ -128,6 +128,11 @@ function LineReminderPage() {
     setExpandedId,
   ] = useState(null);
 
+  const [
+    expandedContentId,
+    setExpandedContentId,
+  ] = useState(null);
+
 
   const activeTeachers =
     useMemo(
@@ -1059,6 +1064,49 @@ function LineReminderPage() {
                             announcement.title
                           }
                         </h3>
+
+                        {announcement.content && (
+                          <>
+                            <div
+                              style={
+                                styles.contentPreview
+                              }
+                            >
+                              {expandedContentId ===
+                              announcement.id
+                                ? announcement.content
+                                : `${announcement.content.slice(
+                                    0,
+                                    80
+                                  )}${
+                                    announcement.content.length >
+                                    80
+                                      ? "…"
+                                      : ""
+                                  }`}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedContentId(
+                                  expandedContentId ===
+                                    announcement.id
+                                    ? null
+                                    : announcement.id
+                                )
+                              }
+                              style={
+                                styles.contentToggleButton
+                              }
+                            >
+                              {expandedContentId ===
+                              announcement.id
+                                ? "收起公告內容"
+                                : "查看完整內容"}
+                            </button>
+                          </>
+                        )}
                       </div>
 
 
@@ -1713,6 +1761,26 @@ const styles = {
       "10px 0 0",
     fontSize: "18px",
     color: "#374037",
+  },
+
+  contentPreview: {
+    marginTop: "10px",
+    maxWidth: "760px",
+    color: "#6f766f",
+    fontSize: "13px",
+    lineHeight: 1.8,
+    whiteSpace: "pre-wrap",
+  },
+
+  contentToggleButton: {
+    marginTop: "7px",
+    padding: 0,
+    border: 0,
+    background: "transparent",
+    color: "#7a6d5d",
+    fontSize: "11px",
+    fontFamily: "inherit",
+    cursor: "pointer",
   },
 
   statBlock: {
