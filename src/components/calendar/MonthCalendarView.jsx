@@ -287,7 +287,20 @@ function MonthCalendarView({
     currentMonth,
     setCurrentMonth,
   ] = useState(() => {
-    if (semesterStart) {
+    const now = new Date();
+
+    const currentMonthStart =
+      new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+        12
+      );
+
+    if (
+      semesterStart &&
+      now < semesterStart
+    ) {
       return new Date(
         semesterStart.getFullYear(),
         semesterStart.getMonth(),
@@ -296,15 +309,19 @@ function MonthCalendarView({
       );
     }
 
-    const now =
-      new Date();
+    if (
+      semesterEnd &&
+      now > semesterEnd
+    ) {
+      return new Date(
+        semesterEnd.getFullYear(),
+        semesterEnd.getMonth(),
+        1,
+        12
+      );
+    }
 
-    return new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1,
-      12
-    );
+    return currentMonthStart;
   });
 
 
