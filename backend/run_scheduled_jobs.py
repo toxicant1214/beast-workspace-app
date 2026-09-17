@@ -1,6 +1,6 @@
 import os
 from calendar import monthrange
-from datetime import datetime, time
+from datetime import datetime, timedelta, time
 
 from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
@@ -29,6 +29,7 @@ from send_teacher_daily_summary import (
     get_today_cleaning_by_teacher_id,
     get_today_makeups_by_teacher_id,
     get_upcoming_calendar_events,
+    get_makeup_source_name,
 )
 
 
@@ -181,6 +182,418 @@ def normalize_taipei_time(now=None):
         TAIPEI_TZ
     )
 
+
+
+MAKEUP_REMINDER_GRACE_MINUTES = 10
+
+MAKEUP_REMINDERS = {
+    "makeup_2_hours": {
+        "minutes": 120,
+        "headline": "🎒 補課提醒｜2 小時後",
+        "label": "2 小時",
+    },
+    "makeup_30_minutes": {
+        "minutes": 30,
+        "headline": "🔔 補課即將開始｜30 分鐘後",
+        "label": "30 分鐘",
+    },
+}
+
+
+def parse_makeup_start_datetime(
+    makeup_date,
+    start_time,
+):
+    """
+    將補課日期與時間明確組成 Asia/Taipei 時區時間。
+
+    makeup_date 預期為 YYYY-MM-DD。
+    start_time 可接受 HH:MM、HH:MM:SS。
+    """
+
+    if not makeup_date or not start_time:
+        return None
+
+    try:
+        date_value = datetime.strptime(
+            str(makeup_date),
+            "%Y-%m-%d",
+        ).date()
+
+        time_text = str(
+            start_time
+        ).strip()
+
+        parsed_time = None
+
+        for time_format in (
+            "%H:%M:%S",
+            "%H:%M",
+        ):
+            try:
+                parsed_time = datetime.strptime(
+                    time_text,
+                    time_format,
+                ).time()
+                break
+            except ValueError:
+                continue
+
+        if parsed_time is None:
+            return None
+
+        return datetime.combine(
+            date_value,
+            parsed_time,
+            tzinfo=TAIPEI_TZ,
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return None
+
+
+def is_makeup_reminder_due(
+    reminder_time,
+    now,
+):
+    """
+    排程晚幾分鐘執行時仍可補送，
+    但不補送超過 10 分鐘以前的提醒。
+    """
+
+    grace_end = (
+        reminder_time
+        + timedelta(
+            minutes=(
+                MAKEUP_REMINDER_GRACE_MINUTES
+            )
+        )
+    )
+
+    return (
+        reminder_time
+        <= now
+        < grace_end
+    )
+
+
+def build_makeup_reminder_message(
+    makeup,
+    makeup_start,
+    reminder_config,
+):
+    student = (
+        makeup.get("students")
+        or {}
+    )
+
+    student_name = (
+        student.get("chinese_name")
+        or student.get("english_name")
+        or "未命名學生"
+    )
+
+    source_name = (
+        get_makeup_source_name(
+            makeup
+        )
+    )
+
+    note = str(
+        makeup.get("note")
+        or ""
+    ).strip()
+
+    lines = [
+        reminder_config[
+            "headline"
+        ],
+        "",
+        (
+            f"{makeup_start.strftime('%H:%M')} "
+            f"{student_name}｜{source_name}"
+        ),
+    ]
+
+    if note:
+        lines.append(
+            f"備註：{note}"
+        )
+
+    lines.extend(
+        [
+            "",
+            "請協助提醒孩子準備前往補課。",
+        ]
+    )
+
+    return "\n".join(lines)
+
+
+def process_makeup_reminders(
+    now=None,
+):
+    """
+    發送補課前 2 小時與前 30 分鐘 LINE 提醒。
+
+    所有時間一律以 Asia/Taipei 判斷。
+    每筆補課、每位通知老師、每個提醒時間只會成功發送一次。
+    """
+
+    now = normalize_taipei_time(
+        now
+    )
+
+    today_date = (
+        now.date().isoformat()
+    )
+
+    teachers = (
+        get_active_line_teachers()
+    )
+
+    checked_count = 0
+    due_count = 0
+    sent_count = 0
+    skipped_count = 0
+    failed_count = 0
+
+    print(
+        "================================="
+    )
+    print(
+        "開始檢查補課即時提醒"
+    )
+    print(
+        "台灣時間：",
+        now.isoformat(),
+    )
+    print(
+        "================================="
+    )
+
+    for teacher in teachers:
+        teacher_id = (
+            teacher.get("id")
+        )
+
+        line_user_id = (
+            teacher.get(
+                "line_user_id"
+            )
+        )
+
+        teacher_name = (
+            teacher.get(
+                "chinese_name"
+            )
+            or teacher.get(
+                "english_name"
+            )
+            or "老師"
+        )
+
+        if (
+            not teacher_id
+            or not line_user_id
+        ):
+            continue
+
+        try:
+            makeups = (
+                get_today_makeups_by_teacher_id(
+                    teacher_id,
+                    today_date,
+                )
+            )
+
+            for makeup in makeups:
+                makeup_id = (
+                    makeup.get("id")
+                )
+
+                makeup_start = (
+                    parse_makeup_start_datetime(
+                        makeup.get(
+                            "makeup_date"
+                        ),
+                        makeup.get(
+                            "start_time"
+                        ),
+                    )
+                )
+
+                if (
+                    not makeup_id
+                    or not makeup_start
+                ):
+                    continue
+
+                checked_count += 1
+
+                for (
+                    reminder_type,
+                    reminder_config,
+                ) in MAKEUP_REMINDERS.items():
+                    reminder_time = (
+                        makeup_start
+                        - timedelta(
+                            minutes=(
+                                reminder_config[
+                                    "minutes"
+                                ]
+                            )
+                        )
+                    )
+
+                    if not is_makeup_reminder_due(
+                        reminder_time,
+                        now,
+                    ):
+                        continue
+
+                    due_count += 1
+
+                    delivery = (
+                        claim_notification_delivery(
+                            source_type=(
+                                "makeup_class"
+                            ),
+                            source_id=(
+                                makeup_id
+                            ),
+                            recipient_type=(
+                                "teacher"
+                            ),
+                            recipient_line_user_id=(
+                                line_user_id
+                            ),
+                            reminder_type=(
+                                reminder_type
+                            ),
+                            scheduled_at=(
+                                reminder_time
+                            ),
+                        )
+                    )
+
+                    if not delivery:
+                        skipped_count += 1
+
+                        print(
+                            "補課提醒略過：",
+                            teacher_name,
+                            makeup_id,
+                            reminder_type,
+                        )
+
+                        continue
+
+                    try:
+                        message = (
+                            build_makeup_reminder_message(
+                                makeup=(
+                                    makeup
+                                ),
+                                makeup_start=(
+                                    makeup_start
+                                ),
+                                reminder_config=(
+                                    reminder_config
+                                ),
+                            )
+                        )
+
+                        send_line_message_to_user(
+                            line_user_id,
+                            message,
+                        )
+
+                        mark_notification_delivery_sent(
+                            delivery[
+                                "id"
+                            ]
+                        )
+
+                        sent_count += 1
+
+                        print(
+                            "補課提醒發送成功：",
+                            teacher_name,
+                            makeup_id,
+                            reminder_type,
+                            reminder_time.isoformat(),
+                        )
+
+                    except Exception as error:
+                        failed_count += 1
+
+                        mark_notification_delivery_failed(
+                            delivery[
+                                "id"
+                            ],
+                            error,
+                        )
+
+                        print(
+                            "補課提醒發送失敗：",
+                            teacher_name,
+                            makeup_id,
+                            reminder_type,
+                            type(error).__name__,
+                            error,
+                        )
+
+        except Exception as error:
+            failed_count += 1
+
+            print(
+                "補課提醒資料整理失敗：",
+                teacher_name,
+                type(error).__name__,
+                error,
+            )
+
+    print(
+        "================================="
+    )
+    print(
+        "補課即時提醒檢查完成"
+    )
+    print(
+        "已檢查補課：",
+        checked_count,
+    )
+    print(
+        "本次到期提醒：",
+        due_count,
+    )
+    print(
+        "成功發送：",
+        sent_count,
+    )
+    print(
+        "略過重複：",
+        skipped_count,
+    )
+    print(
+        "發送失敗：",
+        failed_count,
+    )
+    print(
+        "================================="
+    )
+
+    return {
+        "checked": checked_count,
+        "due": due_count,
+        "sent": sent_count,
+        "skipped": skipped_count,
+        "failed": failed_count,
+    }
 
 def send_morning_report_if_due(
     now=None,
@@ -567,6 +980,12 @@ def main():
         )
     )
 
+    makeup_reminder_result = (
+        process_makeup_reminders(
+            now=now
+        )
+    )
+
     admin_morning_result = (
         send_morning_report_if_due(
             now=now
@@ -588,6 +1007,10 @@ def main():
     print(
         "待辦提醒結果：",
         reminder_result,
+    )
+    print(
+        "補課即時提醒結果：",
+        makeup_reminder_result,
     )
     print(
         "主管晨報結果：",
