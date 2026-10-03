@@ -6,196 +6,71 @@ import {
 
 import { supabase } from "../lib/supabase";
 
-import ScoreClassEntryPage from "./ScoreClassEntryPage";
+
+const SUBJECT_LABELS = {
+  CHINESE: "國語",
+  MATH: "數學",
+  ENGLISH: "英文",
+  SOCIAL: "社會",
+  SCIENCE: "自然",
+};
 
 
-const TERM_OPTIONS = [
-  "上學期",
-  "下學期",
-];
-
-const PERIOD_OPTIONS = [
-  "期中",
-  "期末",
-];
-
-const EXAM_TYPE_OPTIONS = [
-  {
-    value: "MOCK_1",
-    label: "模擬考①",
-    examType: "MOCK",
-    mockNumber: 1,
-  },
-  {
-    value: "MOCK_2",
-    label: "模擬考②",
-    examType: "MOCK",
-    mockNumber: 2,
-  },
-  {
-    value: "OFFICIAL",
-    label: "正式大考",
-    examType: "OFFICIAL",
-    mockNumber: null,
-  },
+const MOCK_SUBJECTS = [
+  "CHINESE",
+  "MATH",
+  "SOCIAL",
+  "SCIENCE",
 ];
 
 
-function getCurrentAcademicYear() {
-  const now = new Date();
+const OFFICIAL_SUBJECTS = [
+  "CHINESE",
+  "MATH",
+  "ENGLISH",
+  "SOCIAL",
+  "SCIENCE",
+];
 
-  const year =
-    now.getFullYear();
 
-  const month =
-    now.getMonth() + 1;
+function getStatusLabel(status) {
+  switch (status) {
+    case "SCORED":
+      return "已登記";
 
-  const rocYear =
-    year - 1911;
+    case "ABSENT":
+      return "缺考";
 
-  if (month >= 8) {
-    return String(rocYear);
+    case "EXEMPT_PENDING":
+      return "免考審核中";
+
+    case "EXEMPT_APPROVED":
+      return "免考";
+
+    case "EXEMPT_REJECTED":
+      return "免考未通過";
+
+    case "PENDING":
+    default:
+      return "待登記";
   }
-
-  return String(
-    rocYear - 1
-  );
 }
 
 
-function getDefaultTerm() {
-  const month =
-    new Date().getMonth() + 1;
-
-  if (
-    month >= 8 ||
-    month === 1
-  ) {
-    return "上學期";
-  }
-
-  return "下學期";
-}
-
-
-function normalizeAcademicYear(
-  value
-) {
-  return String(
-    value || ""
-  )
-    .replace(
-      "學年度",
-      ""
-    )
-    .trim();
-}
-
-
-function buildAcademicYearOptions(
-  classRows
-) {
-  const current =
-    Number(
-      getCurrentAcademicYear()
-    );
-
-  const years =
-    new Set();
-
-
-  for (
-    const classItem
-    of classRows
-  ) {
-    const value =
-      Number(
-        normalizeAcademicYear(
-          classItem.academic_year
-        )
-      );
-
-    if (
-      Number.isFinite(value)
-    ) {
-      years.add(value);
-    }
-  }
-
-
-  /*
-   * 自動保留目前學年度前 3 年、
-   * 後 5 年。
-   *
-   * 每年會隨現在時間自動往後延伸。
-   */
-  for (
-    let year = current - 3;
-    year <= current + 5;
-    year += 1
-  ) {
-    years.add(year);
-  }
-
-
-  return Array.from(years)
-    .sort(
-      (a, b) => b - a
-    )
-    .map(String);
-}
-
-
-function buildExamTitle({
-  academicYear,
-  term,
-  examPeriod,
-  examLabel,
-}) {
-  return [
-    `${academicYear}學年度`,
-    term,
-    examPeriod,
-    examLabel,
-  ].join("・");
-}
-
-
-export default function ScoreEntryPage({
+export default function ScoreClassEntryPage({
+  examClassId,
+  examInfo,
+  classInfo,
   onBack,
 }) {
   const [
-    academicYear,
-    setAcademicYear,
-  ] = useState(
-    getCurrentAcademicYear()
-  );
-
-  const [
-    term,
-    setTerm,
-  ] = useState(
-    getDefaultTerm()
-  );
-
-  const [
-    examPeriod,
-    setExamPeriod,
-  ] = useState("期中");
-
-  const [
-    examTypeKey,
-    setExamTypeKey,
-  ] = useState("MOCK_1");
-
-  const [
-    allClasses,
-    setAllClasses,
+    students,
+    setStudents,
   ] = useState([]);
 
   const [
-    loadingClasses,
-    setLoadingClasses,
+    loading,
+    setLoading,
   ] = useState(true);
 
   const [
@@ -203,49 +78,19 @@ export default function ScoreEntryPage({
     setErrorMessage,
   ] = useState("");
 
-  const [
-    selectedClassId,
-    setSelectedClassId,
-  ] = useState("");
 
-  const [
-    openingEntry,
-    setOpeningEntry,
-  ] = useState(false);
-
-  const [
-    openError,
-    setOpenError,
-  ] = useState("");
-
-  const [
-    examClassId,
-    setExamClassId,
-  ] = useState("");
-
-  const [
-    openedExamInfo,
-    setOpenedExamInfo,
-  ] = useState(null);
-
-  const [
-    openedClassInfo,
-    setOpenedClassInfo,
-  ] = useState(null);
-
-
-  const selectedExamType =
+  const subjects =
     useMemo(() => {
-      return (
-        EXAM_TYPE_OPTIONS.find(
-          (item) =>
-            item.value ===
-            examTypeKey
-        ) ||
-        EXAM_TYPE_OPTIONS[0]
-      );
+      if (
+        examInfo?.examType ===
+        "OFFICIAL"
+      ) {
+        return OFFICIAL_SUBJECTS;
+      }
+
+      return MOCK_SUBJECTS;
     }, [
-      examTypeKey,
+      examInfo?.examType,
     ]);
 
 
@@ -253,49 +98,62 @@ export default function ScoreEntryPage({
     let cancelled = false;
 
 
-    async function loadClasses() {
+    async function loadScoreData() {
+      if (!examClassId) {
+        return;
+      }
+
+
       try {
-        setLoadingClasses(
-          true
-        );
-
-        setErrorMessage(
-          ""
-        );
+        setLoading(true);
+        setErrorMessage("");
 
 
+        /*
+         * 先讀取這次考試建立當下的
+         * 學生快照。
+         *
+         * 這裡不是重新讀取目前班級學生，
+         * 所以未來學生轉班、退班，
+         * 都不會改寫這場考試的歷史名單。
+         */
         const {
-          data,
-          error,
+          data: studentRows,
+          error: studentError,
         } =
           await supabase
-            .from("classes")
+            .from(
+              "score_exam_students"
+            )
             .select(
               `
               id,
-              class_name,
-              academic_year,
-              term,
-              course_type,
+              student_id,
+              student_name_snapshot,
+              grade_snapshot,
+              class_name_snapshot,
               is_active,
-              start_date,
-              end_date
+              created_at
               `
             )
             .eq(
-              "course_type",
-              "AFTER_SCHOOL"
+              "exam_class_id",
+              examClassId
+            )
+            .eq(
+              "is_active",
+              true
             )
             .order(
-              "class_name",
+              "student_name_snapshot",
               {
                 ascending: true,
               }
             );
 
 
-        if (error) {
-          throw error;
+        if (studentError) {
+          throw studentError;
         }
 
 
@@ -304,314 +162,186 @@ export default function ScoreEntryPage({
         }
 
 
-        setAllClasses(
-          data || []
+        const safeStudentRows =
+          studentRows || [];
+
+
+        if (
+          safeStudentRows.length === 0
+        ) {
+          setStudents([]);
+          return;
+        }
+
+
+        const examStudentIds =
+          safeStudentRows.map(
+            (student) =>
+              student.id
+          );
+
+
+        /*
+         * 再讀取每位學生的各科資料。
+         */
+        const {
+          data: subjectRows,
+          error: subjectError,
+        } =
+          await supabase
+            .from(
+              "score_exam_subjects"
+            )
+            .select(
+              `
+              id,
+              exam_student_id,
+              subject,
+              score,
+              status,
+              created_at,
+              updated_at
+              `
+            )
+            .in(
+              "exam_student_id",
+              examStudentIds
+            );
+
+
+        if (subjectError) {
+          throw subjectError;
+        }
+
+
+        if (cancelled) {
+          return;
+        }
+
+
+        const subjectsByStudent =
+          {};
+
+
+        for (
+          const subjectRow
+          of subjectRows || []
+        ) {
+          if (
+            !subjectsByStudent[
+              subjectRow.exam_student_id
+            ]
+          ) {
+            subjectsByStudent[
+              subjectRow.exam_student_id
+            ] = {};
+          }
+
+
+          subjectsByStudent[
+            subjectRow.exam_student_id
+          ][subjectRow.subject] =
+            subjectRow;
+        }
+
+
+        const combinedStudents =
+          safeStudentRows.map(
+            (student) => ({
+              ...student,
+
+              subjects:
+                subjectsByStudent[
+                  student.id
+                ] || {},
+            })
+          );
+
+
+        setStudents(
+          combinedStudents
         );
       } catch (error) {
         console.error(
-          "讀取成績班級失敗：",
+          "讀取班級成績表失敗：",
           error
         );
 
 
         if (!cancelled) {
-          setAllClasses(
-            []
-          );
+          setStudents([]);
 
           setErrorMessage(
-            `班級資料讀取失敗：${
-              error?.message ||
-              "未知錯誤"
-            }`
+            error?.message ||
+              "無法讀取班級成績資料。"
           );
         }
       } finally {
         if (!cancelled) {
-          setLoadingClasses(
-            false
-          );
+          setLoading(false);
         }
       }
     }
 
 
-    loadClasses();
+    loadScoreData();
 
 
     return () => {
       cancelled = true;
     };
-  }, []);
-
-
-  const academicYearOptions =
-    useMemo(() => {
-      return buildAcademicYearOptions(
-        allClasses
-      );
-    }, [
-      allClasses,
-    ]);
-
-
-  const classes =
-    useMemo(() => {
-      return allClasses.filter(
-        (classItem) => {
-          const classAcademicYear =
-            normalizeAcademicYear(
-              classItem.academic_year
-            );
-
-          const classTerm =
-            String(
-              classItem.term ||
-              ""
-            ).trim();
-
-
-          const academicYearMatches =
-            classAcademicYear ===
-            String(
-              academicYear
-            );
-
-
-          const termMatches =
-            classTerm ===
-              "全年" ||
-            classTerm ===
-              term;
-
-
-          return (
-            academicYearMatches &&
-            termMatches
-          );
-        }
-      );
-    }, [
-      allClasses,
-      academicYear,
-      term,
-    ]);
-
-
-  const selectedClass =
-    useMemo(() => {
-      return (
-        classes.find(
-          (classItem) =>
-            classItem.id ===
-            selectedClassId
-        ) || null
-      );
-    }, [
-      classes,
-      selectedClassId,
-    ]);
-
-
-  useEffect(() => {
-    setSelectedClassId(
-      ""
-    );
-
-    setOpenError(
-      ""
-    );
   }, [
-    academicYear,
-    term,
+    examClassId,
   ]);
 
 
-  useEffect(() => {
-    setOpenError(
-      ""
-    );
-  }, [
-    examPeriod,
-    examTypeKey,
-    selectedClassId,
-  ]);
+  const completion =
+    useMemo(() => {
+      let total = 0;
+      let completed = 0;
 
 
-  async function handleOpenEntry() {
-    if (
-      !selectedClass ||
-      openingEntry
-    ) {
-      return;
-    }
+      for (
+        const student of students
+      ) {
+        for (
+          const subject of subjects
+        ) {
+          total += 1;
+
+          const row =
+            student.subjects?.[
+              subject
+            ];
 
 
-    try {
-      setOpeningEntry(
-        true
-      );
-
-      setOpenError(
-        ""
-      );
-
-
-      const examTitle =
-        buildExamTitle({
-          academicYear,
-          term,
-          examPeriod,
-          examLabel:
-            selectedExamType.label,
-        });
-
-
-      /*
-       * 建立或取得：
-       *
-       * 考試
-       * → 班級快照
-       * → 學生快照
-       * → 各科成績列
-       *
-       * 如果同一場考試、
-       * 同一個班級已經建立過，
-       * Supabase function 會直接回傳
-       * 原本的 exam_class_id。
-       */
-      const {
-        data,
-        error,
-      } =
-        await supabase.rpc(
-          "get_or_create_score_exam_class",
-          {
-            p_academic_year:
-              String(
-                academicYear
-              ),
-
-            p_term:
-              term,
-
-            p_exam_period:
-              examPeriod,
-
-            p_exam_type:
-              selectedExamType.examType,
-
-            p_mock_number:
-              selectedExamType.mockNumber,
-
-            p_title:
-              examTitle,
-
-            p_class_id:
-              selectedClass.id,
+          if (
+            row &&
+            (
+              row.status ===
+                "SCORED" ||
+              row.status ===
+                "ABSENT" ||
+              row.status ===
+                "EXEMPT_APPROVED"
+            )
+          ) {
+            completed += 1;
           }
-        );
-
-
-      if (error) {
-        throw error;
+        }
       }
 
 
-      if (!data) {
-        throw new Error(
-          "沒有取得考試班級資料。"
-        );
-      }
-
-
-      setOpenedExamInfo({
-        academicYear,
-        term,
-        examPeriod,
-
-        examType:
-          selectedExamType.examType,
-
-        mockNumber:
-          selectedExamType.mockNumber,
-
-        examLabel:
-          selectedExamType.label,
-
-        title:
-          examTitle,
-      });
-
-
-      setOpenedClassInfo({
-        ...selectedClass,
-      });
-
-
-      setExamClassId(
-        data
-      );
-    } catch (error) {
-      console.error(
-        "進入成績登記失敗：",
-        error
-      );
-
-
-      setOpenError(
-        error?.message ||
-          "無法進入成績登記，請稍後再試。"
-      );
-    } finally {
-      setOpeningEntry(
-        false
-      );
-    }
-  }
-
-
-  function handleBackFromClassEntry() {
-    setExamClassId(
-      ""
-    );
-
-    setOpenedExamInfo(
-      null
-    );
-
-    setOpenedClassInfo(
-      null
-    );
-  }
-
-
-  /*
-   * 已成功取得 exam_class_id，
-   * 就切換到真正的班級成績表。
-   */
-  if (
-    examClassId &&
-    openedExamInfo &&
-    openedClassInfo
-  ) {
-    return (
-      <ScoreClassEntryPage
-        examClassId={
-          examClassId
-        }
-        examInfo={
-          openedExamInfo
-        }
-        classInfo={
-          openedClassInfo
-        }
-        onBack={
-          handleBackFromClassEntry
-        }
-      />
-    );
-  }
+      return {
+        total,
+        completed,
+        pending:
+          total - completed,
+      };
+    }, [
+      students,
+      subjects,
+    ]);
 
 
   return (
@@ -623,12 +353,41 @@ export default function ScoreEntryPage({
           </div>
 
           <h1 style={styles.title}>
-            成績登記
+            {classInfo?.class_name ||
+              "班級"}
+            {" 成績登記"}
           </h1>
 
-          <p style={styles.subtitle}>
-            選擇考試與班級後，進入班級成績登記。
-          </p>
+          <div style={styles.examInfo}>
+            <span>
+              {examInfo?.academicYear}
+              {" 學年度"}
+            </span>
+
+            <span style={styles.dot}>
+              ·
+            </span>
+
+            <span>
+              {examInfo?.term}
+            </span>
+
+            <span style={styles.dot}>
+              ·
+            </span>
+
+            <span>
+              {examInfo?.examPeriod}
+            </span>
+
+            <span style={styles.dot}>
+              ·
+            </span>
+
+            <strong>
+              {examInfo?.examLabel}
+            </strong>
+          </div>
         </div>
 
 
@@ -637,203 +396,82 @@ export default function ScoreEntryPage({
           onClick={onBack}
           style={styles.backButton}
         >
-          ← 返回學生成績
+          ← 返回選擇班級
         </button>
       </div>
 
 
-      <section style={styles.panel}>
-        <div style={styles.sectionTitle}>
-          選擇考試
+      <div style={styles.statGrid}>
+        <div style={styles.statCard}>
+          <div style={styles.statLabel}>
+            學生
+          </div>
+
+          <div style={styles.statValue}>
+            {students.length}
+          </div>
         </div>
 
 
-        <div style={styles.formGrid}>
-          <label style={styles.field}>
-            <span style={styles.label}>
-              學年度
-            </span>
+        <div style={styles.statCard}>
+          <div style={styles.statLabel}>
+            應登記
+          </div>
 
-            <select
-              value={
-                academicYear
-              }
-              onChange={(
-                event
-              ) =>
-                setAcademicYear(
-                  event.target.value
-                )
-              }
-              style={styles.select}
-            >
-              {academicYearOptions.map(
-                (year) => (
-                  <option
-                    key={year}
-                    value={year}
-                  >
-                    {year} 學年度
-                  </option>
-                )
-              )}
-            </select>
-          </label>
-
-
-          <label style={styles.field}>
-            <span style={styles.label}>
-              學期
-            </span>
-
-            <select
-              value={term}
-              onChange={(
-                event
-              ) =>
-                setTerm(
-                  event.target.value
-                )
-              }
-              style={styles.select}
-            >
-              {TERM_OPTIONS.map(
-                (item) => (
-                  <option
-                    key={item}
-                    value={item}
-                  >
-                    {item}
-                  </option>
-                )
-              )}
-            </select>
-          </label>
-
-
-          <label style={styles.field}>
-            <span style={styles.label}>
-              考試
-            </span>
-
-            <select
-              value={
-                examPeriod
-              }
-              onChange={(
-                event
-              ) =>
-                setExamPeriod(
-                  event.target.value
-                )
-              }
-              style={styles.select}
-            >
-              {PERIOD_OPTIONS.map(
-                (item) => (
-                  <option
-                    key={item}
-                    value={item}
-                  >
-                    {item}
-                  </option>
-                )
-              )}
-            </select>
-          </label>
-
-
-          <label style={styles.field}>
-            <span style={styles.label}>
-              考試類型
-            </span>
-
-            <select
-              value={
-                examTypeKey
-              }
-              onChange={(
-                event
-              ) =>
-                setExamTypeKey(
-                  event.target.value
-                )
-              }
-              style={styles.select}
-            >
-              {EXAM_TYPE_OPTIONS.map(
-                (item) => (
-                  <option
-                    key={
-                      item.value
-                    }
-                    value={
-                      item.value
-                    }
-                  >
-                    {item.label}
-                  </option>
-                )
-              )}
-            </select>
-          </label>
+          <div style={styles.statValue}>
+            {completion.total}
+          </div>
         </div>
 
 
-        <div style={styles.summary}>
-          <span style={styles.summaryLabel}>
-            目前選擇
-          </span>
+        <div style={styles.statCard}>
+          <div style={styles.statLabel}>
+            已完成
+          </div>
 
-          <strong>
-            {academicYear}
-            {" 學年度・"}
-            {term}
-            {"・"}
-            {examPeriod}
-            {"・"}
-            {
-              selectedExamType.label
-            }
-          </strong>
+          <div style={styles.statValue}>
+            {completion.completed}
+          </div>
         </div>
-      </section>
+
+
+        <div style={styles.statCard}>
+          <div style={styles.statLabel}>
+            待完成
+          </div>
+
+          <div style={styles.statValue}>
+            {completion.pending}
+          </div>
+        </div>
+      </div>
 
 
       <section style={styles.panel}>
         <div style={styles.sectionHeader}>
           <div>
             <div style={styles.sectionTitle}>
-              選擇班級
+              成績表
             </div>
 
             <div style={styles.sectionHint}>
-              班級依目前選擇的學年度與學期載入。
+              {examInfo?.examType ===
+              "OFFICIAL"
+                ? "正式大考：國語、數學、英文、社會、自然"
+                : "模擬考：國語、數學、社會、自然"}
             </div>
           </div>
-
-
-          {!loadingClasses &&
-            !errorMessage && (
-              <div
-                style={
-                  styles.classCount
-                }
-              >
-                {classes.length} 班
-              </div>
-            )}
         </div>
 
 
-        {loadingClasses && (
+        {loading && (
           <div style={styles.emptyState}>
-            正在讀取班級…
+            正在讀取成績表…
           </div>
         )}
 
 
-        {!loadingClasses &&
+        {!loading &&
           errorMessage && (
             <div style={styles.errorState}>
               {errorMessage}
@@ -841,106 +479,160 @@ export default function ScoreEntryPage({
           )}
 
 
-        {!loadingClasses &&
+        {!loading &&
           !errorMessage &&
-          classes.length === 0 && (
+          students.length === 0 && (
             <div style={styles.emptyState}>
-              這個學年度目前沒有可用的安親班級。
+              這個班級目前沒有考試學生資料。
             </div>
           )}
 
 
-        {!loadingClasses &&
+        {!loading &&
           !errorMessage &&
-          classes.length > 0 && (
-            <div style={styles.classGrid}>
-              {classes.map(
-                (classItem) => {
-                  const selected =
-                    selectedClassId ===
-                    classItem.id;
-
-                  return (
-                    <button
-                      key={
-                        classItem.id
-                      }
-                      type="button"
-                      onClick={() =>
-                        setSelectedClassId(
-                          classItem.id
-                        )
-                      }
+          students.length > 0 && (
+            <div
+              style={
+                styles.tableWrapper
+              }
+            >
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th
                       style={{
-                        ...styles.classCard,
-
-                        ...(selected
-                          ? styles.classCardSelected
-                          : {}),
+                        ...styles.th,
+                        ...styles.nameColumn,
                       }}
                     >
-                      <div
-                        style={
-                          styles.className
-                        }
-                      >
-                        {
-                          classItem.class_name
-                        }
-                      </div>
+                      學生
+                    </th>
+
+                    {subjects.map(
+                      (subject) => (
+                        <th
+                          key={
+                            subject
+                          }
+                          style={
+                            styles.th
+                          }
+                        >
+                          {
+                            SUBJECT_LABELS[
+                              subject
+                            ]
+                          }
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
 
 
-                      <div
-                        style={
-                          styles.classMeta
+                <tbody>
+                  {students.map(
+                    (student) => (
+                      <tr
+                        key={
+                          student.id
                         }
                       >
-                        {classItem.is_active
-                          ? "使用中"
-                          : "歷史班級"}
-                      </div>
-                    </button>
-                  );
-                }
-              )}
+                        <td
+                          style={{
+                            ...styles.td,
+                            ...styles.studentCell,
+                          }}
+                        >
+                          <div
+                            style={
+                              styles.studentName
+                            }
+                          >
+                            {
+                              student.student_name_snapshot
+                            }
+                          </div>
+
+                          <div
+                            style={
+                              styles.studentMeta
+                            }
+                          >
+                            {student.grade_snapshot ||
+                              ""}
+                          </div>
+                        </td>
+
+
+                        {subjects.map(
+                          (
+                            subject
+                          ) => {
+                            const row =
+                              student
+                                .subjects?.[
+                                subject
+                              ];
+
+
+                            const status =
+                              row?.status ||
+                              "PENDING";
+
+
+                            return (
+                              <td
+                                key={
+                                  subject
+                                }
+                                style={
+                                  styles.td
+                                }
+                              >
+                                {status ===
+                                "SCORED" ? (
+                                  <div
+                                    style={
+                                      styles.score
+                                    }
+                                  >
+                                    {
+                                      row.score
+                                    }
+                                  </div>
+                                ) : (
+                                  <div
+                                    style={
+                                      styles.pendingScore
+                                    }
+                                  >
+                                    —
+                                  </div>
+                                )}
+
+                                <div
+                                  style={
+                                    styles.statusText
+                                  }
+                                >
+                                  {
+                                    getStatusLabel(
+                                      status
+                                    )
+                                  }
+                                </div>
+                              </td>
+                            );
+                          }
+                        )}
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
-
-
-        {openError && (
-          <div style={styles.openError}>
-            無法進入成績登記：
-            {openError}
-          </div>
-        )}
-
-
-        <div style={styles.actionRow}>
-          <button
-            type="button"
-            onClick={
-              handleOpenEntry
-            }
-            disabled={
-              !selectedClassId ||
-              openingEntry
-            }
-            style={{
-              ...styles.primaryButton,
-
-              ...(
-                !selectedClassId ||
-                openingEntry
-                  ? styles.primaryButtonDisabled
-                  : {}
-              ),
-            }}
-          >
-            {openingEntry
-              ? "正在建立成績表…"
-              : "進入成績登記 →"}
-          </button>
-        </div>
       </section>
     </div>
   );
@@ -950,7 +642,7 @@ export default function ScoreEntryPage({
 const styles = {
   page: {
     padding: "32px",
-    maxWidth: "1200px",
+    maxWidth: "1300px",
     margin: "0 auto",
   },
 
@@ -960,7 +652,7 @@ const styles = {
       "space-between",
     alignItems: "flex-start",
     gap: "20px",
-    marginBottom: "28px",
+    marginBottom: "24px",
   },
 
   eyebrow: {
@@ -973,16 +665,23 @@ const styles = {
 
   title: {
     margin: 0,
-    fontSize: "32px",
+    fontSize: "30px",
     fontWeight: "800",
     color: "#222",
   },
 
-  subtitle: {
-    margin: "10px 0 0",
-    color: "#777",
-    fontSize: "15px",
-    lineHeight: 1.6,
+  examInfo: {
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "7px",
+    marginTop: "10px",
+    color: "#666",
+    fontSize: "14px",
+  },
+
+  dot: {
+    color: "#bbb",
   },
 
   backButton: {
@@ -995,12 +694,39 @@ const styles = {
     color: "#555",
   },
 
+  statGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(4, minmax(0, 1fr))",
+    gap: "12px",
+    marginBottom: "18px",
+  },
+
+  statCard: {
+    padding: "18px",
+    background: "#fff",
+    border: "1px solid #e8e8e8",
+    borderRadius: "14px",
+  },
+
+  statLabel: {
+    fontSize: "12px",
+    fontWeight: "700",
+    color: "#888",
+  },
+
+  statValue: {
+    marginTop: "5px",
+    fontSize: "25px",
+    fontWeight: "800",
+    color: "#222",
+  },
+
   panel: {
     background: "#fff",
     border: "1px solid #e8e8e8",
     borderRadius: "18px",
     padding: "24px",
-    marginBottom: "18px",
     boxShadow:
       "0 3px 14px rgba(0, 0, 0, 0.035)",
   },
@@ -1011,112 +737,99 @@ const styles = {
     justifyContent:
       "space-between",
     gap: "16px",
-    marginBottom: "20px",
+    marginBottom: "18px",
   },
 
   sectionTitle: {
     fontSize: "18px",
     fontWeight: "800",
     color: "#222",
-    marginBottom: "18px",
   },
 
   sectionHint: {
-    marginTop: "-10px",
+    marginTop: "6px",
     fontSize: "13px",
     color: "#888",
   },
 
-  formGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: "16px",
-  },
-
-  field: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "7px",
-  },
-
-  label: {
-    fontSize: "13px",
-    fontWeight: "700",
-    color: "#555",
-  },
-
-  select: {
+  tableWrapper: {
     width: "100%",
-    minHeight: "44px",
-    padding: "0 12px",
-    border: "1px solid #ddd",
-    borderRadius: "10px",
-    background: "#fff",
-    fontFamily: "inherit",
-    fontSize: "14px",
-    color: "#333",
-  },
-
-  summary: {
-    display: "flex",
-    gap: "10px",
-    alignItems: "center",
-    flexWrap: "wrap",
-    marginTop: "20px",
-    padding: "13px 15px",
-    borderRadius: "10px",
-    background: "#f7f7f7",
-    color: "#333",
-    fontSize: "14px",
-  },
-
-  summaryLabel: {
-    color: "#888",
-  },
-
-  classCount: {
-    fontSize: "13px",
-    color: "#888",
-  },
-
-  classGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: "12px",
-  },
-
-  classCard: {
-    padding: "18px",
-    border: "1px solid #e2e2e2",
+    overflowX: "auto",
+    border:
+      "1px solid #e8e8e8",
     borderRadius: "12px",
-    background: "#fff",
-    cursor: "pointer",
+  },
+
+  table: {
+    width: "100%",
+    minWidth: "760px",
+    borderCollapse: "collapse",
+  },
+
+  th: {
+    padding: "12px 14px",
+    background: "#f7f7f7",
+    borderBottom:
+      "1px solid #e5e5e5",
+    borderRight:
+      "1px solid #ececec",
+    fontSize: "13px",
+    fontWeight: "800",
+    color: "#555",
+    textAlign: "center",
+  },
+
+  nameColumn: {
+    width: "180px",
     textAlign: "left",
-    fontFamily: "inherit",
   },
 
-  classCardSelected: {
-    border: "2px solid #333",
-    padding: "17px",
-    background: "#fafafa",
+  td: {
+    padding: "13px 14px",
+    borderBottom:
+      "1px solid #eeeeee",
+    borderRight:
+      "1px solid #eeeeee",
+    textAlign: "center",
+    verticalAlign: "middle",
   },
 
-  className: {
+  studentCell: {
+    textAlign: "left",
+  },
+
+  studentName: {
+    fontSize: "15px",
+    fontWeight: "800",
+    color: "#222",
+  },
+
+  studentMeta: {
+    marginTop: "3px",
+    fontSize: "11px",
+    color: "#aaa",
+  },
+
+  score: {
     fontSize: "17px",
     fontWeight: "800",
     color: "#222",
   },
 
-  classMeta: {
-    marginTop: "7px",
-    fontSize: "12px",
+  pendingScore: {
+    fontSize: "17px",
+    fontWeight: "700",
+    color: "#bbb",
+  },
+
+  statusText: {
+    marginTop: "4px",
+    fontSize: "10px",
     color: "#999",
   },
 
   emptyState: {
-    padding: "32px 16px",
+    padding: "40px 16px",
     textAlign: "center",
     color: "#888",
     background: "#fafafa",
@@ -1128,38 +841,5 @@ const styles = {
     color: "#9c3b3b",
     background: "#fff5f5",
     borderRadius: "10px",
-  },
-
-  openError: {
-    marginTop: "18px",
-    padding: "14px 16px",
-    color: "#9c3b3b",
-    background: "#fff5f5",
-    borderRadius: "10px",
-    fontSize: "13px",
-    lineHeight: 1.6,
-  },
-
-  actionRow: {
-    display: "flex",
-    justifyContent: "flex-end",
-    marginTop: "22px",
-  },
-
-  primaryButton: {
-    minHeight: "44px",
-    padding: "0 20px",
-    border: 0,
-    borderRadius: "10px",
-    background: "#222",
-    color: "#fff",
-    fontWeight: "800",
-    fontFamily: "inherit",
-    cursor: "pointer",
-  },
-
-  primaryButtonDisabled: {
-    opacity: 0.35,
-    cursor: "not-allowed",
   },
 };
