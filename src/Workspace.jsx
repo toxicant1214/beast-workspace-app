@@ -19,12 +19,10 @@ import CalendarPage from "./pages/CalendarPage";
 import PickupPage from "./pages/PickupPage";
 import SnackManagementPage from "./pages/SnackManagementPage";
 import ViewerManagementPage from "./pages/ViewerManagementPage";
-import LearningReportPage from "./pages/LearningReportPage";
+import ScoreManagementPage from "./pages/ScoreManagementPage";
 import CleaningPage from "./pages/CleaningPage";
 import LineReminderPage from "./pages/LineReminderPage";
-import ScoreAnalysisPage from "./pages/ScoreAnalysisPage";
 import FinancePage from "./pages/FinancePage";
-import TeacherEvaluationPage from "./pages/TeacherEvaluationPage";
 import LoginPage from "./pages/LoginPage";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AnnouncementPublicPage from "./pages/AnnouncementPublicPage";
@@ -57,7 +55,7 @@ const PAGE_OPTIONS = [
     label: "學生資料",
     key: "students",
   },
-    {
+  {
     label: "老師管理",
     key: "teachers",
     adminOnly: true,
@@ -77,15 +75,15 @@ const PAGE_OPTIONS = [
     key: "teacher_assignments",
   },
   {
-  label: "班級管理",
-  key: "classes",
-  editOnly: true,
-},
-{
-  label: "課程管理",
-  key: "courses",
-  editOnly: true,
-},
+    label: "班級管理",
+    key: "classes",
+    editOnly: true,
+  },
+  {
+    label: "課程管理",
+    key: "courses",
+    editOnly: true,
+  },
   {
     label: "營隊管理",
     key: "camps",
@@ -114,8 +112,8 @@ const PAGE_OPTIONS = [
     teacherOnly: true,
   },
   {
-    label: "學習報告書",
-    key: "learning_reports",
+    label: "學生成績",
+    key: "student_scores",
   },
   {
     label: "清潔分配",
@@ -124,15 +122,6 @@ const PAGE_OPTIONS = [
   {
     label: "LINE 提醒",
     key: "line_reminders",
-    adminOnly: true,
-  },
-  {
-    label: "成績分析",
-    key: "score_analysis",
-  },
-  {
-    label: "教師考核",
-    key: "teacher_evaluation",
     adminOnly: true,
   },
   {
@@ -219,7 +208,6 @@ function buildPermissionObject(
 }
 
 
-
 function buildViewerPermissionObject(
   permissionRows
 ) {
@@ -246,7 +234,6 @@ function buildViewerPermissionObject(
 
   return result;
 }
-
 
 
 function getPublicAnnouncementToken() {
@@ -294,7 +281,6 @@ function Workspace() {
     isTeacherInviteUrl
   );
 
-
   const [
     currentTeacher,
     setCurrentTeacher,
@@ -309,7 +295,6 @@ function Workspace() {
     currentTeacherError,
     setCurrentTeacherError,
   ] = useState("");
-
 
   const [
     isSigningOut,
@@ -351,7 +336,9 @@ function Workspace() {
             return false;
           }
 
-          if (page.editOnly) {
+          if (
+            page.editOnly
+          ) {
             return canEditPage(
               currentTeacher,
               page.key
@@ -723,6 +710,7 @@ function Workspace() {
       }
     }
 
+
     loadCurrentTeacher();
 
 
@@ -945,6 +933,7 @@ function Workspace() {
       );
     }
 
+
     if (
       activePage ===
       "休假管理"
@@ -953,6 +942,7 @@ function Workspace() {
         <LeaveManagementPage />
       );
     }
+
 
     if (
       activePage ===
@@ -1062,6 +1052,7 @@ function Workspace() {
       );
     }
 
+
     if (
       activePage ===
       "月點心表"
@@ -1072,6 +1063,7 @@ function Workspace() {
         />
       );
     }
+
 
     if (
       activePage ===
@@ -1087,16 +1079,17 @@ function Workspace() {
 
     if (
       activePage ===
-      "學習報告書"
+      "學生成績"
     ) {
       return (
-        <LearningReportPage
+        <ScoreManagementPage
           currentTeacher={
             currentTeacher
           }
         />
       );
     }
+
 
     if (
       activePage ===
@@ -1118,34 +1111,6 @@ function Workspace() {
     ) {
       return (
         <LineReminderPage />
-      );
-    }
-
-
-    if (
-      activePage ===
-      "成績分析"
-    ) {
-      return (
-        <ScoreAnalysisPage
-          currentTeacher={
-            currentTeacher
-          }
-        />
-      );
-    }
-
-
-    if (
-      activePage ===
-      "教師考核"
-    ) {
-      return (
-        <TeacherEvaluationPage
-          currentTeacher={
-            currentTeacher
-          }
-        />
       );
     }
 
