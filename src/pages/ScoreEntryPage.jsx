@@ -76,6 +76,20 @@ function getDefaultTerm() {
 }
 
 
+function normalizeAcademicYear(
+  value
+) {
+  return String(
+    value || ""
+  )
+    .replace(
+      "學年度",
+      ""
+    )
+    .trim();
+}
+
+
 function buildAcademicYearOptions(
   classRows
 ) {
@@ -89,7 +103,10 @@ function buildAcademicYearOptions(
 
 
   /*
-   * 保留 Workspace 已經存在的所有學年度。
+   * 把 Workspace 已存在的學年度全部保留。
+   *
+   * classes.academic_year 實際格式：
+   * 115學年度
    */
   for (
     const classItem
@@ -97,7 +114,9 @@ function buildAcademicYearOptions(
   ) {
     const value =
       Number(
-        classItem.academic_year
+        normalizeAcademicYear(
+          classItem.academic_year
+        )
       );
 
     if (
@@ -109,11 +128,11 @@ function buildAcademicYearOptions(
 
 
   /*
-   * 同時預留目前學年度前 3 年、
+   * 自動保留目前學年度前 3 年、
    * 後 5 年。
    *
-   * 例如目前 115，
-   * 會至少提供 112～120。
+   * 每年會跟著現在時間自動往後延伸，
+   * 不需要再手動修改程式。
    */
   for (
     let year = current - 3;
@@ -196,11 +215,14 @@ export default function ScoreEntryPage({
 
 
   /*
-   * 只讀一次所有安親班級。
+   * 一次讀取 Workspace 所有安親班級。
    *
-   * 學年度、學期切換時，
-   * 前端直接從既有資料篩選，
-   * 不需要一直重新打 Supabase。
+   * 實際 classes 欄位：
+   * class_name
+   * academic_year
+   * term
+   * course_type
+   * is_active
    */
   useEffect(() => {
     let cancelled = false;
@@ -299,8 +321,8 @@ export default function ScoreEntryPage({
 
 
   /*
-   * 學年度選項：
-   * 既有資料 + 自動預留未來年度。
+   * 學年度：
+   * 既有資料 + 自動延伸未來年度。
    */
   const academicYearOptions =
     useMemo(() => {
@@ -313,25 +335,50 @@ export default function ScoreEntryPage({
 
 
   /*
-   * 真正顯示的班級，
-   * 必須同時符合學年度與學期。
+   * 篩選目前學年度與學期可使用的班級。
+   *
+   * classes.academic_year：
+   * 115學年度
+   *
+   * classes.term：
+   * 全年
+   *
+   * 「全年」班級在上學期、下學期
+   * 都應該可以登記成績。
    */
   const classes =
     useMemo(() => {
       return allClasses.filter(
         (classItem) => {
-          return (
-            String(
-              classItem.academic_year ||
-              ""
-            ) ===
-              String(
-                academicYear
-              ) &&
+          const classAcademicYear =
+            normalizeAcademicYear(
+              classItem.academic_year
+            );
+
+          const classTerm =
             String(
               classItem.term ||
               ""
-            ) === term
+            ).trim();
+
+
+          const academicYearMatches =
+            classAcademicYear ===
+            String(
+              academicYear
+            );
+
+
+          const termMatches =
+            classTerm ===
+              "全年" ||
+            classTerm ===
+              term;
+
+
+          return (
+            academicYearMatches &&
+            termMatches
           );
         }
       );
@@ -344,7 +391,7 @@ export default function ScoreEntryPage({
 
   /*
    * 換學年度或學期後，
-   * 原本選的班級要清掉。
+   * 清除原本選擇的班級。
    */
   useEffect(() => {
     setSelectedClassId(
@@ -404,8 +451,7 @@ export default function ScoreEntryPage({
                 event
               ) =>
                 setAcademicYear(
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               style={styles.select}
@@ -435,8 +481,7 @@ export default function ScoreEntryPage({
                 event
               ) =>
                 setTerm(
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               style={styles.select}
@@ -468,8 +513,7 @@ export default function ScoreEntryPage({
                 event
               ) =>
                 setExamPeriod(
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               style={styles.select}
@@ -501,8 +545,7 @@ export default function ScoreEntryPage({
                 event
               ) =>
                 setExamTypeKey(
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               style={styles.select}
@@ -589,18 +632,16 @@ export default function ScoreEntryPage({
 
         {!loadingClasses &&
           !errorMessage &&
-          classes.length ===
-            0 && (
+          classes.length === 0 && (
             <div style={styles.emptyState}>
-              這個學年度／學期目前沒有安親班級。
+              這個學年度目前沒有可用的安親班級。
             </div>
           )}
 
 
         {!loadingClasses &&
           !errorMessage &&
-          classes.length >
-            0 && (
+          classes.length > 0 && (
             <div style={styles.classGrid}>
               {classes.map(
                 (classItem) => {
