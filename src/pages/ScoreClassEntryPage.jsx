@@ -265,8 +265,8 @@ export default function ScoreClassEntryPage({
 
 
   /*
-   * 更新本機 students。
-   * 儲存成功後立即反映完成數。
+   * 儲存成功後同步更新本機資料，
+   * 讓「已完成 / 待完成」立即更新。
    */
   function updateLocalSubject(
     subjectId,
@@ -320,7 +320,7 @@ export default function ScoreClassEntryPage({
     subjectRow
   ) {
     if (!subjectRow?.id) {
-      return;
+      return false;
     }
 
 
@@ -356,7 +356,7 @@ export default function ScoreClassEntryPage({
           })
         );
 
-        return;
+        return false;
       }
 
 
@@ -365,9 +365,6 @@ export default function ScoreClassEntryPage({
     }
 
 
-    /*
-     * 沒有變更就不打 Supabase。
-     */
     const currentScore =
       subjectRow.score === null ||
       subjectRow.score === undefined
@@ -377,20 +374,15 @@ export default function ScoreClassEntryPage({
           );
 
 
+    /*
+     * 沒有變更就不用再寫入資料庫。
+     */
     if (
       currentScore === nextScore &&
       subjectRow.status ===
         nextStatus
     ) {
-      setSaveStates(
-        (current) => ({
-          ...current,
-          [subjectRow.id]:
-            "saved",
-        })
-      );
-
-      return;
+      return true;
     }
 
 
@@ -443,9 +435,6 @@ export default function ScoreClassEntryPage({
       );
 
 
-      /*
-       * 「已儲存」提示只短暫存在。
-       */
       window.setTimeout(() => {
         setSaveStates(
           (current) => {
@@ -465,6 +454,9 @@ export default function ScoreClassEntryPage({
           }
         );
       }, 1200);
+
+
+      return true;
     } catch (error) {
       console.error(
         "儲存成績失敗：",
@@ -479,6 +471,9 @@ export default function ScoreClassEntryPage({
             "error",
         })
       );
+
+
+      return false;
     }
   }
 
@@ -488,10 +483,10 @@ export default function ScoreClassEntryPage({
     value
   ) {
     /*
-     * 只接受：
+     * 接受：
      * 空白、整數、小數。
      *
-     * 最終 0～100 會在 save 時驗證。
+     * 最終仍會在儲存時驗證 0～100。
      */
     if (
       value !== "" &&
@@ -512,10 +507,6 @@ export default function ScoreClassEntryPage({
     );
 
 
-    /*
-     * 使用者重新修改時，
-     * 清掉上一個錯誤提示。
-     */
     setSaveStates(
       (current) => ({
         ...current,
@@ -525,10 +516,72 @@ export default function ScoreClassEntryPage({
   }
 
 
-  function focusNextStudent(
+  /*
+   * Enter 移動順序：
+   *
+   * 同一位學生：
+   * 國語 → 數學 → 社會 → 自然
+   *
+   * 正式大考：
+   * 國語 → 數學 → 英文 → 社會 → 自然
+   *
+   * 最後一科完成後，
+   * 才前往下一位學生的第一科。
+   */
+  function focusNextScore(
     studentIndex,
     subject
   ) {
+    const currentSubjectIndex =
+      subjects.indexOf(subject);
+
+
+    /*
+     * 同一位學生還有下一科。
+     */
+    if (
+      currentSubjectIndex >= 0 &&
+      currentSubjectIndex <
+        subjects.length - 1
+    ) {
+      const nextSubject =
+        subjects[
+          currentSubjectIndex + 1
+        ];
+
+
+      const nextSubjectRow =
+        students[
+          studentIndex
+        ]?.subjects?.[
+          nextSubject
+        ];
+
+
+      if (nextSubjectRow?.id) {
+        window.setTimeout(() => {
+          const nextInput =
+            inputRefs.current[
+              nextSubjectRow.id
+            ];
+
+
+          if (nextInput) {
+            nextInput.focus();
+            nextInput.select();
+          }
+        }, 0);
+
+
+        return;
+      }
+    }
+
+
+    /*
+     * 已經是這位學生最後一科，
+     * 前往下一位學生的第一科。
+     */
     const nextStudent =
       students[
         studentIndex + 1
@@ -540,9 +593,13 @@ export default function ScoreClassEntryPage({
     }
 
 
+    const firstSubject =
+      subjects[0];
+
+
     const nextSubjectRow =
       nextStudent.subjects?.[
-        subject
+        firstSubject
       ];
 
 
@@ -556,6 +613,7 @@ export default function ScoreClassEntryPage({
         inputRefs.current[
           nextSubjectRow.id
         ];
+
 
       if (nextInput) {
         nextInput.focus();
@@ -578,11 +636,24 @@ export default function ScoreClassEntryPage({
 
     event.preventDefault();
 
-    await saveScore(
-      subjectRow
-    );
 
-    focusNextStudent(
+    const saved =
+      await saveScore(
+        subjectRow
+      );
+
+
+    /*
+     * 儲存成功才移動。
+     * 如果輸入超過 100 等錯誤，
+     * 游標留在原格讓老師修正。
+     */
+    if (!saved) {
+      return;
+    }
+
+
+    focusNextScore(
       studentIndex,
       subject
     );
@@ -604,6 +675,7 @@ export default function ScoreClassEntryPage({
           of subjects
         ) {
           total += 1;
+
 
           const row =
             student.subjects?.[
@@ -751,7 +823,7 @@ export default function ScoreClassEntryPage({
             </div>
 
             <div style={styles.sectionHint}>
-              直接輸入成績，離開欄位即自動儲存；按 Enter 可往下一位學生。
+              直接輸入成績，離開欄位即自動儲存；按 Enter 可輸入同一位學生的下一科。
             </div>
           </div>
         </div>
