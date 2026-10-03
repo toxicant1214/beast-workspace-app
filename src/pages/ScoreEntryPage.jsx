@@ -5,7 +5,6 @@ import {
 } from "react";
 
 import { supabase } from "../lib/supabase";
-
 import ScoreClassEntryPage from "./ScoreClassEntryPage";
 
 
@@ -43,23 +42,15 @@ const EXAM_TYPE_OPTIONS = [
 
 function getCurrentAcademicYear() {
   const now = new Date();
-
-  const year =
-    now.getFullYear();
-
-  const month =
-    now.getMonth() + 1;
-
-  const rocYear =
-    year - 1911;
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const rocYear = year - 1911;
 
   if (month >= 8) {
     return String(rocYear);
   }
 
-  return String(
-    rocYear - 1
-  );
+  return String(rocYear - 1);
 }
 
 
@@ -78,16 +69,9 @@ function getDefaultTerm() {
 }
 
 
-function normalizeAcademicYear(
-  value
-) {
-  return String(
-    value || ""
-  )
-    .replace(
-      "學年度",
-      ""
-    )
+function normalizeAcademicYear(value) {
+  return String(value || "")
+    .replace("學年度", "")
     .trim();
 }
 
@@ -123,12 +107,6 @@ function buildAcademicYearOptions(
   }
 
 
-  /*
-   * 自動保留目前學年度前 3 年、
-   * 後 5 年。
-   *
-   * 每年會隨現在時間自動往後延伸。
-   */
   for (
     let year = current - 3;
     year <= current + 5;
@@ -158,6 +136,77 @@ function buildExamTitle({
     examPeriod,
     examLabel,
   ].join("・");
+}
+
+
+/*
+ * Supabase RPC 的回傳值做統一處理。
+ *
+ * PostgreSQL function returns uuid 時，
+ * 一般會直接得到 UUID 字串；
+ * 但這裡同時容許陣列或物件型態，
+ * 避免前端因回傳格式差異無法切頁。
+ */
+function extractExamClassId(data) {
+  if (!data) {
+    return "";
+  }
+
+
+  if (
+    typeof data === "string"
+  ) {
+    return data;
+  }
+
+
+  if (
+    Array.isArray(data)
+  ) {
+    if (
+      data.length === 0
+    ) {
+      return "";
+    }
+
+    const first =
+      data[0];
+
+    if (
+      typeof first === "string"
+    ) {
+      return first;
+    }
+
+    if (
+      first &&
+      typeof first === "object"
+    ) {
+      return (
+        first.exam_class_id ||
+        first.get_or_create_score_exam_class ||
+        first.id ||
+        ""
+      );
+    }
+
+    return "";
+  }
+
+
+  if (
+    typeof data === "object"
+  ) {
+    return (
+      data.exam_class_id ||
+      data.get_or_create_score_exam_class ||
+      data.id ||
+      ""
+    );
+  }
+
+
+  return "";
 }
 
 
@@ -255,13 +304,8 @@ export default function ScoreEntryPage({
 
     async function loadClasses() {
       try {
-        setLoadingClasses(
-          true
-        );
-
-        setErrorMessage(
-          ""
-        );
+        setLoadingClasses(true);
+        setErrorMessage("");
 
 
         const {
@@ -315,9 +359,7 @@ export default function ScoreEntryPage({
 
 
         if (!cancelled) {
-          setAllClasses(
-            []
-          );
+          setAllClasses([]);
 
           setErrorMessage(
             `班級資料讀取失敗：${
@@ -328,9 +370,7 @@ export default function ScoreEntryPage({
         }
       } finally {
         if (!cancelled) {
-          setLoadingClasses(
-            false
-          );
+          setLoadingClasses(false);
         }
       }
     }
@@ -366,8 +406,7 @@ export default function ScoreEntryPage({
 
           const classTerm =
             String(
-              classItem.term ||
-              ""
+              classItem.term || ""
             ).trim();
 
 
@@ -379,10 +418,8 @@ export default function ScoreEntryPage({
 
 
           const termMatches =
-            classTerm ===
-              "全年" ||
-            classTerm ===
-              term;
+            classTerm === "全年" ||
+            classTerm === term;
 
 
           return (
@@ -414,13 +451,8 @@ export default function ScoreEntryPage({
 
 
   useEffect(() => {
-    setSelectedClassId(
-      ""
-    );
-
-    setOpenError(
-      ""
-    );
+    setSelectedClassId("");
+    setOpenError("");
   }, [
     academicYear,
     term,
@@ -428,9 +460,7 @@ export default function ScoreEntryPage({
 
 
   useEffect(() => {
-    setOpenError(
-      ""
-    );
+    setOpenError("");
   }, [
     examPeriod,
     examTypeKey,
@@ -448,13 +478,8 @@ export default function ScoreEntryPage({
 
 
     try {
-      setOpeningEntry(
-        true
-      );
-
-      setOpenError(
-        ""
-      );
+      setOpeningEntry(true);
+      setOpenError("");
 
 
       const examTitle =
@@ -467,19 +492,6 @@ export default function ScoreEntryPage({
         });
 
 
-      /*
-       * 建立或取得：
-       *
-       * 考試
-       * → 班級快照
-       * → 學生快照
-       * → 各科成績列
-       *
-       * 如果同一場考試、
-       * 同一個班級已經建立過，
-       * Supabase function 會直接回傳
-       * 原本的 exam_class_id。
-       */
       const {
         data,
         error,
@@ -518,14 +530,26 @@ export default function ScoreEntryPage({
       }
 
 
-      if (!data) {
+      /*
+       * 不直接把 data 塞進 state。
+       * 先確實取出 UUID。
+       */
+      const resolvedExamClassId =
+        extractExamClassId(
+          data
+        );
+
+
+      if (
+        !resolvedExamClassId
+      ) {
         throw new Error(
-          "沒有取得考試班級資料。"
+          "考試資料已建立，但沒有取得班級成績表 ID。"
         );
       }
 
 
-      setOpenedExamInfo({
+      const nextExamInfo = {
         academicYear,
         term,
         examPeriod,
@@ -541,16 +565,30 @@ export default function ScoreEntryPage({
 
         title:
           examTitle,
-      });
+      };
 
 
-      setOpenedClassInfo({
+      const nextClassInfo = {
         ...selectedClass,
-      });
+      };
 
+
+      /*
+       * 三個切頁需要的 state
+       * 全部設定完成。
+       */
+      setOpenedExamInfo(
+        nextExamInfo
+      );
+
+      setOpenedClassInfo(
+        nextClassInfo
+      );
 
       setExamClassId(
-        data
+        String(
+          resolvedExamClassId
+        )
       );
     } catch (error) {
       console.error(
@@ -564,31 +602,21 @@ export default function ScoreEntryPage({
           "無法進入成績登記，請稍後再試。"
       );
     } finally {
-      setOpeningEntry(
-        false
-      );
+      setOpeningEntry(false);
     }
   }
 
 
   function handleBackFromClassEntry() {
-    setExamClassId(
-      ""
-    );
-
-    setOpenedExamInfo(
-      null
-    );
-
-    setOpenedClassInfo(
-      null
-    );
+    setExamClassId("");
+    setOpenedExamInfo(null);
+    setOpenedClassInfo(null);
   }
 
 
   /*
-   * 已成功取得 exam_class_id，
-   * 就切換到真正的班級成績表。
+   * 只要三份資料都齊全，
+   * 就直接 render 班級成績登記頁。
    */
   if (
     examClassId &&
@@ -655,9 +683,7 @@ export default function ScoreEntryPage({
             </span>
 
             <select
-              value={
-                academicYear
-              }
+              value={academicYear}
               onChange={(
                 event
               ) =>
@@ -937,7 +963,7 @@ export default function ScoreEntryPage({
             }}
           >
             {openingEntry
-              ? "正在建立成績表…"
+              ? "正在開啟成績表…"
               : "進入成績登記 →"}
           </button>
         </div>
