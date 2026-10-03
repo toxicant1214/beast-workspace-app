@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -33,65 +34,48 @@ const OFFICIAL_SUBJECTS = [
 ];
 
 
-function getStatusLabel(status) {
-  switch (status) {
-    case "SCORED":
-      return "已登記";
-
-    case "ABSENT":
-      return "缺考";
-
-    case "EXEMPT_PENDING":
-      return "免考審核中";
-
-    case "EXEMPT_APPROVED":
-      return "免考";
-
-    case "EXEMPT_REJECTED":
-      return "免考未通過";
-
-    case "PENDING":
-    default:
-      return "待登記";
-  }
-}
-
-
 export default function ScoreClassEntryPage({
   examClassId,
   examInfo,
   classInfo,
   onBack,
 }) {
-  const [
-    students,
-    setStudents,
-  ] = useState([]);
+  const [students, setStudents] =
+    useState([]);
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
   const [
     errorMessage,
     setErrorMessage,
   ] = useState("");
 
+  /*
+   * 輸入中的值獨立保存。
+   * key = examSubjectId
+   */
+  const [draftScores, setDraftScores] =
+    useState({});
 
-  const subjects =
-    useMemo(() => {
-      if (
-        examInfo?.examType ===
-        "OFFICIAL"
-      ) {
-        return OFFICIAL_SUBJECTS;
-      }
+  /*
+   * saving / saved / error
+   */
+  const [saveStates, setSaveStates] =
+    useState({});
 
-      return MOCK_SUBJECTS;
-    }, [
-      examInfo?.examType,
-    ]);
+  const inputRefs = useRef({});
+
+
+  const subjects = useMemo(() => {
+    if (
+      examInfo?.examType === "OFFICIAL"
+    ) {
+      return OFFICIAL_SUBJECTS;
+    }
+
+    return MOCK_SUBJECTS;
+  }, [examInfo?.examType]);
 
 
   useEffect(() => {
@@ -103,59 +87,41 @@ export default function ScoreClassEntryPage({
         return;
       }
 
-
       try {
         setLoading(true);
         setErrorMessage("");
 
 
-        /*
-         * 先讀取這次考試建立當下的
-         * 學生快照。
-         *
-         * 這裡不是重新讀取目前班級學生，
-         * 所以未來學生轉班、退班，
-         * 都不會改寫這場考試的歷史名單。
-         */
         const {
           data: studentRows,
           error: studentError,
-        } =
-          await supabase
-            .from(
-              "score_exam_students"
-            )
-            .select(
-              `
-              id,
-              student_id,
-              student_name_snapshot,
-              grade_snapshot,
-              class_name_snapshot,
-              is_active,
-              created_at
-              `
-            )
-            .eq(
-              "exam_class_id",
-              examClassId
-            )
-            .eq(
-              "is_active",
-              true
-            )
-            .order(
-              "student_name_snapshot",
-              {
-                ascending: true,
-              }
-            );
+        } = await supabase
+          .from("score_exam_students")
+          .select(`
+            id,
+            student_id,
+            student_name_snapshot,
+            grade_snapshot,
+            class_name_snapshot,
+            is_active,
+            created_at
+          `)
+          .eq(
+            "exam_class_id",
+            examClassId
+          )
+          .eq("is_active", true)
+          .order(
+            "student_name_snapshot",
+            {
+              ascending: true,
+            }
+          );
 
 
         if (studentError) {
           throw studentError;
         }
-
 
         if (cancelled) {
           return;
@@ -170,57 +136,48 @@ export default function ScoreClassEntryPage({
           safeStudentRows.length === 0
         ) {
           setStudents([]);
+          setDraftScores({});
           return;
         }
 
 
         const examStudentIds =
           safeStudentRows.map(
-            (student) =>
-              student.id
+            (student) => student.id
           );
 
 
-        /*
-         * 再讀取每位學生的各科資料。
-         */
         const {
           data: subjectRows,
           error: subjectError,
-        } =
-          await supabase
-            .from(
-              "score_exam_subjects"
-            )
-            .select(
-              `
-              id,
-              exam_student_id,
-              subject,
-              score,
-              status,
-              created_at,
-              updated_at
-              `
-            )
-            .in(
-              "exam_student_id",
-              examStudentIds
-            );
+        } = await supabase
+          .from("score_exam_subjects")
+          .select(`
+            id,
+            exam_student_id,
+            subject,
+            score,
+            status,
+            created_at,
+            updated_at
+          `)
+          .in(
+            "exam_student_id",
+            examStudentIds
+          );
 
 
         if (subjectError) {
           throw subjectError;
         }
 
-
         if (cancelled) {
           return;
         }
 
 
-        const subjectsByStudent =
-          {};
+        const subjectsByStudent = {};
+        const initialDrafts = {};
 
 
         for (
@@ -242,6 +199,17 @@ export default function ScoreClassEntryPage({
             subjectRow.exam_student_id
           ][subjectRow.subject] =
             subjectRow;
+
+
+          initialDrafts[
+            subjectRow.id
+          ] =
+            subjectRow.score === null ||
+            subjectRow.score === undefined
+              ? ""
+              : String(
+                  subjectRow.score
+                );
         }
 
 
@@ -261,12 +229,15 @@ export default function ScoreClassEntryPage({
         setStudents(
           combinedStudents
         );
+
+        setDraftScores(
+          initialDrafts
+        );
       } catch (error) {
         console.error(
           "讀取班級成績表失敗：",
           error
         );
-
 
         if (!cancelled) {
           setStudents([]);
@@ -290,9 +261,332 @@ export default function ScoreClassEntryPage({
     return () => {
       cancelled = true;
     };
-  }, [
-    examClassId,
-  ]);
+  }, [examClassId]);
+
+
+  /*
+   * 更新本機 students。
+   * 儲存成功後立即反映完成數。
+   */
+  function updateLocalSubject(
+    subjectId,
+    nextScore,
+    nextStatus
+  ) {
+    setStudents(
+      (currentStudents) =>
+        currentStudents.map(
+          (student) => ({
+            ...student,
+
+            subjects:
+              Object.fromEntries(
+                Object.entries(
+                  student.subjects || {}
+                ).map(
+                  ([
+                    subjectKey,
+                    subjectRow,
+                  ]) => {
+                    if (
+                      subjectRow.id !==
+                      subjectId
+                    ) {
+                      return [
+                        subjectKey,
+                        subjectRow,
+                      ];
+                    }
+
+                    return [
+                      subjectKey,
+                      {
+                        ...subjectRow,
+                        score: nextScore,
+                        status:
+                          nextStatus,
+                      },
+                    ];
+                  }
+                )
+              ),
+          })
+        )
+    );
+  }
+
+
+  async function saveScore(
+    subjectRow
+  ) {
+    if (!subjectRow?.id) {
+      return;
+    }
+
+
+    const rawValue =
+      String(
+        draftScores[
+          subjectRow.id
+        ] ?? ""
+      ).trim();
+
+
+    let nextScore = null;
+    let nextStatus = "PENDING";
+
+
+    if (rawValue !== "") {
+      const numberValue =
+        Number(rawValue);
+
+
+      if (
+        !Number.isFinite(
+          numberValue
+        ) ||
+        numberValue < 0 ||
+        numberValue > 100
+      ) {
+        setSaveStates(
+          (current) => ({
+            ...current,
+            [subjectRow.id]:
+              "error",
+          })
+        );
+
+        return;
+      }
+
+
+      nextScore = numberValue;
+      nextStatus = "SCORED";
+    }
+
+
+    /*
+     * 沒有變更就不打 Supabase。
+     */
+    const currentScore =
+      subjectRow.score === null ||
+      subjectRow.score === undefined
+        ? null
+        : Number(
+            subjectRow.score
+          );
+
+
+    if (
+      currentScore === nextScore &&
+      subjectRow.status ===
+        nextStatus
+    ) {
+      setSaveStates(
+        (current) => ({
+          ...current,
+          [subjectRow.id]:
+            "saved",
+        })
+      );
+
+      return;
+    }
+
+
+    try {
+      setSaveStates(
+        (current) => ({
+          ...current,
+          [subjectRow.id]:
+            "saving",
+        })
+      );
+
+
+      const {
+        error,
+      } = await supabase
+        .from(
+          "score_exam_subjects"
+        )
+        .update({
+          score: nextScore,
+          status: nextStatus,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          subjectRow.id
+        );
+
+
+      if (error) {
+        throw error;
+      }
+
+
+      updateLocalSubject(
+        subjectRow.id,
+        nextScore,
+        nextStatus
+      );
+
+
+      setSaveStates(
+        (current) => ({
+          ...current,
+          [subjectRow.id]:
+            "saved",
+        })
+      );
+
+
+      /*
+       * 「已儲存」提示只短暫存在。
+       */
+      window.setTimeout(() => {
+        setSaveStates(
+          (current) => {
+            if (
+              current[
+                subjectRow.id
+              ] !== "saved"
+            ) {
+              return current;
+            }
+
+            return {
+              ...current,
+              [subjectRow.id]:
+                "",
+            };
+          }
+        );
+      }, 1200);
+    } catch (error) {
+      console.error(
+        "儲存成績失敗：",
+        error
+      );
+
+
+      setSaveStates(
+        (current) => ({
+          ...current,
+          [subjectRow.id]:
+            "error",
+        })
+      );
+    }
+  }
+
+
+  function handleScoreChange(
+    subjectRow,
+    value
+  ) {
+    /*
+     * 只接受：
+     * 空白、整數、小數。
+     *
+     * 最終 0～100 會在 save 時驗證。
+     */
+    if (
+      value !== "" &&
+      !/^\d{0,3}(\.\d{0,2})?$/.test(
+        value
+      )
+    ) {
+      return;
+    }
+
+
+    setDraftScores(
+      (current) => ({
+        ...current,
+        [subjectRow.id]:
+          value,
+      })
+    );
+
+
+    /*
+     * 使用者重新修改時，
+     * 清掉上一個錯誤提示。
+     */
+    setSaveStates(
+      (current) => ({
+        ...current,
+        [subjectRow.id]: "",
+      })
+    );
+  }
+
+
+  function focusNextStudent(
+    studentIndex,
+    subject
+  ) {
+    const nextStudent =
+      students[
+        studentIndex + 1
+      ];
+
+
+    if (!nextStudent) {
+      return;
+    }
+
+
+    const nextSubjectRow =
+      nextStudent.subjects?.[
+        subject
+      ];
+
+
+    if (!nextSubjectRow?.id) {
+      return;
+    }
+
+
+    window.setTimeout(() => {
+      const nextInput =
+        inputRefs.current[
+          nextSubjectRow.id
+        ];
+
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select();
+      }
+    }, 0);
+  }
+
+
+  async function handleKeyDown(
+    event,
+    subjectRow,
+    studentIndex,
+    subject
+  ) {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+
+    event.preventDefault();
+
+    await saveScore(
+      subjectRow
+    );
+
+    focusNextStudent(
+      studentIndex,
+      subject
+    );
+  }
 
 
   const completion =
@@ -302,10 +596,12 @@ export default function ScoreClassEntryPage({
 
 
       for (
-        const student of students
+        const student
+        of students
       ) {
         for (
-          const subject of subjects
+          const subject
+          of subjects
         ) {
           total += 1;
 
@@ -455,10 +751,7 @@ export default function ScoreClassEntryPage({
             </div>
 
             <div style={styles.sectionHint}>
-              {examInfo?.examType ===
-              "OFFICIAL"
-                ? "正式大考：國語、數學、英文、社會、自然"
-                : "模擬考：國語、數學、社會、自然"}
+              直接輸入成績，離開欄位即自動儲存；按 Enter 可往下一位學生。
             </div>
           </div>
         </div>
@@ -532,7 +825,10 @@ export default function ScoreClassEntryPage({
 
                 <tbody>
                   {students.map(
-                    (student) => (
+                    (
+                      student,
+                      studentIndex
+                    ) => (
                       <tr
                         key={
                           student.id
@@ -576,9 +872,26 @@ export default function ScoreClassEntryPage({
                               ];
 
 
-                            const status =
-                              row?.status ||
-                              "PENDING";
+                            if (!row) {
+                              return (
+                                <td
+                                  key={
+                                    subject
+                                  }
+                                  style={
+                                    styles.td
+                                  }
+                                >
+                                  —
+                                </td>
+                              );
+                            }
+
+
+                            const saveState =
+                              saveStates[
+                                row.id
+                              ] || "";
 
 
                             return (
@@ -590,37 +903,92 @@ export default function ScoreClassEntryPage({
                                   styles.td
                                 }
                               >
-                                {status ===
-                                "SCORED" ? (
-                                  <div
-                                    style={
-                                      styles.score
-                                    }
-                                  >
-                                    {
-                                      row.score
-                                    }
-                                  </div>
-                                ) : (
-                                  <div
-                                    style={
-                                      styles.pendingScore
-                                    }
-                                  >
-                                    —
-                                  </div>
-                                )}
-
                                 <div
                                   style={
-                                    styles.statusText
+                                    styles.inputWrap
                                   }
                                 >
-                                  {
-                                    getStatusLabel(
-                                      status
-                                    )
-                                  }
+                                  <input
+                                    ref={(
+                                      element
+                                    ) => {
+                                      if (
+                                        element
+                                      ) {
+                                        inputRefs.current[
+                                          row.id
+                                        ] =
+                                          element;
+                                      }
+                                    }}
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={
+                                      draftScores[
+                                        row.id
+                                      ] ?? ""
+                                    }
+                                    placeholder="—"
+                                    onChange={(
+                                      event
+                                    ) =>
+                                      handleScoreChange(
+                                        row,
+                                        event
+                                          .target
+                                          .value
+                                      )
+                                    }
+                                    onBlur={() =>
+                                      saveScore(
+                                        row
+                                      )
+                                    }
+                                    onKeyDown={(
+                                      event
+                                    ) =>
+                                      handleKeyDown(
+                                        event,
+                                        row,
+                                        studentIndex,
+                                        subject
+                                      )
+                                    }
+                                    style={{
+                                      ...styles.scoreInput,
+
+                                      ...(saveState ===
+                                      "error"
+                                        ? styles.scoreInputError
+                                        : {}),
+                                    }}
+                                  />
+                                </div>
+
+
+                                <div
+                                  style={{
+                                    ...styles.saveState,
+
+                                    ...(saveState ===
+                                    "error"
+                                      ? styles.saveStateError
+                                      : {}),
+                                  }}
+                                >
+                                  {saveState ===
+                                    "saving" &&
+                                    "儲存中…"}
+
+
+                                  {saveState ===
+                                    "saved" &&
+                                    "已儲存"}
+
+
+                                  {saveState ===
+                                    "error" &&
+                                    "請輸入 0–100"}
                                 </div>
                               </td>
                             );
@@ -785,7 +1153,7 @@ const styles = {
   },
 
   td: {
-    padding: "13px 14px",
+    padding: "10px 14px",
     borderBottom:
       "1px solid #eeeeee",
     borderRight:
@@ -810,22 +1178,41 @@ const styles = {
     color: "#aaa",
   },
 
-  score: {
-    fontSize: "17px",
-    fontWeight: "800",
-    color: "#222",
+  inputWrap: {
+    display: "flex",
+    justifyContent: "center",
   },
 
-  pendingScore: {
-    fontSize: "17px",
+  scoreInput: {
+    width: "82px",
+    height: "38px",
+    boxSizing: "border-box",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+    background: "#fff",
+    textAlign: "center",
+    fontFamily: "inherit",
+    fontSize: "16px",
     fontWeight: "700",
-    color: "#bbb",
+    color: "#222",
+    outline: "none",
   },
 
-  statusText: {
-    marginTop: "4px",
+  scoreInputError: {
+    border:
+      "1px solid #c85b5b",
+    background: "#fff7f7",
+  },
+
+  saveState: {
+    height: "15px",
+    marginTop: "3px",
     fontSize: "10px",
     color: "#999",
+  },
+
+  saveStateError: {
+    color: "#b54b4b",
   },
 
   emptyState: {
