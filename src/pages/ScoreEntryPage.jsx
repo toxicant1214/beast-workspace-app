@@ -32,7 +32,7 @@ const EXAM_TYPE_OPTIONS = [
   },
   {
     value: "OFFICIAL",
-    label: "學校正式大考",
+    label: "正式大考",
     examType: "OFFICIAL",
     mockNumber: null,
   },
@@ -40,8 +40,7 @@ const EXAM_TYPE_OPTIONS = [
 
 
 function getCurrentAcademicYear() {
-  const now =
-    new Date();
+  const now = new Date();
 
   const year =
     now.getFullYear();
@@ -52,10 +51,6 @@ function getCurrentAcademicYear() {
   const rocYear =
     year - 1911;
 
-  /*
-   * 台灣學年度：
-   * 8 月起算新學年度。
-   */
   if (month >= 8) {
     return String(rocYear);
   }
@@ -70,10 +65,6 @@ function getDefaultTerm() {
   const month =
     new Date().getMonth() + 1;
 
-  /*
-   * 8～1 月：上學期
-   * 2～7 月：下學期
-   */
   if (
     month >= 8 ||
     month === 1
@@ -82,6 +73,62 @@ function getDefaultTerm() {
   }
 
   return "下學期";
+}
+
+
+function buildAcademicYearOptions(
+  classRows
+) {
+  const current =
+    Number(
+      getCurrentAcademicYear()
+    );
+
+  const years =
+    new Set();
+
+
+  /*
+   * 保留 Workspace 已經存在的所有學年度。
+   */
+  for (
+    const classItem
+    of classRows
+  ) {
+    const value =
+      Number(
+        classItem.academic_year
+      );
+
+    if (
+      Number.isFinite(value)
+    ) {
+      years.add(value);
+    }
+  }
+
+
+  /*
+   * 同時預留目前學年度前 3 年、
+   * 後 5 年。
+   *
+   * 例如目前 115，
+   * 會至少提供 112～120。
+   */
+  for (
+    let year = current - 3;
+    year <= current + 5;
+    year += 1
+  ) {
+    years.add(year);
+  }
+
+
+  return Array.from(years)
+    .sort(
+      (a, b) => b - a
+    )
+    .map(String);
 }
 
 
@@ -113,23 +160,23 @@ export default function ScoreEntryPage({
   ] = useState("MOCK_1");
 
   const [
-    classes,
-    setClasses,
+    allClasses,
+    setAllClasses,
   ] = useState([]);
-
-  const [
-    selectedClassId,
-    setSelectedClassId,
-  ] = useState("");
 
   const [
     loadingClasses,
     setLoadingClasses,
-  ] = useState(false);
+  ] = useState(true);
 
   const [
     errorMessage,
     setErrorMessage,
+  ] = useState("");
+
+  const [
+    selectedClassId,
+    setSelectedClassId,
   ] = useState("");
 
 
@@ -140,11 +187,21 @@ export default function ScoreEntryPage({
           (item) =>
             item.value ===
             examTypeKey
-        ) || EXAM_TYPE_OPTIONS[0]
+        ) ||
+        EXAM_TYPE_OPTIONS[0]
       );
-    }, [examTypeKey]);
+    }, [
+      examTypeKey,
+    ]);
 
 
+  /*
+   * 只讀一次所有安親班級。
+   *
+   * 學年度、學期切換時，
+   * 前端直接從既有資料篩選，
+   * 不需要一直重新打 Supabase。
+   */
   useEffect(() => {
     let cancelled = false;
 
@@ -159,54 +216,35 @@ export default function ScoreEntryPage({
           ""
         );
 
-        setSelectedClassId(
-          ""
-        );
-
-
-        let query =
-          supabase
-            .from("classes")
-            .select(
-              `
-              id,
-              name,
-              academic_year,
-              term,
-              course_type,
-              is_active
-              `
-            )
-            .eq(
-              "academic_year",
-              academicYear
-            )
-            .eq(
-              "term",
-              term
-            );
-
-
-        /*
-         * 成績系統只抓安親班。
-         */
-        query =
-          query.eq(
-            "course_type",
-            "AFTER_SCHOOL"
-          );
-
 
         const {
           data,
           error,
         } =
-          await query.order(
-            "name",
-            {
-              ascending: true,
-            }
-          );
+          await supabase
+            .from("classes")
+            .select(
+              `
+              id,
+              class_name,
+              academic_year,
+              term,
+              course_type,
+              is_active,
+              start_date,
+              end_date
+              `
+            )
+            .eq(
+              "course_type",
+              "AFTER_SCHOOL"
+            )
+            .order(
+              "class_name",
+              {
+                ascending: true,
+              }
+            );
 
 
         if (error) {
@@ -219,7 +257,7 @@ export default function ScoreEntryPage({
         }
 
 
-        setClasses(
+        setAllClasses(
           data || []
         );
       } catch (error) {
@@ -230,12 +268,15 @@ export default function ScoreEntryPage({
 
 
         if (!cancelled) {
-          setClasses(
+          setAllClasses(
             []
           );
 
           setErrorMessage(
-            "班級資料讀取失敗，請稍後再試。"
+            `班級資料讀取失敗：${
+              error?.message ||
+              "未知錯誤"
+            }`
           );
         }
       } finally {
@@ -248,37 +289,71 @@ export default function ScoreEntryPage({
     }
 
 
-    if (
-      academicYear &&
-      term
-    ) {
-      loadClasses();
-    }
+    loadClasses();
 
 
     return () => {
       cancelled = true;
     };
+  }, []);
+
+
+  /*
+   * 學年度選項：
+   * 既有資料 + 自動預留未來年度。
+   */
+  const academicYearOptions =
+    useMemo(() => {
+      return buildAcademicYearOptions(
+        allClasses
+      );
+    }, [
+      allClasses,
+    ]);
+
+
+  /*
+   * 真正顯示的班級，
+   * 必須同時符合學年度與學期。
+   */
+  const classes =
+    useMemo(() => {
+      return allClasses.filter(
+        (classItem) => {
+          return (
+            String(
+              classItem.academic_year ||
+              ""
+            ) ===
+              String(
+                academicYear
+              ) &&
+            String(
+              classItem.term ||
+              ""
+            ) === term
+          );
+        }
+      );
+    }, [
+      allClasses,
+      academicYear,
+      term,
+    ]);
+
+
+  /*
+   * 換學年度或學期後，
+   * 原本選的班級要清掉。
+   */
+  useEffect(() => {
+    setSelectedClassId(
+      ""
+    );
   }, [
     academicYear,
     term,
   ]);
-
-
-  const academicYearOptions =
-    useMemo(() => {
-      const current =
-        Number(
-          getCurrentAcademicYear()
-        );
-
-      return [
-        current - 2,
-        current - 1,
-        current,
-        current + 1,
-      ].map(String);
-    }, []);
 
 
   return (
@@ -297,6 +372,7 @@ export default function ScoreEntryPage({
             選擇考試與班級後，進入班級成績登記。
           </p>
         </div>
+
 
         <button
           type="button"
@@ -321,10 +397,15 @@ export default function ScoreEntryPage({
             </span>
 
             <select
-              value={academicYear}
-              onChange={(event) =>
+              value={
+                academicYear
+              }
+              onChange={(
+                event
+              ) =>
                 setAcademicYear(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               style={styles.select}
@@ -350,9 +431,12 @@ export default function ScoreEntryPage({
 
             <select
               value={term}
-              onChange={(event) =>
+              onChange={(
+                event
+              ) =>
                 setTerm(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               style={styles.select}
@@ -377,10 +461,15 @@ export default function ScoreEntryPage({
             </span>
 
             <select
-              value={examPeriod}
-              onChange={(event) =>
+              value={
+                examPeriod
+              }
+              onChange={(
+                event
+              ) =>
                 setExamPeriod(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               style={styles.select}
@@ -405,10 +494,15 @@ export default function ScoreEntryPage({
             </span>
 
             <select
-              value={examTypeKey}
-              onChange={(event) =>
+              value={
+                examTypeKey
+              }
+              onChange={(
+                event
+              ) =>
                 setExamTypeKey(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               style={styles.select}
@@ -416,8 +510,12 @@ export default function ScoreEntryPage({
               {EXAM_TYPE_OPTIONS.map(
                 (item) => (
                   <option
-                    key={item.value}
-                    value={item.value}
+                    key={
+                      item.value
+                    }
+                    value={
+                      item.value
+                    }
                   >
                     {item.label}
                   </option>
@@ -434,10 +532,15 @@ export default function ScoreEntryPage({
           </span>
 
           <strong>
-            {academicYear} 學年度・
-            {term}・
-            {examPeriod}・
-            {selectedExamType.label}
+            {academicYear}
+            {" 學年度・"}
+            {term}
+            {"・"}
+            {examPeriod}
+            {"・"}
+            {
+              selectedExamType.label
+            }
           </strong>
         </div>
       </section>
@@ -455,11 +558,17 @@ export default function ScoreEntryPage({
             </div>
           </div>
 
-          {!loadingClasses && (
-            <div style={styles.classCount}>
-              {classes.length} 班
-            </div>
-          )}
+
+          {!loadingClasses &&
+            !errorMessage && (
+              <div
+                style={
+                  styles.classCount
+                }
+              >
+                {classes.length} 班
+              </div>
+            )}
         </div>
 
 
@@ -480,16 +589,18 @@ export default function ScoreEntryPage({
 
         {!loadingClasses &&
           !errorMessage &&
-          classes.length === 0 && (
+          classes.length ===
+            0 && (
             <div style={styles.emptyState}>
-              這個學年度／學期目前沒有可用的安親班級。
+              這個學年度／學期目前沒有安親班級。
             </div>
           )}
 
 
         {!loadingClasses &&
           !errorMessage &&
-          classes.length > 0 && (
+          classes.length >
+            0 && (
             <div style={styles.classGrid}>
               {classes.map(
                 (classItem) => {
@@ -510,6 +621,7 @@ export default function ScoreEntryPage({
                       }
                       style={{
                         ...styles.classCard,
+
                         ...(selected
                           ? styles.classCardSelected
                           : {}),
@@ -521,9 +633,10 @@ export default function ScoreEntryPage({
                         }
                       >
                         {
-                          classItem.name
+                          classItem.class_name
                         }
                       </div>
+
 
                       <div
                         style={
@@ -550,6 +663,7 @@ export default function ScoreEntryPage({
             }
             style={{
               ...styles.primaryButton,
+
               ...(!selectedClassId
                 ? styles.primaryButtonDisabled
                 : {}),
