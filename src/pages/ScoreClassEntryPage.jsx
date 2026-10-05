@@ -232,13 +232,6 @@ export default function ScoreClassEntryPage({
         }
 
 
-        /*
-         * 讀取所有免考申請歷史。
-         *
-         * 不只讀 PENDING，
-         * 因為核准、退回的原因與審核紀錄
-         * 日後都必須保留。
-         */
         const subjectIds =
           (subjectRows || []).map(
             (row) => row.id
@@ -427,8 +420,8 @@ export default function ScoreClassEntryPage({
 
 
     /*
-     * 免考申請中或已核准，
-     * 不允許直接用輸入成績覆蓋。
+     * 免考申請中或已核准時，
+     * 不允許直接用成績覆蓋。
      */
     if (
       subjectRow.status ===
@@ -623,6 +616,13 @@ export default function ScoreClassEntryPage({
   }
 
 
+  /*
+   * Enter：
+   *
+   * 同一位學生逐科往右。
+   * 最後一科完成後，
+   * 才前往下一位學生第一科。
+   */
   function focusNextScore(
     studentIndex,
     subject
@@ -749,18 +749,54 @@ export default function ScoreClassEntryPage({
   }
 
 
+  /*
+   * 新增免考申請。
+   */
   function openExemptionModal({
     student,
     subject,
     subjectRow,
   }) {
     setExemptionModal({
+      mode: "create",
       student,
       subject,
       subjectRow,
+      request: null,
     });
 
     setExemptionReason("");
+    setExemptionError("");
+  }
+
+
+  /*
+   * 修改尚未審核的免考申請。
+   */
+  function openEditExemptionModal({
+    student,
+    subject,
+    subjectRow,
+    request,
+  }) {
+    if (!request) {
+      return;
+    }
+
+
+    setExemptionModal({
+      mode: "edit",
+      student,
+      subject,
+      subjectRow,
+      request,
+    });
+
+
+    setExemptionReason(
+      request.reason || ""
+    );
+
     setExemptionError("");
   }
 
@@ -776,6 +812,9 @@ export default function ScoreClassEntryPage({
   }
 
 
+  /*
+   * 新增免考申請。
+   */
   async function submitExemption() {
     if (
       !exemptionModal?.subjectRow?.id
@@ -809,10 +848,6 @@ export default function ScoreClassEntryPage({
       setExemptionError("");
 
 
-      /*
-       * 先確認這一科目前沒有
-       * 尚未處理的免考申請。
-       */
       const existingRequests =
         exemptionRequests[
           subjectRow.id
@@ -834,11 +869,6 @@ export default function ScoreClassEntryPage({
       }
 
 
-      /*
-       * 取得目前登入者。
-       * 若取得不到，requested_by 維持 null，
-       * 不影響申請本身保存。
-       */
       const {
         data: authData,
       } =
@@ -851,8 +881,8 @@ export default function ScoreClassEntryPage({
 
 
       /*
-       * 新增一筆「永久保留」的申請紀錄。
-       * 不會覆蓋以前的申請。
+       * 新增新的歷史申請。
+       * 曾撤回或曾退回的舊申請不會被刪除。
        */
       const {
         data: requestData,
@@ -893,10 +923,6 @@ export default function ScoreClassEntryPage({
       }
 
 
-      /*
-       * 再把目前科目狀態改成
-       * 「免考審核中」。
-       */
       const {
         error: subjectError,
       } = await supabase
@@ -920,9 +946,12 @@ export default function ScoreClassEntryPage({
 
       if (subjectError) {
         /*
-         * 如果第二步失敗，
+         * 第二步失敗時，
          * 把剛新增的申請刪掉，
-         * 避免留下半套資料。
+         * 避免留下半套狀態。
+         *
+         * 這只針對「尚未正式建立成功」
+         * 的新申請，不是使用者撤回。
          */
         await supabase
           .from(
@@ -991,6 +1020,299 @@ export default function ScoreClassEntryPage({
   }
 
 
+  /*
+   * 修改原本尚未審核的申請。
+   *
+   * 不新增第二筆，
+   * 直接修改目前 PENDING 的申請。
+   */
+  async function updateExemption() {
+    if (
+      exemptionModal?.mode !==
+        "edit" ||
+      !exemptionModal?.request?.id
+    ) {
+      return;
+    }
+
+
+    const reason =
+      exemptionReason.trim();
+
+
+    if (!reason) {
+      setExemptionError(
+        "請填寫免考原因。"
+      );
+
+      return;
+    }
+
+
+    try {
+      setSubmittingExemption(
+        true
+      );
+
+      setExemptionError("");
+
+
+      const request =
+        exemptionModal.request;
+
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "score_exemption_requests"
+        )
+        .update({
+          reason,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          request.id
+        )
+        .eq(
+          "status",
+          "PENDING"
+        )
+        .select(`
+          id,
+          exam_subject_id,
+          reason,
+          status,
+          requested_by,
+          requested_at,
+          reviewed_by,
+          reviewed_at,
+          review_note,
+          created_at,
+          updated_at
+        `)
+        .single();
+
+
+      if (error) {
+        throw error;
+      }
+
+
+      setExemptionRequests(
+        (current) => ({
+          ...current,
+
+          [data.exam_subject_id]: (
+            current[
+              data.exam_subject_id
+            ] || []
+          ).map(
+            (item) =>
+              item.id === data.id
+                ? data
+                : item
+          ),
+        })
+      );
+
+
+      setExemptionModal(null);
+      setExemptionReason("");
+      setExemptionError("");
+    } catch (error) {
+      console.error(
+        "修改免考申請失敗：",
+        error
+      );
+
+
+      setExemptionError(
+        error?.message ||
+          "修改免考申請失敗。"
+      );
+    } finally {
+      setSubmittingExemption(
+        false
+      );
+    }
+  }
+
+
+  /*
+   * 撤回申請。
+   *
+   * 注意：
+   * 不 DELETE。
+   *
+   * 申請改成 WITHDRAWN，
+   * 原始原因仍永久存在。
+   */
+  async function withdrawExemption({
+    subjectRow,
+    request,
+  }) {
+    if (
+      !subjectRow?.id ||
+      !request?.id
+    ) {
+      return;
+    }
+
+
+    const confirmed =
+      window.confirm(
+        "確定要撤回這筆免考申請嗎？\n\n撤回後這一科會恢復為待登記，原本的申請原因仍會保留在歷史紀錄中。"
+      );
+
+
+    if (!confirmed) {
+      return;
+    }
+
+
+    try {
+      /*
+       * 先把申請標記成已撤回。
+       */
+      const {
+        data: withdrawnRequest,
+        error: requestError,
+      } = await supabase
+        .from(
+          "score_exemption_requests"
+        )
+        .update({
+          status: "WITHDRAWN",
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          request.id
+        )
+        .eq(
+          "status",
+          "PENDING"
+        )
+        .select(`
+          id,
+          exam_subject_id,
+          reason,
+          status,
+          requested_by,
+          requested_at,
+          reviewed_by,
+          reviewed_at,
+          review_note,
+          created_at,
+          updated_at
+        `)
+        .single();
+
+
+      if (requestError) {
+        throw requestError;
+      }
+
+
+      /*
+       * 科目恢復待登記。
+       */
+      const {
+        error: subjectError,
+      } = await supabase
+        .from(
+          "score_exam_subjects"
+        )
+        .update({
+          score: null,
+          status: "PENDING",
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          subjectRow.id
+        );
+
+
+      if (subjectError) {
+        /*
+         * 如果第二步失敗，
+         * 嘗試把申請恢復為 PENDING。
+         */
+        await supabase
+          .from(
+            "score_exemption_requests"
+          )
+          .update({
+            status: "PENDING",
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq(
+            "id",
+            request.id
+          );
+
+        throw subjectError;
+      }
+
+
+      updateLocalSubject(
+        subjectRow.id,
+        null,
+        "PENDING"
+      );
+
+
+      setDraftScores(
+        (current) => ({
+          ...current,
+          [subjectRow.id]: "",
+        })
+      );
+
+
+      /*
+       * 本機資料也保留這筆撤回紀錄。
+       */
+      setExemptionRequests(
+        (current) => ({
+          ...current,
+
+          [subjectRow.id]: (
+            current[
+              subjectRow.id
+            ] || []
+          ).map(
+            (item) =>
+              item.id ===
+              withdrawnRequest.id
+                ? withdrawnRequest
+                : item
+          ),
+        })
+      );
+    } catch (error) {
+      console.error(
+        "撤回免考申請失敗：",
+        error
+      );
+
+
+      window.alert(
+        error?.message ||
+          "撤回免考申請失敗，請稍後再試。"
+      );
+    }
+  }
+
+
   const completion =
     useMemo(() => {
       let total = 0;
@@ -1016,13 +1338,10 @@ export default function ScoreClassEntryPage({
 
           /*
            * 只有：
-           * 1. 已有成績
-           * 2. 免考已核准
+           * SCORED
+           * EXEMPT_APPROVED
            *
            * 才算完成。
-           *
-           * EXEMPT_PENDING
-           * 仍然屬於待完成。
            */
           if (
             row &&
@@ -1332,6 +1651,11 @@ export default function ScoreClassEntryPage({
                                 ] || [];
 
 
+                              /*
+                               * 因為資料依 requested_at
+                               * DESC 載入，
+                               * 第一筆就是最近一次申請。
+                               */
                               const latestRequest =
                                 requests[0] ||
                                 null;
@@ -1370,6 +1694,7 @@ export default function ScoreClassEntryPage({
                                         免考審核中
                                       </div>
 
+
                                       {latestRequest?.reason && (
                                         <div
                                           style={
@@ -1382,6 +1707,61 @@ export default function ScoreClassEntryPage({
                                           {
                                             latestRequest.reason
                                           }
+                                        </div>
+                                      )}
+
+
+                                      {latestRequest?.status ===
+                                        "PENDING" && (
+                                        <div
+                                          style={
+                                            styles.requestActions
+                                          }
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              openEditExemptionModal({
+                                                student,
+                                                subject,
+                                                subjectRow:
+                                                  row,
+                                                request:
+                                                  latestRequest,
+                                              })
+                                            }
+                                            style={
+                                              styles.requestActionButton
+                                            }
+                                          >
+                                            修改
+                                          </button>
+
+                                          <span
+                                            style={
+                                              styles.actionDivider
+                                            }
+                                          >
+                                            |
+                                          </span>
+
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              withdrawExemption({
+                                                subjectRow:
+                                                  row,
+                                                request:
+                                                  latestRequest,
+                                              })
+                                            }
+                                            style={{
+                                              ...styles.requestActionButton,
+                                              ...styles.withdrawButton,
+                                            }}
+                                          >
+                                            撤回
+                                          </button>
                                         </div>
                                       )}
                                     </div>
@@ -1555,7 +1935,10 @@ export default function ScoreClassEntryPage({
                     styles.modalEyebrow
                   }
                 >
-                  免考申請
+                  {exemptionModal?.mode ===
+                  "edit"
+                    ? "修改免考申請"
+                    : "免考申請"}
                 </div>
 
                 <div
@@ -1601,7 +1984,10 @@ export default function ScoreClassEntryPage({
                 styles.modalHint
               }
             >
-              請填寫本次免考原因。送出後將進入主管審核，申請內容會保留於歷史紀錄。
+              {exemptionModal?.mode ===
+              "edit"
+                ? "此申請尚未審核，可以修改免考原因。主管完成審核後將不能再修改。"
+                : "請填寫本次免考原因。送出後將進入主管審核，申請內容會保留於歷史紀錄。"}
             </div>
 
 
@@ -1674,10 +2060,14 @@ export default function ScoreClassEntryPage({
                 取消
               </button>
 
+
               <button
                 type="button"
                 onClick={
-                  submitExemption
+                  exemptionModal?.mode ===
+                  "edit"
+                    ? updateExemption
+                    : submitExemption
                 }
                 disabled={
                   submittingExemption
@@ -1691,8 +2081,11 @@ export default function ScoreClassEntryPage({
                 }}
               >
                 {submittingExemption
-                  ? "送出中…"
-                  : "送出免考申請"}
+                  ? "處理中…"
+                  : exemptionModal?.mode ===
+                      "edit"
+                    ? "儲存修改"
+                    : "送出免考申請"}
               </button>
             </div>
           </div>
@@ -1961,6 +2354,34 @@ const styles = {
     whiteSpace: "nowrap",
     fontSize: "10px",
     color: "#999",
+  },
+
+  requestActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    marginTop: "2px",
+  },
+
+  requestActionButton: {
+    padding: 0,
+    border: 0,
+    background: "transparent",
+    color: "#666",
+    fontSize: "10px",
+    fontWeight: "700",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+
+  actionDivider: {
+    color: "#ccc",
+    fontSize: "10px",
+  },
+
+  withdrawButton: {
+    color: "#a45b5b",
   },
 
   emptyState: {
