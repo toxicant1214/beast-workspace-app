@@ -1,13 +1,8 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
-const SUBJECT_NAMES = {
+const SUBJECTS = {
   CHINESE: "國語",
   MATH: "數學",
   ENGLISH: "英文",
@@ -15,216 +10,177 @@ const SUBJECT_NAMES = {
   SCIENCE: "自然",
 };
 
-const COMPLETED = new Set([
-  "SCORED",
-  "EXEMPT_APPROVED",
-]);
+const FINISHED = new Set(["SCORED", "EXEMPT_APPROVED"]);
 
-const EXAM_TYPE = {
-  MOCK: "模擬考",
-  OFFICIAL: "學校正式考試",
-};
-
-const STATUS = {
+const REQUEST_STATUS = {
   PENDING: "待審核",
   APPROVED: "已核准",
   REJECTED: "已退回",
-  WITHDRAWN: "老師已撤回",
+  WITHDRAWN: "已撤回",
 };
 
-async function readAll(
-  table,
-  columns,
-  configure = (query) => query
-) {
-  const output = [];
+const styles = {
+  page: { maxWidth: 1350, margin: "0 auto", padding: 28 },
+  heading: { fontSize: 28, margin: "0 0 8px", color: "#252525" },
+  muted: { color: "#888", fontSize: 13 },
+  panel: {
+    background: "#fff",
+    border: "1px solid #e7e7e7",
+    borderRadius: 14,
+    padding: 22,
+    marginTop: 20,
+  },
+  row: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" },
+  button: {
+    padding: "10px 15px",
+    border: "1px solid #ddd",
+    borderRadius: 9,
+    background: "#fff",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  input: {
+    padding: "11px 12px",
+    border: "1px solid #ddd",
+    borderRadius: 9,
+    background: "#fff",
+    fontFamily: "inherit",
+    width: "100%",
+  },
+  label: { display: "block", marginBottom: 8, fontWeight: 700, fontSize: 14 },
+  stats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: 12,
+    marginTop: 20,
+  },
+  stat: {
+    padding: 18,
+    border: "1px solid #e8e8e8",
+    borderRadius: 12,
+    background: "#fafafa",
+  },
+  table: { width: "100%", borderCollapse: "collapse", minWidth: 700, fontSize: 14 },
+  th: {
+    padding: "13px 10px",
+    textAlign: "left",
+    borderBottom: "1px solid #ddd",
+    background: "#f7f7f7",
+    whiteSpace: "nowrap",
+  },
+  td: { padding: "13px 10px", borderBottom: "1px solid #eee", verticalAlign: "top" },
+};
 
-  for (let from = 0; ; from += 500) {
-    const query = configure(
-      supabase.from(table).select(columns)
-    )
-      .order("id", { ascending: true })
-      .range(from, from + 499);
+async function fetchAll(table, columns = "*", filter) {
+  const result = [];
+
+  for (let offset = 0; ; offset += 500) {
+    let query = supabase
+      .from(table)
+      .select(columns)
+      .range(offset, offset + 499);
+
+    if (filter) query = filter(query);
 
     const { data, error } = await query;
-
     if (error) throw error;
 
-    output.push(...(data || []));
-
-    if (!data || data.length < 500) {
-      break;
-    }
+    result.push(...(data || []));
+    if (!data || data.length < 500) break;
   }
 
-  return output;
+  return result;
 }
 
-function formatDate(value) {
-  if (!value) return "—";
+function examName(exam) {
+  if (!exam) return "未知考試";
 
-  const date = new Date(value);
+  const type =
+    exam.exam_type === "MOCK"
+      ? `模擬考 第${exam.mock_number || 1}次`
+      : "學校正式考試";
 
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : date.toLocaleString("zh-TW", {
-        hour12: false,
-      });
+  return [
+    exam.academic_year,
+    exam.term,
+    exam.exam_period,
+    type,
+  ].filter(Boolean).join("｜");
 }
 
-export default function ScorePendingPage({
-  onBack,
-  currentTeacher,
-}) {
+function dateText(value) {
+  return value ? new Date(value).toLocaleString("zh-TW", { hour12: false }) : "—";
+}
+
+function Stat({ label, value }) {
+  return (
+    <div style={styles.stat}>
+      <div style={styles.muted}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 800, marginTop: 7 }}>{value}</div>
+    </div>
+  );
+}
+
+function Table({ headings, children }) {
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={styles.table}>
+        <thead>
+          <tr>{headings.map((heading) => (
+            <th key={heading} style={styles.th}>{heading}</th>
+          ))}</tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function Cell({ children }) {
+  return <td style={styles.td}>{children}</td>;
+}
+
+export default function ScorePendingPage({ onBack, currentTeacher }) {
+  const isAdmin = currentTeacher?.role === "admin";
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [rows, setRows] = useState([]);
+  const [tab, setTab] = useState("progress");
+
+  const [exams, setExams] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [requests, setRequests] = useState([]);
 
-  const [filter, setFilter] = useState("ALL");
+  const [selectedExam, setSelectedExam] = useState("");
+  const [selectedClass, setSelectedClass] = useState("");
+  const [showResult, setShowResult] = useState(false);
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState("scores");
-
-  const [busyId, setBusyId] = useState(null);
-
-  const isAdmin = currentTeacher?.role === "admin";
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const exams = await readAll(
-        "score_exams",
-        "*"
-      );
+      const [examData, classData, studentData, subjectData, requestData] =
+        await Promise.all([
+          fetchAll("score_exams"),
+          fetchAll("score_exam_classes"),
+          fetchAll("score_exam_students"),
+          fetchAll("score_exam_subjects"),
+          fetchAll("score_exemption_requests"),
+        ]);
 
-      const classes = await readAll(
-        "score_exam_classes",
-        "*"
-      );
-
-      const students = await readAll(
-        "score_exam_students",
-        "*",
-        (query) => query.eq("is_active", true)
-      );
-
-      const subjects = await readAll(
-        "score_exam_subjects",
-        "*"
-      );
-
-      const applications = await readAll(
-        "score_exemption_requests",
-        "*"
-      );
-
-      const examMap = new Map(
-        exams.map((item) => [item.id, item])
-      );
-
-      const classMap = new Map(
-        classes.map((item) => [item.id, item])
-      );
-
-      const studentMap = new Map(
-        students.map((item) => [item.id, item])
-      );
-
-      const enriched = subjects.flatMap(
-        (subject) => {
-          const student = studentMap.get(
-            subject.exam_student_id
-          );
-
-          if (!student) return [];
-
-          const examClass = classMap.get(
-            student.exam_class_id
-          );
-
-          if (!examClass) return [];
-
-          const exam = examMap.get(
-            examClass.exam_id
-          );
-
-          if (!exam) return [];
-
-          return [
-            {
-              ...subject,
-
-              studentName:
-                student.student_name_snapshot ||
-                "未命名學生",
-
-              className:
-                examClass.class_name_snapshot ||
-                "未命名班級",
-
-              exam,
-
-              examLabel: [
-                exam.academic_year || "",
-                exam.term || "",
-                exam.exam_period || "",
-                EXAM_TYPE[exam.exam_type] ||
-                  exam.exam_type ||
-                  "",
-                exam.mock_number
-                  ? `第${exam.mock_number}次`
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" "),
-            },
-          ];
-        }
-      );
-
-      const enrichedMap = new Map(
-        enriched.map((item) => [
-          item.id,
-          item,
-        ])
-      );
-
-      const applicationRows =
-        applications.flatMap((request) => {
-          const subject = enrichedMap.get(
-            request.exam_subject_id
-          );
-
-          if (!subject) return [];
-
-          return [
-            {
-              ...request,
-              subject,
-            },
-          ];
-        });
-
-      applicationRows.sort(
-        (a, b) =>
-          new Date(b.requested_at || 0) -
-          new Date(a.requested_at || 0)
-      );
-
-      setRows(enriched);
-      setRequests(applicationRows);
+      setExams(examData);
+      setClasses(classData);
+      setStudents(studentData.filter((item) => item.is_active !== false));
+      setSubjects(subjectData);
+      setRequests(requestData);
     } catch (err) {
-      console.error(
-        "讀取待完成資料失敗：",
-        err
-      );
-
-      setError(
-        err.message ||
-          "無法讀取資料，請稍後再試。"
-      );
+      console.error("讀取成績進度失敗：", err);
+      setError(err.message || "讀取資料失敗。");
     } finally {
       setLoading(false);
     }
@@ -234,837 +190,471 @@ export default function ScorePendingPage({
     load();
   }, [load]);
 
-  async function review(item, action) {
-    if (!isAdmin || busyId) return;
+  const examMap = useMemo(
+    () => new Map(exams.map((item) => [String(item.id), item])),
+    [exams]
+  );
 
-    const title =
-      action === "APPROVE"
-        ? "核准免考"
-        : action === "REJECT"
-          ? "退回免考"
-          : "撤銷核准";
+  const classMap = useMemo(
+    () => new Map(classes.map((item) => [String(item.id), item])),
+    [classes]
+  );
+
+  const studentMap = useMemo(
+    () => new Map(students.map((item) => [String(item.id), item])),
+    [students]
+  );
+
+  const subjectMap = useMemo(
+    () => new Map(subjects.map((item) => [String(item.id), item])),
+    [subjects]
+  );
+
+  const examOptions = useMemo(() => {
+    const ids = new Set(classes.map((item) => String(item.exam_id)));
+    return exams
+      .filter((item) => ids.has(String(item.id)))
+      .sort((a, b) => examName(b).localeCompare(examName(a), "zh-TW"));
+  }, [exams, classes]);
+
+  const classOptions = useMemo(() => (
+    classes
+      .filter((item) => String(item.exam_id) === selectedExam)
+      .sort((a, b) =>
+        (a.class_name_snapshot || "").localeCompare(
+          b.class_name_snapshot || "", "zh-TW"
+        )
+      )
+  ), [classes, selectedExam]);
+
+  const selectedClassData = classMap.get(selectedClass);
+  const selectedExamData = examMap.get(selectedExam);
+
+  const selectedStudents = useMemo(() => (
+    students.filter((item) => String(item.exam_class_id) === selectedClass)
+  ), [students, selectedClass]);
+
+  const selectedStudentIds = useMemo(
+    () => new Set(selectedStudents.map((item) => String(item.id))),
+    [selectedStudents]
+  );
+
+  const selectedSubjects = useMemo(() => (
+    subjects
+      .filter((item) => selectedStudentIds.has(String(item.exam_student_id)))
+      .map((item) => ({
+        ...item,
+        student: studentMap.get(String(item.exam_student_id)),
+      }))
+  ), [subjects, selectedStudentIds, studentMap]);
+
+  const completed = selectedSubjects.filter((item) => FINISHED.has(item.status));
+  const incomplete = selectedSubjects.filter((item) => !FINISHED.has(item.status));
+
+  const visibleIncomplete = incomplete.filter((item) => {
+    const text = [
+      item.student?.student_name_snapshot,
+      SUBJECTS[item.subject] || item.subject,
+    ].join(" ").toLowerCase();
+
+    return text.includes(search.trim().toLowerCase());
+  });
+
+  const enrichedRequests = useMemo(() => (
+    requests.map((request) => {
+      const subject = subjectMap.get(String(request.exam_subject_id));
+      const student = subject
+        ? studentMap.get(String(subject.exam_student_id))
+        : null;
+      const examClass = student
+        ? classMap.get(String(student.exam_class_id))
+        : null;
+      const exam = examClass
+        ? examMap.get(String(examClass.exam_id))
+        : null;
+
+      return { ...request, subject, student, examClass, exam };
+    })
+      .filter((item) => item.subject && item.student && item.exam)
+      .sort((a, b) =>
+        new Date(b.requested_at || 0) - new Date(a.requested_at || 0)
+      )
+  ), [requests, subjectMap, studentMap, classMap, examMap]);
+
+  const pendingRequests = enrichedRequests.filter(
+    (item) => item.status === "PENDING"
+  );
+
+  async function review(request, action) {
+    if (!isAdmin || busy) return;
+
+    const label = {
+      APPROVE: "核准",
+      REJECT: "退回",
+      REVOKE: "撤銷核准",
+    }[action];
 
     let note = "";
 
-    if (action !== "APPROVE") {
-      const answer = window.prompt(
-        `${title}：請填寫原因（必填）`
-      );
-
+    if (action === "APPROVE") {
+      if (!window.confirm(`確定核准 ${request.student.student_name_snapshot} 的免考申請？`)) {
+        return;
+      }
+    } else {
+      const answer = window.prompt(`請填寫「${label}」原因（必填）`);
       if (answer === null) return;
-
       note = answer.trim();
-
       if (!note) {
         window.alert("請填寫原因。");
         return;
       }
-    } else {
-      const confirmed = window.confirm(
-        `確定核准 ${item.subject.studentName} 的` +
-          `${
-            SUBJECT_NAMES[item.subject.subject] ||
-            item.subject.subject
-          }免考申請？`
-      );
-
-      if (!confirmed) return;
     }
 
-    setBusyId(item.id);
+    setBusy(true);
 
     try {
-      const { error: rpcError } =
-        await supabase.rpc(
-          "review_score_exemption",
-          {
-            p_request_id: item.id,
-            p_action: action,
-            p_note: note || null,
-          }
-        );
+      const { error: rpcError } = await supabase.rpc(
+        "review_score_exemption",
+        {
+          p_request_id: request.id,
+          p_action: action,
+          p_note: note || null,
+        }
+      );
 
       if (rpcError) throw rpcError;
 
       await load();
-
-      window.alert(`${title}成功。`);
+      window.alert(`${label}成功。`);
     } catch (err) {
-      console.error(
-        `${title}失敗：`,
-        err
-      );
-
-      window.alert(
-        `${title}失敗：${
-          err.message || "請稍後再試"
-        }`
-      );
+      console.error(err);
+      window.alert(`${label}失敗：${err.message || "未知錯誤"}`);
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   }
 
-  const incomplete = useMemo(
-    () =>
-      rows.filter(
-        (row) => !COMPLETED.has(row.status)
-      ),
-    [rows]
-  );
-
-  const visibleScores = useMemo(() => {
-    return incomplete.filter((row) => {
-      const matchesType =
-        filter === "ALL" ||
-        row.exam.exam_type === filter;
-
-      const text = [
-        row.studentName,
-        row.className,
-        row.examLabel,
-        SUBJECT_NAMES[row.subject] ||
-          row.subject,
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return (
-        matchesType &&
-        text.includes(
-          search.trim().toLowerCase()
-        )
-      );
-    });
-  }, [incomplete, filter, search]);
-
-  const visibleRequests = useMemo(() => {
-    return requests.filter((item) => {
-      const matchesType =
-        filter === "ALL" ||
-        item.subject.exam.exam_type ===
-          filter;
-
-      const text = [
-        item.subject.studentName,
-        item.subject.className,
-        item.subject.examLabel,
-        SUBJECT_NAMES[
-          item.subject.subject
-        ] || item.subject.subject,
-        item.reason || "",
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return (
-        matchesType &&
-        text.includes(
-          search.trim().toLowerCase()
-        )
-      );
-    });
-  }, [requests, filter, search]);
-
-  const pendingCount = requests.filter(
-    (item) => item.status === "PENDING"
-  ).length;
-
-  const grouped = useMemo(() => {
-    const map = new Map();
-
-    for (const row of rows) {
-      const key =
-        `${row.exam.id}:${row.className}`;
-
-      if (!map.has(key)) {
-        map.set(key, {
-          key,
-          examLabel: row.examLabel,
-          className: row.className,
-          total: 0,
-          completed: 0,
-        });
-      }
-
-      const entry = map.get(key);
-
-      entry.total += 1;
-
-      if (COMPLETED.has(row.status)) {
-        entry.completed += 1;
-      }
-    }
-
-    return [...map.values()].sort(
-      (a, b) =>
-        a.examLabel.localeCompare(
-          b.examLabel,
-          "zh-TW"
-        ) ||
-        a.className.localeCompare(
-          b.className,
-          "zh-TW"
-        )
-    );
-  }, [rows]);
+  const tabButton = (active) => ({
+    ...styles.button,
+    background: active ? "#242424" : "#f5f5f5",
+    color: active ? "#fff" : "#555",
+    borderColor: active ? "#242424" : "#eee",
+    fontWeight: active ? 700 : 400,
+  });
 
   return (
     <div style={styles.page}>
-      <div style={styles.header}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        flexWrap: "wrap",
+        gap: 15,
+      }}>
         <div>
-          <div style={styles.eyebrow}>
-            BEAST WORKSPACE
+          <h1 style={styles.heading}>待完成</h1>
+          <div style={styles.muted}>
+            即時查詢成績登記進度與模擬考免考申請
           </div>
-
-          <h1 style={styles.title}>
-            待完成
-          </h1>
-
-          <p style={styles.sub}>
-            各班成績登記進度、待完成科目與免考申請追蹤
-          </p>
         </div>
 
-        <div style={styles.actions}>
-          <button
-            type="button"
-            style={styles.button}
-            onClick={load}
-            disabled={loading}
-          >
+        <div style={styles.row}>
+          <button style={styles.button} onClick={load} disabled={loading}>
             重新整理
           </button>
-
-          <button
-            type="button"
-            style={styles.button}
-            onClick={onBack}
-          >
+          <button style={styles.button} onClick={onBack}>
             ← 返回學生成績
           </button>
         </div>
       </div>
 
-      <div style={styles.stats}>
-        <Stat
-          label="應登記科目"
-          value={rows.length}
-        />
+      <div style={{ ...styles.row, marginTop: 25 }}>
+        <button
+          style={tabButton(tab === "progress")}
+          onClick={() => setTab("progress")}
+        >
+          成績登記檢查
+        </button>
 
-        <Stat
-          label="已完成"
-          value={
-            rows.filter((row) =>
-              COMPLETED.has(row.status)
-            ).length
-          }
-        />
-
-        <Stat
-          label="待完成"
-          value={incomplete.length}
-        />
-
-        <Stat
-          label="免考待審核"
-          value={pendingCount}
-        />
+        <button
+          style={tabButton(tab === "requests")}
+          onClick={() => setTab("requests")}
+        >
+          免考申請審核
+          {pendingRequests.length > 0 ? `（待審 ${pendingRequests.length}）` : ""}
+        </button>
       </div>
 
       {error && (
-        <div style={styles.error}>
-          {error}
-        </div>
+        <div style={{ ...styles.panel, color: "#b33" }}>{error}</div>
       )}
 
       {loading ? (
-        <div style={styles.panel}>
-          正在讀取各班成績資料…
-        </div>
-      ) : (
+        <div style={styles.panel}>正在讀取資料…</div>
+      ) : tab === "progress" ? (
         <>
           <section style={styles.panel}>
-            <h2 style={styles.h2}>
-              班級登記進度
-            </h2>
+            <h2 style={{ marginTop: 0 }}>選擇查詢範圍</h2>
 
-            <div style={styles.scroll}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <Th>考試</Th>
-                    <Th>班級</Th>
-                    <Th>應登記</Th>
-                    <Th>已完成</Th>
-                    <Th>待完成</Th>
-                    <Th>完成率</Th>
-                  </tr>
-                </thead>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 18,
+            }}>
+              <div>
+                <label style={styles.label}>考試時程</label>
+                <select
+                  style={styles.input}
+                  value={selectedExam}
+                  onChange={(event) => {
+                    setSelectedExam(event.target.value);
+                    setSelectedClass("");
+                    setShowResult(false);
+                  }}
+                >
+                  <option value="">請選擇考試時程</option>
+                  {examOptions.map((exam) => (
+                    <option key={exam.id} value={String(exam.id)}>
+                      {examName(exam)}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <tbody>
-                  {grouped.map((item) => (
-                    <tr key={item.key}>
-                      <Td>{item.examLabel}</Td>
-                      <Td>{item.className}</Td>
-                      <Td>{item.total}</Td>
-                      <Td>{item.completed}</Td>
-                      <Td>
-                        {item.total -
-                          item.completed}
-                      </Td>
-                      <Td>
-                        {item.total
-                          ? Math.round(
-                              (item.completed /
-                                item.total) *
-                                100
-                            )
-                          : 0}
-                        %
-                      </Td>
+              <div>
+                <label style={styles.label}>班級</label>
+                <select
+                  style={styles.input}
+                  value={selectedClass}
+                  disabled={!selectedExam}
+                  onChange={(event) => {
+                    setSelectedClass(event.target.value);
+                    setShowResult(false);
+                  }}
+                >
+                  <option value="">請選擇班級</option>
+                  {classOptions.map((item) => (
+                    <option key={item.id} value={String(item.id)}>
+                      {item.class_name_snapshot || "未命名班級"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <button
+              style={{
+                ...styles.button,
+                marginTop: 20,
+                background: "#242424",
+                color: "#fff",
+                borderColor: "#242424",
+                opacity: selectedExam && selectedClass ? 1 : 0.5,
+              }}
+              disabled={!selectedExam || !selectedClass}
+              onClick={() => {
+                setSearch("");
+                setShowResult(true);
+              }}
+            >
+              查詢登記進度
+            </button>
+          </section>
+
+          {!showResult ? (
+            <div style={{
+              ...styles.panel,
+              textAlign: "center",
+              color: "#888",
+              padding: 45,
+            }}>
+              請先選擇考試時程與班級，再查詢成績登記情況。
+            </div>
+          ) : (
+            <>
+              <section style={styles.panel}>
+                <h2 style={{ marginTop: 0 }}>
+                  {examName(selectedExamData)}
+                </h2>
+                <div style={styles.muted}>
+                  {selectedClassData?.class_name_snapshot || "班級"}
+                  {"　"}即時登記進度
+                </div>
+
+                <div style={styles.stats}>
+                  <Stat label="應登記科目" value={selectedSubjects.length} />
+                  <Stat label="已完成" value={completed.length} />
+                  <Stat label="尚未登記" value={incomplete.length} />
+                  <Stat
+                    label="完成率"
+                    value={
+                      selectedSubjects.length
+                        ? `${Math.round(completed.length / selectedSubjects.length * 100)}%`
+                        : "0%"
+                    }
+                  />
+                </div>
+
+                <div style={{
+                  height: 9,
+                  background: "#eee",
+                  borderRadius: 20,
+                  overflow: "hidden",
+                  marginTop: 20,
+                }}>
+                  <div style={{
+                    height: "100%",
+                    width: selectedSubjects.length
+                      ? `${completed.length / selectedSubjects.length * 100}%`
+                      : "0%",
+                    background: "#333",
+                    transition: "width .2s",
+                  }} />
+                </div>
+
+                <p style={styles.muted}>
+                  已輸入成績及已核准免考，均計入完成。
+                  尚未登記不代表逾期或疏漏。
+                </p>
+              </section>
+
+              <section style={styles.panel}>
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 15,
+                  alignItems: "center",
+                  marginBottom: 18,
+                }}>
+                  <h2 style={{ margin: 0 }}>
+                    尚未完成科目（{incomplete.length}）
+                  </h2>
+
+                  <input
+                    style={{ ...styles.input, width: 260 }}
+                    placeholder="搜尋學生或科目"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </div>
+
+                <Table headings={["學生", "科目", "目前狀態"]}>
+                  {visibleIncomplete.map((item) => (
+                    <tr key={item.id}>
+                      <Cell>
+                        {item.student?.student_name_snapshot || "未知學生"}
+                      </Cell>
+                      <Cell>{SUBJECTS[item.subject] || item.subject}</Cell>
+                      <Cell>
+                        {item.status === "EXEMPT_PENDING"
+                          ? "免考申請審核中"
+                          : item.status === "EXEMPT_REJECTED"
+                            ? "免考已退回／待登記"
+                            : "尚未登記"}
+                      </Cell>
                     </tr>
                   ))}
-                </tbody>
-              </table>
+                </Table>
 
-              {!grouped.length && (
-                <div style={styles.empty}>
-                  目前沒有考試資料。
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section style={styles.panel}>
-            <div style={styles.toolbar}>
-              <div style={styles.tabs}>
-                <button
-                  type="button"
-                  style={
-                    tab === "scores"
-                      ? styles.activeTab
-                      : styles.tab
-                  }
-                  onClick={() =>
-                    setTab("scores")
-                  }
-                >
-                  未完成科目（
-                  {incomplete.length}）
-                </button>
-
-                <button
-                  type="button"
-                  style={
-                    tab === "requests"
-                      ? styles.activeTab
-                      : styles.tab
-                  }
-                  onClick={() =>
-                    setTab("requests")
-                  }
-                >
-                  免考申請紀錄（
-                  {requests.length}）
-                </button>
-              </div>
-
-              <div style={styles.filters}>
-                <select
-                  value={filter}
-                  onChange={(event) =>
-                    setFilter(
-                      event.target.value
-                    )
-                  }
-                  style={styles.input}
-                >
-                  <option value="ALL">
-                    全部考試
-                  </option>
-                  <option value="MOCK">
-                    模擬考
-                  </option>
-                  <option value="OFFICIAL">
-                    正式考試
-                  </option>
-                </select>
-
-                <input
-                  style={styles.input}
-                  placeholder="搜尋學生、班級、科目…"
-                  value={search}
-                  onChange={(event) =>
-                    setSearch(
-                      event.target.value
-                    )
-                  }
-                />
-              </div>
-            </div>
-
-            {tab === "scores" ? (
-              <div style={styles.scroll}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr>
-                      <Th>考試</Th>
-                      <Th>班級</Th>
-                      <Th>學生</Th>
-                      <Th>科目</Th>
-                      <Th>狀態</Th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {visibleScores.map(
-                      (row) => (
-                        <tr key={row.id}>
-                          <Td>
-                            {row.examLabel}
-                          </Td>
-
-                          <Td>
-                            {row.className}
-                          </Td>
-
-                          <Td>
-                            {row.studentName}
-                          </Td>
-
-                          <Td>
-                            {SUBJECT_NAMES[
-                              row.subject
-                            ] || row.subject}
-                          </Td>
-
-                          <Td>
-                            {row.status ===
-                            "EXEMPT_PENDING"
-                              ? "免考審核中"
-                              : row.status ===
-                                  "EXEMPT_REJECTED"
-                                ? "免考已退回／待登記"
-                                : "待登記"}
-                          </Td>
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
-
-                {!visibleScores.length && (
-                  <div style={styles.empty}>
-                    目前沒有符合條件的未完成科目。
-                  </div>
+                {visibleIncomplete.length === 0 && (
+                  <p style={{ textAlign: "center", color: "#888", padding: 20 }}>
+                    {incomplete.length === 0
+                      ? "這個班級目前沒有尚未完成的科目。"
+                      : "沒有符合搜尋條件的資料。"}
+                  </p>
                 )}
-              </div>
-            ) : (
-              <div style={styles.scroll}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr>
-                      <Th>申請時間</Th>
-                      <Th>考試／班級</Th>
-                      <Th>學生／科目</Th>
-                      <Th>申請原因</Th>
-                      <Th>狀態</Th>
-                      <Th>審核備註</Th>
-                      {isAdmin && (
-                        <Th>
-                          管理員操作
-                        </Th>
-                      )}
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {visibleRequests.map(
-                      (item) => (
-                        <tr key={item.id}>
-                          <Td>
-                            {formatDate(
-                              item.requested_at
-                            )}
-                          </Td>
-
-                          <Td>
-                            {
-                              item.subject
-                                .examLabel
-                            }
-
-                            <div
-                              style={
-                                styles.muted
-                              }
-                            >
-                              {
-                                item.subject
-                                  .className
-                              }
-                            </div>
-                          </Td>
-
-                          <Td>
-                            {
-                              item.subject
-                                .studentName
-                            }
-
-                            <div
-                              style={
-                                styles.muted
-                              }
-                            >
-                              {SUBJECT_NAMES[
-                                item.subject
-                                  .subject
-                              ] ||
-                                item.subject
-                                  .subject}
-                            </div>
-                          </Td>
-
-                          <Td>
-                            {item.reason || "—"}
-                          </Td>
-
-                          <Td>
-                            {item.status ===
-                              "APPROVED" &&
-                            item.subject.status !==
-                              "EXEMPT_APPROVED"
-                              ? "核准已撤銷"
-                              : STATUS[
-                                  item.status
-                                ] ||
-                                item.status}
-                          </Td>
-
-                          <Td>
-                            {item.review_note ||
-                              "—"}
-                          </Td>
-
-                          {isAdmin && (
-                            <Td>
-                              {item.subject.exam
-                                .exam_type ===
-                                "MOCK" &&
-                              item.status ===
-                                "PENDING" ? (
-                                <div
-                                  style={
-                                    styles.actions
-                                  }
-                                >
-                                  <button
-                                    type="button"
-                                    disabled={Boolean(
-                                      busyId
-                                    )}
-                                    style={
-                                      styles.button
-                                    }
-                                    onClick={() =>
-                                      review(
-                                        item,
-                                        "APPROVE"
-                                      )
-                                    }
-                                  >
-                                    核准
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    disabled={Boolean(
-                                      busyId
-                                    )}
-                                    style={
-                                      styles.button
-                                    }
-                                    onClick={() =>
-                                      review(
-                                        item,
-                                        "REJECT"
-                                      )
-                                    }
-                                  >
-                                    退回
-                                  </button>
-                                </div>
-                              ) : item.subject.exam
-                                  .exam_type ===
-                                  "MOCK" &&
-                                item.status ===
-                                  "APPROVED" &&
-                                item.subject.status ===
-                                  "EXEMPT_APPROVED" ? (
-                                <button
-                                  type="button"
-                                  disabled={Boolean(
-                                    busyId
-                                  )}
-                                  style={
-                                    styles.button
-                                  }
-                                  onClick={() =>
-                                    review(
-                                      item,
-                                      "REVOKE"
-                                    )
-                                  }
-                                >
-                                  撤銷核准
-                                </button>
-                              ) : (
-                                "—"
-                              )}
-                            </Td>
-                          )}
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
-
-                {!visibleRequests.length && (
-                  <div style={styles.empty}>
-                    目前沒有符合條件的免考申請。
-                  </div>
-                )}
-              </div>
-            )}
-
-            <p style={styles.note}>
-              只有管理員可以核准、退回或撤銷核准；
-              退回與撤銷必須填寫原因。
-              撤銷不刪除原本的核准紀錄。
-              操作後請重新整理成績登記頁，
-              查看最新完成數量。
-            </p>
-          </section>
+              </section>
+            </>
+          )}
         </>
+      ) : (
+        <section style={styles.panel}>
+          <h2 style={{ marginTop: 0 }}>模擬考免考申請</h2>
+          <p style={styles.muted}>
+            管理員可以核准、退回或撤銷已核准的免考申請。
+            正式大考不開放免考申請。
+          </p>
+
+          <Table headings={[
+            "申請時間", "考試", "班級", "學生",
+            "科目", "申請原因", "狀態",
+            "審核備註", ...(isAdmin ? ["主管操作"] : []),
+          ]}>
+            {enrichedRequests.map((item) => {
+              const approved =
+                item.status === "APPROVED" &&
+                item.subject.status === "EXEMPT_APPROVED";
+
+              const revoked =
+                item.status === "APPROVED" &&
+                item.subject.status !== "EXEMPT_APPROVED";
+
+              const isMock = item.exam.exam_type === "MOCK";
+
+              return (
+                <tr key={item.id}>
+                  <Cell>{dateText(item.requested_at)}</Cell>
+                  <Cell>{examName(item.exam)}</Cell>
+                  <Cell>{item.examClass.class_name_snapshot}</Cell>
+                  <Cell>{item.student.student_name_snapshot}</Cell>
+                  <Cell>{SUBJECTS[item.subject.subject] || item.subject.subject}</Cell>
+                  <Cell>{item.reason || "—"}</Cell>
+                  <Cell>
+                    {revoked
+                      ? "核准已撤銷"
+                      : REQUEST_STATUS[item.status] || item.status}
+                  </Cell>
+                  <Cell>{item.review_note || "—"}</Cell>
+
+                  {isAdmin && (
+                    <Cell>
+                      <div style={styles.row}>
+                        {isMock && item.status === "PENDING" && (
+                          <>
+                            <button
+                              style={styles.button}
+                              disabled={busy}
+                              onClick={() => review(item, "APPROVE")}
+                            >
+                              核准
+                            </button>
+                            <button
+                              style={styles.button}
+                              disabled={busy}
+                              onClick={() => review(item, "REJECT")}
+                            >
+                              退回
+                            </button>
+                          </>
+                        )}
+
+                        {isMock && approved && (
+                          <button
+                            style={styles.button}
+                            disabled={busy}
+                            onClick={() => review(item, "REVOKE")}
+                          >
+                            撤銷核准
+                          </button>
+                        )}
+
+                        {(!isMock || (item.status !== "PENDING" && !approved)) && "—"}
+                      </div>
+                    </Cell>
+                  )}
+                </tr>
+              );
+            })}
+          </Table>
+
+          {enrichedRequests.length === 0 && (
+            <p style={{ textAlign: "center", padding: 25, color: "#888" }}>
+              目前沒有免考申請紀錄。
+            </p>
+          )}
+        </section>
       )}
     </div>
   );
 }
-
-function Stat({ label, value }) {
-  return (
-    <div style={styles.stat}>
-      <div style={styles.muted}>
-        {label}
-      </div>
-
-      <div style={styles.number}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function Th({ children }) {
-  return (
-    <th style={styles.th}>
-      {children}
-    </th>
-  );
-}
-
-function Td({ children }) {
-  return (
-    <td style={styles.td}>
-      {children}
-    </td>
-  );
-}
-
-const styles = {
-  page: {
-    maxWidth: 1350,
-    margin: "0 auto",
-    padding: 32,
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    gap: 16,
-    marginBottom: 24,
-  },
-
-  eyebrow: {
-    color: "#888",
-    fontSize: 12,
-    fontWeight: 700,
-    letterSpacing: ".14em",
-    marginBottom: 8,
-  },
-
-  title: {
-    fontSize: 30,
-    margin: 0,
-    color: "#222",
-  },
-
-  sub: {
-    color: "#777",
-    fontSize: 14,
-    margin: "8px 0 0",
-  },
-
-  actions: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-
-  button: {
-    border: "1px solid #ddd",
-    background: "#fff",
-    padding: "10px 14px",
-    borderRadius: 9,
-    cursor: "pointer",
-    fontFamily: "inherit",
-  },
-
-  stats: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(160px,1fr))",
-    gap: 12,
-    marginBottom: 18,
-  },
-
-  stat: {
-    background: "#fff",
-    border: "1px solid #e8e8e8",
-    padding: 18,
-    borderRadius: 14,
-  },
-
-  number: {
-    fontSize: 26,
-    fontWeight: 800,
-    marginTop: 6,
-  },
-
-  muted: {
-    color: "#888",
-    fontSize: 12,
-  },
-
-  panel: {
-    background: "#fff",
-    border: "1px solid #e8e8e8",
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 18,
-  },
-
-  h2: {
-    fontSize: 18,
-    margin: "0 0 15px",
-  },
-
-  scroll: {
-    overflowX: "auto",
-  },
-
-  table: {
-    width: "100%",
-    minWidth: 780,
-    borderCollapse: "collapse",
-    fontSize: 13,
-  },
-
-  th: {
-    textAlign: "left",
-    background: "#f7f7f7",
-    color: "#555",
-    padding: "12px 10px",
-    borderBottom: "1px solid #ddd",
-    whiteSpace: "nowrap",
-  },
-
-  td: {
-    padding: "12px 10px",
-    borderBottom: "1px solid #eee",
-    verticalAlign: "top",
-  },
-
-  toolbar: {
-    display: "flex",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 15,
-  },
-
-  tabs: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-
-  tab: {
-    background: "#f4f4f4",
-    border: 0,
-    borderRadius: 9,
-    padding: "9px 12px",
-    cursor: "pointer",
-    color: "#666",
-    fontFamily: "inherit",
-  },
-
-  activeTab: {
-    background: "#222",
-    border: 0,
-    borderRadius: 9,
-    padding: "9px 12px",
-    cursor: "pointer",
-    color: "#fff",
-    fontWeight: 700,
-    fontFamily: "inherit",
-  },
-
-  filters: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-
-  input: {
-    border: "1px solid #ddd",
-    borderRadius: 8,
-    padding: "9px 10px",
-    fontFamily: "inherit",
-  },
-
-  empty: {
-    padding: 25,
-    textAlign: "center",
-    color: "#888",
-  },
-
-  note: {
-    fontSize: 12,
-    color: "#888",
-    lineHeight: 1.7,
-    margin: "18px 0 0",
-  },
-
-  error: {
-    background: "#fff4f4",
-    color: "#a33",
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-  },
-};
