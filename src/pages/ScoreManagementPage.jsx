@@ -3,6 +3,7 @@ import {
 } from "react";
 
 import ScoreEntryPage from "./ScoreEntryPage";
+import ScorePendingPage from "./ScorePendingPage";
 
 
 const MENU_ITEMS = [
@@ -78,15 +79,23 @@ export default function ScoreManagementPage({
   }
 
 
+  if (activeSection === "pending") {
+    return (
+      <ScorePendingPage
+        currentTeacher={currentTeacher}
+        onBack={() => setActiveSection("home")}
+      />
+    );
+  }
+
   function handleMenuClick(
     key
   ) {
     if (
-      key === "entry"
+      key === "entry" ||
+      key === "pending"
     ) {
-      setActiveSection(
-        "entry"
-      );
+      setActiveSection(key);
 
       return;
     }
@@ -122,7 +131,8 @@ export default function ScoreManagementPage({
         {MENU_ITEMS.map(
           (item) => {
             const isAvailable =
-              item.key === "entry";
+              item.key === "entry" ||
+              item.key === "pending";
 
             return (
               <button
