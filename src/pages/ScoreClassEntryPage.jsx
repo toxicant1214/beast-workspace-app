@@ -757,6 +757,8 @@ export default function ScoreClassEntryPage({
     subject,
     subjectRow,
   }) {
+    if (examInfo?.examType !== "MOCK") return;
+
     setExemptionModal({
       mode: "create",
       student,
@@ -816,6 +818,11 @@ export default function ScoreClassEntryPage({
    * 新增免考申請。
    */
   async function submitExemption() {
+    if (examInfo?.examType !== "MOCK") {
+      setExemptionError("學校正式大考不開放免考申請。");
+      return;
+    }
+
     if (
       !exemptionModal?.subjectRow?.id
     ) {
@@ -1490,7 +1497,9 @@ export default function ScoreClassEntryPage({
                   styles.sectionHint
                 }
               >
-                直接輸入成績即自動儲存；無成績時可提出免考申請。
+                {examInfo?.examType === "MOCK"
+                  ? "直接輸入成績即自動儲存；無成績時可提出免考申請。"
+                  : "直接輸入成績即自動儲存；正式大考不開放免考申請。"}
               </div>
             </div>
           </div>
@@ -1885,8 +1894,8 @@ export default function ScoreClassEntryPage({
                                       </div>
 
 
-                                      {row.status !==
-                                        "SCORED" && (
+                                      {examInfo?.examType === "MOCK" &&
+                                        row.status !== "SCORED" && (
                                         <button
                                           type="button"
                                           onClick={() =>
