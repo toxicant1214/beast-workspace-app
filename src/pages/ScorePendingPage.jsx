@@ -155,7 +155,6 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
 
   const [selectedExam, setSelectedExam] = useState("");
   const [selectedClass, setSelectedClass] = useState("");
-  const [showResult, setShowResult] = useState(false);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -258,10 +257,8 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
     if (selectedExam && !examOptions.some((exam) => String(exam.id) === selectedExam)) {
       setSelectedExam("");
       setSelectedClass("");
-      setShowResult(false);
     } else if (selectedClass && !classOptions.some((item) => String(item.id) === selectedClass)) {
       setSelectedClass("");
-      setShowResult(false);
     }
   }, [loading, selectedExam, selectedClass, examOptions, classOptions]);
 
@@ -448,7 +445,7 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
                   onChange={(event) => {
                     setSelectedExam(event.target.value);
                     setSelectedClass("");
-                    setShowResult(false);
+                    setSearch("");
                   }}
                 >
                   <option value="">請選擇考試時程</option>
@@ -468,7 +465,7 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
                   disabled={!selectedExam}
                   onChange={(event) => {
                     setSelectedClass(event.target.value);
-                    setShowResult(false);
+                    setSearch("");
                   }}
                 >
                   <option value="">請選擇班級</option>
@@ -485,33 +482,16 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
               <p style={styles.muted}>目前沒有尚未完成登記的考試。</p>
             )}
 
-            <button
-              style={{
-                ...styles.button,
-                marginTop: 20,
-                background: "#242424",
-                color: "#fff",
-                borderColor: "#242424",
-                opacity: selectedExam && selectedClass ? 1 : 0.5,
-              }}
-              disabled={!selectedExam || !selectedClass}
-              onClick={() => {
-                setSearch("");
-                setShowResult(true);
-              }}
-            >
-              查詢登記進度
-            </button>
           </section>
 
-          {!showResult ? (
+          {!selectedExam || !selectedClass ? (
             <div style={{
               ...styles.panel,
               textAlign: "center",
               color: "#888",
               padding: 45,
             }}>
-              請先選擇尚未完成的考試時程與班級，再查詢成績登記情況。
+              請先選擇考試時程與班級，登記進度就會自動顯示。
             </div>
           ) : (
             <>
