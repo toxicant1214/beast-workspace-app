@@ -210,22 +210,60 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
     [subjects]
   );
 
+  // 只列出已建立科目資料、且至少一科尚未完成的班級。
+  // 免考審核中不屬於 FINISHED，因此仍留在待完成。
+  const incompleteClassIds = useMemo(() => {
+    const studentClassMap = new Map(
+      students.map((student) => [
+        String(student.id),
+        String(student.exam_class_id),
+      ])
+    );
+    const ids = new Set();
+    for (const subject of subjects) {
+      if (FINISHED.has(subject.status)) continue;
+      const classId = studentClassMap.get(String(subject.exam_student_id));
+      if (classId) ids.add(classId);
+    }
+    return ids;
+  }, [students, subjects]);
+
   const examOptions = useMemo(() => {
-    const ids = new Set(classes.map((item) => String(item.exam_id)));
+    const incompleteExamIds = new Set(
+      classes
+        .filter((item) => incompleteClassIds.has(String(item.id)))
+        .map((item) => String(item.exam_id))
+    );
     return exams
-      .filter((item) => ids.has(String(item.id)))
+      .filter((item) => incompleteExamIds.has(String(item.id)))
       .sort((a, b) => examName(b).localeCompare(examName(a), "zh-TW"));
-  }, [exams, classes]);
+  }, [exams, classes, incompleteClassIds]);
 
   const classOptions = useMemo(() => (
     classes
-      .filter((item) => String(item.exam_id) === selectedExam)
+      .filter((item) =>
+        String(item.exam_id) === selectedExam &&
+        incompleteClassIds.has(String(item.id))
+      )
       .sort((a, b) =>
         (a.class_name_snapshot || "").localeCompare(
           b.class_name_snapshot || "", "zh-TW"
         )
       )
-  ), [classes, selectedExam]);
+  ), [classes, selectedExam, incompleteClassIds]);
+
+  // 重新整理後若已全數完成，清除已不在待完成清單中的選擇。
+  useEffect(() => {
+    if (loading) return;
+    if (selectedExam && !examOptions.some((exam) => String(exam.id) === selectedExam)) {
+      setSelectedExam("");
+      setSelectedClass("");
+      setShowResult(false);
+    } else if (selectedClass && !classOptions.some((item) => String(item.id) === selectedClass)) {
+      setSelectedClass("");
+      setShowResult(false);
+    }
+  }, [loading, selectedExam, selectedClass, examOptions, classOptions]);
 
   const selectedClassData = classMap.get(selectedClass);
   const selectedExamData = examMap.get(selectedExam);
@@ -354,7 +392,7 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
         <div>
           <h1 style={styles.heading}>待完成</h1>
           <div style={styles.muted}>
-            即時查詢成績登記進度與模擬考免考申請
+            僅顯示尚未完成的考試與班級，並可審核模擬考免考申請
           </div>
         </div>
 
@@ -395,6 +433,7 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
         <>
           <section style={styles.panel}>
             <h2 style={{ marginTop: 0 }}>選擇查詢範圍</h2>
+            <p style={styles.muted}>已全部完成的班級及考試會自動隱藏，成績資料仍保留。</p>
 
             <div style={{
               display: "grid",
@@ -442,6 +481,10 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
               </div>
             </div>
 
+            {examOptions.length === 0 && (
+              <p style={styles.muted}>目前沒有尚未完成登記的考試。</p>
+            )}
+
             <button
               style={{
                 ...styles.button,
@@ -468,7 +511,7 @@ export default function ScorePendingPage({ onBack, currentTeacher }) {
               color: "#888",
               padding: 45,
             }}>
-              請先選擇考試時程與班級，再查詢成績登記情況。
+              請先選擇尚未完成的考試時程與班級，再查詢成績登記情況。
             </div>
           ) : (
             <>
