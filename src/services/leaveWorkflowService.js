@@ -1096,6 +1096,28 @@ export async function cancelLeaveRequest(id) {
   if (error) throw error;
 }
 
+/** 永久刪除（主管用，限已取消、還沒寫入休假紀錄的請假；測試資料清理用） */
+export async function deleteLeaveRequest(request) {
+  if (request.leave_record_id || request.status === "completed") {
+    throw new Error("已完成的請假已寫入休假紀錄，不能刪除。");
+  }
+  if (request.status !== "cancelled") {
+    throw new Error("請先取消這筆請假，再刪除。");
+  }
+  const { error: itemError } = await supabase.from(ITEM_TABLE).delete().eq("request_id", request.id);
+  if (itemError) throw itemError;
+  const { error } = await supabase.from(REQUEST_TABLE).delete().eq("id", request.id);
+  if (error) throw error;
+  try {
+    const { data: files } = await supabase.storage.from("leave-sheets").list(String(request.id));
+    if (files?.length) {
+      await supabase.storage.from("leave-sheets").remove(files.map((f) => `${request.id}/${f.name}`));
+    }
+  } catch (storageError) {
+    console.warn("刪除代班確認單檔案失敗", storageError);
+  }
+}
+
 export async function reopenLeaveRequest(id) {
   const { error } = await supabase
     .from(REQUEST_TABLE)

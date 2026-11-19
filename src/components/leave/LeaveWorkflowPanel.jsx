@@ -43,6 +43,7 @@ import {
   parseDate,
   presentStudents,
   reopenLeaveRequest,
+  deleteLeaveRequest,
   splitLeaveItem,
   timesOverlap,
   toDateString,
@@ -1338,6 +1339,19 @@ function RequestDetail({ request, teachers, admins = [], externalStaff, currentT
     }
   }
 
+  async function handleDelete() {
+    if (!window.confirm("永久刪除這筆請假？所有代班格子、交接內容都會刪掉，無法復原。")) return;
+    try {
+      setBusyId("delete");
+      await deleteLeaveRequest(request);
+      await onChanged();
+      onBack();
+    } catch (e) {
+      setMessage({ type: "error", text: e.message });
+      setBusyId(null);
+    }
+  }
+
   async function handlePrintSheet() {
     try {
       setBusyId("print");
@@ -2155,6 +2169,16 @@ function RequestDetail({ request, teachers, admins = [], externalStaff, currentT
                 onClick={() => run("reopen", () => reopenLeaveRequest(request.id))}
               >
                 恢復這筆請假
+              </button>
+            )}
+            {isAdmin && !request.leave_record_id && (
+              <button
+                type="button"
+                className="leave-delete-button"
+                disabled={!!busyId}
+                onClick={handleDelete}
+              >
+                永久刪除
               </button>
             )}
           </div>
