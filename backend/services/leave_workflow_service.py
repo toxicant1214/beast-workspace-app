@@ -152,7 +152,7 @@ def get_leave_request(request_id):
             leave_types ( id, name ),
             leave_request_items (
               *,
-              substitute_teacher:substitute_teacher_id ( id, chinese_name, english_name, line_user_id ),
+              substitute_teacher:substitute_teacher_id ( id, chinese_name, english_name, line_user_id, role ),
               substitute_external:substitute_external_id ( id, name )
             )
             """
@@ -264,6 +264,15 @@ def push_link_card(to, alt_text, title, lines, button_label, url, extra_buttons=
 # 通知①：老師送出 → 通知主管
 # =========================================================
 
+def _line_target(teacher):
+    """老師的 LINE；主管本人如果老師帳號沒綁 LINE，就送到主管通知用的 LINE。"""
+    if teacher.get("line_user_id"):
+        return teacher["line_user_id"]
+    if teacher.get("role") == "admin":
+        return os.getenv("ADMIN_LINE_USER_ID")
+    return None
+
+
 def notify_admin_submitted(request_id, admin_line_user_id):
     request = get_leave_request(request_id)
     if not request:
@@ -358,7 +367,7 @@ def notify_substitutes_approved(request_id, only_unacked=False, item_ids=None):
     for entry in by_teacher.values():
         teacher = entry["teacher"]
         sub_name = _teacher_name(teacher)
-        if not teacher.get("line_user_id"):
+        if not _line_target(teacher):
             no_line.append(sub_name)
             continue
 
@@ -366,7 +375,7 @@ def notify_substitutes_approved(request_id, only_unacked=False, item_ids=None):
 
         try:
             push_link_card(
-                to=teacher["line_user_id"],
+                to=_line_target(teacher),
                 alt_text=f"代班通知：代 {leave_name} 老師",
                 title="🔁 代班通知",
                 lines=lines + ["", "孩子名單和交接內容請點下方按鈕查看，並按「我已了解」。"],
@@ -405,7 +414,7 @@ def notify_removed_substitutes(request_id, teacher_ids, item_ids=None, reason="c
     teachers = (
         supabase
         .table("teachers")
-        .select("id, chinese_name, english_name, line_user_id")
+        .select("id, chinese_name, english_name, line_user_id, role")
         .in_("id", ids)
         .execute()
     ).data or []
@@ -417,7 +426,7 @@ def notify_removed_substitutes(request_id, teacher_ids, item_ids=None, reason="c
     sent, no_line, failed = [], [], []
     for teacher in teachers:
         name = _teacher_name(teacher)
-        if not teacher.get("line_user_id"):
+        if not _line_target(teacher):
             no_line.append(name)
             continue
 
@@ -431,7 +440,7 @@ def notify_removed_substitutes(request_id, teacher_ids, item_ids=None, reason="c
 
         try:
             push_link_card(
-                to=teacher["line_user_id"],
+                to=_line_target(teacher),
                 alt_text=f"{title}：{leave_name} 老師",
                 title=title,
                 lines=lines,
