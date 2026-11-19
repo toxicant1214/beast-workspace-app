@@ -256,6 +256,8 @@ function LeaveWorkflowPanel({ mode = "admin", asTeacher = null, onExitPreview = 
       return requests.filter(
         (r) =>
           r.status === "in_progress" &&
+          // 老師畫面：主管確認後，代班老師才看得到
+          (!isTeacherMode || r.approved_at) &&
           (r.leave_request_items || []).some(
             (i) => String(i.substitute_teacher_id) === String(currentTeacher.id)
           )
@@ -273,7 +275,10 @@ function LeaveWorkflowPanel({ mode = "admin", asTeacher = null, onExitPreview = 
     const urgent = uncovered.filter((i) => i.item_date === today || i.item_date === tomorrow);
     const myPending = currentTeacher
       ? activeItems.filter(
-          (i) => String(i.substitute_teacher_id) === String(currentTeacher.id) && !i.ack_at
+          (i) =>
+            String(i.substitute_teacher_id) === String(currentTeacher.id) &&
+            !i.ack_at &&
+            requests.some((r) => r.id === i.request_id && r.approved_at)
         )
       : [];
     return {
