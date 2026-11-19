@@ -37,6 +37,7 @@ import {
   getMonthLabel,
 } from "../services/leaveReportService";
 
+import LeaveWorkflowPanel from "../components/leave/LeaveWorkflowPanel";
 import "./LeaveManagementPage.css";
 
 
@@ -44,6 +45,10 @@ const TABS = [
   {
     key: "overview",
     label: "休假總覽",
+  },
+  {
+    key: "workflow",
+    label: "請假流程",
   },
   {
     key: "records",
@@ -185,7 +190,16 @@ function LeaveManagementPage() {
   const [
     activeTab,
     setActiveTab,
-  ] = useState("overview");
+  ] = useState(() => {
+    // 從 LINE 通知點進來（?leave=）直接打開「請假流程」
+    try {
+      return new URL(window.location.href).searchParams.get("leave")
+        ? "workflow"
+        : "overview";
+    } catch {
+      return "overview";
+    }
+  });
 
   const [
     teachers,
@@ -4956,6 +4970,13 @@ function LeaveManagementPage() {
 
 
   function renderContent() {
+    if (
+      activeTab ===
+      "workflow"
+    ) {
+      return <LeaveWorkflowPanel />;
+    }
+
     if (
       activeTab ===
       "records"

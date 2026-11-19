@@ -11,6 +11,7 @@ import TaskPage from "./pages/TaskPage";
 import StudentPage from "./pages/StudentPage";
 import TeacherPage from "./pages/TeacherPage";
 import LeaveManagementPage from "./pages/LeaveManagementPage";
+import MyLeavePage from "./pages/MyLeavePage";
 import TeacherAssignmentPage from "./pages/TeacherAssignmentPage";
 import ClassPage from "./pages/ClassPage";
 import CoursePage from "./pages/CoursePage";
@@ -61,9 +62,10 @@ const PAGE_OPTIONS = [
     adminOnly: true,
   },
   {
+    // 主管看完整功能；老師要在「老師管理 → 權限」開放，進來只看得到請假流程
     label: "休假管理",
     key: "leave_management",
-    adminOnly: true,
+    editOnly: true,
   },
   {
     label: "檢視帳號管理",
@@ -762,6 +764,22 @@ function Workspace() {
   ]);
 
 
+  // 從 LINE 點「打開查看」進來（網址帶 ?leave=請假id）：直接打開請假頁
+  useEffect(() => {
+    if (!currentTeacher || !pages.length) return;
+
+    let leaveId = null;
+    try {
+      leaveId = new URL(window.location.href).searchParams.get("leave");
+    } catch {
+      leaveId = null;
+    }
+    if (!leaveId) return;
+
+    if (pages.includes("休假管理")) setActivePage("休假管理");
+  }, [currentTeacher, pages]);
+
+
   async function handleSignOut() {
     try {
       setIsSigningOut(
@@ -938,6 +956,16 @@ function Workspace() {
       activePage ===
       "休假管理"
     ) {
+      // 老師：只看自己的請假與代班
+      if (
+        currentTeacher?.role !==
+        "admin"
+      ) {
+        return (
+          <MyLeavePage />
+        );
+      }
+
       return (
         <LeaveManagementPage />
       );

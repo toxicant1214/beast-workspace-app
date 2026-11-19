@@ -86,6 +86,12 @@ const PERMISSION_MODULES = [
     label: "成績分析",
     description: "學生成績與分析資料",
   },
+  {
+    key: "leave_management",
+    label: "休假管理",
+    description: "老師只看得到請假流程：自己請假、找代理、填交接單，並確認被排到的代班",
+    editOnly: true,
+  },
 ];
 
 

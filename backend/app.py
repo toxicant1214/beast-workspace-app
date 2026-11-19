@@ -28,6 +28,12 @@ from services.teacher_assignment_service import (
     complete_teacher_assignment_by_member_id,
 )
 
+from services.leave_workflow_service import (
+    notify_admin_submitted,
+    notify_removed_substitutes,
+    notify_substitutes_approved,
+)
+
 
 app = Flask(__name__)
 CORS(app)
@@ -129,6 +135,73 @@ def complete_teacher_assignment_from_web(
         "already_completed": False,
         "member": result.get("member"),
     }
+
+
+# =========================================================
+# 請假流程｜老師送出 → 通知主管；主管確認 → 通知代理老師
+# 內容一律由後端從資料庫讀取，前端只傳請假 id。
+# =========================================================
+
+@app.route(
+    "/api/leave-requests/<request_id>/notify-submitted",
+    methods=["POST"],
+)
+def leave_request_notify_submitted(request_id):
+    try:
+        result = notify_admin_submitted(
+            request_id,
+            ADMIN_LINE_USER_ID,
+        )
+    except Exception as error:
+        print("請假送出通知主管失敗：", error)
+        return {"success": False, "message": str(error)}, 500
+
+    return result, (200 if result.get("success") else 400)
+
+
+@app.route(
+    "/api/leave-requests/<request_id>/notify-substitutes",
+    methods=["POST"],
+)
+def leave_request_notify_substitutes(request_id):
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        result = notify_substitutes_approved(
+            request_id,
+            only_unacked=bool(payload.get("only_unacked")),
+            item_ids=payload.get("item_ids") or None,
+        )
+    except Exception as error:
+        print("代班通知失敗：", error)
+        return {"success": False, "message": str(error)}, 500
+
+    return result, (200 if result.get("success") else 400)
+
+
+@app.route(
+    "/api/leave-requests/<request_id>/notify-removed",
+    methods=["POST"],
+)
+def leave_request_notify_removed(request_id):
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        result = notify_removed_substitutes(
+            request_id,
+            teacher_ids=payload.get("teacher_ids") or [],
+            item_ids=payload.get("item_ids") or [],
+            reason=(
+                "cancelled"
+                if payload.get("reason") == "cancelled"
+                else "changed"
+            ),
+        )
+    except Exception as error:
+        print("代班異動通知失敗：", error)
+        return {"success": False, "message": str(error)}, 500
+
+    return result, (200 if result.get("success") else 400)
 
 
 # =========================================================

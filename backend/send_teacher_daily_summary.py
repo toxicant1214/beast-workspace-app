@@ -843,6 +843,17 @@ def main():
             )
         )
 
+        # 請假流程：今日代班（出錯會自動略過，不影響晨報）
+        from services.leave_workflow_service import (
+            append_substitute_section,
+        )
+
+        message = append_substitute_section(
+            message,
+            teacher_id,
+            today_date,
+        )
+
         print(
             "發送老師每日工作摘要：",
             teacher.get(

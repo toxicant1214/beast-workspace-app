@@ -23,6 +23,10 @@ from services.teacher_assignment_service import (
 from send_task_reminders import (
     process_task_reminders,
 )
+from services.leave_workflow_service import (
+    append_admin_leave_overview,
+    append_substitute_section,
+)
 from send_teacher_daily_summary import (
     build_teacher_daily_summary,
     get_active_line_teachers,
@@ -679,6 +683,12 @@ def send_morning_report_if_due(
             )
         )
 
+        # 請假流程：今日請假與代班總覽（出錯會自動略過，不影響晨報）
+        message = append_admin_leave_overview(
+            message,
+            now.date().isoformat(),
+        )
+
         send_line_message_to_user(
             ADMIN_LINE_USER_ID,
             message,
@@ -904,6 +914,13 @@ def send_teacher_reports_if_due(
                         ),
                         today=now,
                     )
+                )
+
+                # 請假流程：今日代班（出錯會自動略過，不影響晨報）
+                message = append_substitute_section(
+                    message,
+                    teacher_id,
+                    today_date,
                 )
 
                 send_line_message_to_user(

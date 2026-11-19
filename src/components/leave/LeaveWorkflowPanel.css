@@ -1,0 +1,1034 @@
+/* 請假流程：沿用 LeaveManagementPage.css 的 leave-* 樣式，這裡只放新增的 lwf-* */
+
+.lwf-loading {
+  padding: 48px 0;
+  text-align: center;
+  opacity: 0.55;
+}
+
+/* ---------- 統計卡 ---------- */
+
+.lwf-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.lwf-stat {
+  padding: 18px 20px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.lwf-stat span {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.55;
+}
+
+.lwf-stat strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.lwf-stat--warn {
+  border-color: rgba(214, 140, 30, 0.35);
+  background: rgba(255, 244, 222, 0.75);
+}
+
+.lwf-stat--danger {
+  border-color: rgba(200, 60, 50, 0.35);
+  background: rgba(255, 232, 228, 0.8);
+}
+
+.lwf-stat--danger strong {
+  color: #b2382c;
+}
+
+/* ---------- 老師畫面預覽 ---------- */
+
+.lwf-heading-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lwf-preview-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lwf-preview-select span {
+  opacity: 0.55;
+}
+
+.lwf-preview-select select {
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+
+.lwf-preview-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(60, 110, 200, 0.1);
+  font-size: 14px;
+}
+
+/* ---------- 篩選 ---------- */
+
+.lwf-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.lwf-filter {
+  appearance: none;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  color: inherit;
+}
+
+.lwf-filter--active {
+  background: #2b2b2b;
+  border-color: #2b2b2b;
+  color: #fff;
+}
+
+/* ---------- 請假卡 ---------- */
+
+.lwf-request-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lwf-card {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  padding: 16px 20px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.75);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.lwf-card:hover {
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+.lwf-card-main small {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.55;
+}
+
+.lwf-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lwf-card-title strong {
+  font-size: 17px;
+}
+
+.lwf-card-title h2 {
+  margin: 0;
+}
+
+.lwf-badge {
+  display: inline-flex;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lwf-badge--danger {
+  background: rgba(200, 60, 50, 0.12);
+  color: #b2382c;
+}
+
+.lwf-done-tag {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2f7a4b;
+}
+
+.lwf-cancel-tag {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.45;
+}
+
+/* ---------- 步驟條 ---------- */
+
+.lwf-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 0 6px;
+  flex-wrap: wrap;
+}
+
+.lwf-steps--compact {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.lwf-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.04);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lwf-step-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.12);
+  color: #fff;
+  font-size: 12px;
+}
+
+.lwf-step-label em {
+  margin-left: 6px;
+  font-style: normal;
+  opacity: 0.6;
+}
+
+.lwf-step--done {
+  background: rgba(47, 122, 75, 0.1);
+  color: #2f7a4b;
+}
+
+.lwf-step--done .lwf-step-dot {
+  background: #2f7a4b;
+}
+
+.lwf-step--current {
+  background: rgba(214, 140, 30, 0.14);
+  color: #94600f;
+}
+
+.lwf-step--current .lwf-step-dot {
+  background: #d68c1e;
+}
+
+.lwf-step--todo {
+  opacity: 0.55;
+}
+
+/* ---------- 新增請假 ---------- */
+
+.lwf-modal {
+  width: min(980px, 96vw);
+  max-width: 980px;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.lwf-build {
+  margin: 4px 24px 16px;
+  padding: 16px;
+  border: 1px dashed rgba(0, 0, 0, 0.15);
+  border-radius: 14px;
+}
+
+.lwf-build-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.lwf-build-head small {
+  display: block;
+  margin-top: 4px;
+  line-height: 1.6;
+  opacity: 0.55;
+}
+
+.lwf-hint {
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(214, 140, 30, 0.1);
+  font-size: 14px;
+}
+
+.lwf-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lwf-preview-day {
+  margin-top: 14px;
+}
+
+.lwf-preview-day h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.lwf-preview-item {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.lwf-preview-row {
+  display: grid;
+  grid-template-columns: 170px 84px 1fr 32px;
+  gap: 10px;
+  align-items: center;
+}
+
+.lwf-preview-times {
+  display: flex;
+  gap: 6px;
+}
+
+.lwf-time-text {
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.lwf-preview-row input,
+.lwf-preview-row select,
+.lwf-item-time input,
+.lwf-item-sub select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 9px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+
+/* ---------- 類別、人數 ---------- */
+
+.lwf-cat {
+  display: inline-flex;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lwf-cat--slot,
+.lwf-cat--class {
+  background: rgba(60, 110, 200, 0.12);
+  color: #2f5aa8;
+}
+
+.lwf-cat--pickup {
+  background: rgba(200, 60, 50, 0.12);
+  color: #b2382c;
+}
+
+.lwf-cat--english {
+  background: rgba(130, 80, 190, 0.12);
+  color: #6b3fa6;
+}
+
+.lwf-cat--other {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.lwf-count {
+  font-size: 13px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.lwf-count--button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+}
+
+.lwf-peek {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.lwf-peek-list {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: 0.75;
+}
+
+/* ---------- 明細 ---------- */
+
+.lwf-back {
+  margin-bottom: 10px;
+}
+
+.lwf-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.lwf-detail-head p {
+  margin: 6px 0 0;
+  opacity: 0.6;
+}
+
+.lwf-day {
+  margin-top: 22px;
+}
+
+.lwf-day h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.lwf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  flex-wrap: wrap;
+}
+
+.lwf-toolbar-hint {
+  flex: 1;
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.lwf-activity {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.lwf-tag {
+  appearance: none;
+  padding: 3px 10px;
+  border: 1px dashed rgba(0, 0, 0, 0.25);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.lwf-tag--on {
+  border-style: solid;
+  border-color: #2f7a4b;
+  background: rgba(47, 122, 75, 0.12);
+  color: #2f7a4b;
+  opacity: 1;
+}
+
+.lwf-tag:disabled {
+  cursor: default;
+}
+
+.lwf-tag--static {
+  cursor: default;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.lwf-handover-tags {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.lwf-handover-tags small {
+  font-weight: 400;
+  opacity: 0.55;
+}
+
+.lwf-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.lwf-check--on {
+  border-color: #2f7a4b;
+  background: rgba(47, 122, 75, 0.12);
+  color: #2f7a4b;
+}
+
+.lwf-rule-note {
+  margin: 0 24px 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(214, 140, 30, 0.12);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.lwf-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.lwf-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lwf-item {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+}
+
+.lwf-item--uncovered {
+  border-color: rgba(200, 60, 50, 0.45);
+  box-shadow: inset 4px 0 0 #c83c32;
+}
+
+.lwf-item--mine {
+  box-shadow: inset 4px 0 0 #d68c1e;
+}
+
+.lwf-item-row {
+  display: grid;
+  grid-template-columns: 200px minmax(180px, 1fr) 220px auto;
+  gap: 14px;
+  align-items: start;
+  padding: 12px 16px;
+}
+
+.lwf-item-time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 5px;
+}
+
+.lwf-item-time strong {
+  font-size: 15px;
+}
+
+.lwf-item-time small {
+  font-size: 12px;
+  color: #6b3fa6;
+  font-weight: 700;
+}
+
+.lwf-item-what {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 5px;
+}
+
+.lwf-item-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lwf-conflict {
+  color: #b2382c;
+  font-weight: 700;
+}
+
+.lwf-item-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.lwf-item-tools {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.lwf-chip {
+  appearance: none;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.lwf-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.lwf-chip--done {
+  border-color: rgba(47, 122, 75, 0.3);
+  background: rgba(47, 122, 75, 0.1);
+  color: #2f7a4b;
+}
+
+.lwf-chip--done:disabled {
+  opacity: 1;
+}
+
+.lwf-chip--todo {
+  border-color: rgba(214, 140, 30, 0.4);
+  background: rgba(255, 244, 222, 0.8);
+  color: #94600f;
+}
+
+.lwf-chip--primary {
+  border-color: #2b2b2b;
+  background: #2b2b2b;
+  color: #fff;
+}
+
+.lwf-icon-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.5;
+  color: inherit;
+}
+
+.lwf-icon-button:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.lwf-link-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  color: #2f5aa8;
+  text-align: left;
+}
+
+.lwf-item--idle {
+  opacity: 0.6;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.lwf-idle-text {
+  grid-column: span 2;
+  padding-top: 6px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.lwf-custom-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lwf-custom-name input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 9px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.lwf-load {
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.lwf-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lwf-range em {
+  font-style: normal;
+  opacity: 0.5;
+}
+
+.lwf-paper-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lwf-apply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.lwf-apply .lwf-link-button {
+  padding: 0;
+  font-size: 12px;
+}
+
+.lwf-day-note {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(60, 110, 200, 0.08);
+  font-size: 13px;
+}
+
+.lwf-my-ack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 14px 0;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(214, 140, 30, 0.12);
+  font-size: 14px;
+}
+
+/* ---------- 孩子名單 ---------- */
+
+.lwf-count-chips {
+  display: inline-flex;
+  gap: 5px;
+  margin-right: 4px;
+}
+
+.lwf-mini {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lwf-mini--present {
+  background: rgba(47, 122, 75, 0.12);
+  color: #2f7a4b;
+}
+
+.lwf-mini--english {
+  background: rgba(130, 80, 190, 0.12);
+  color: #6b3fa6;
+}
+
+.lwf-mini--absent {
+  background: rgba(0, 0, 0, 0.07);
+  color: #555;
+}
+
+.lwf-students-wrap {
+  padding: 12px 16px 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.lwf-students {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 6px;
+}
+
+.lwf-student {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.lwf-student--checked {
+  border-color: #2f5aa8;
+  background: rgba(60, 110, 200, 0.07);
+}
+
+.lwf-student--absent {
+  opacity: 0.55;
+}
+
+.lwf-student--absent strong {
+  text-decoration: line-through;
+}
+
+.lwf-student--english {
+  background: rgba(130, 80, 190, 0.05);
+}
+
+.lwf-student--left {
+  opacity: 0.55;
+}
+
+.lwf-student--left strong {
+  text-decoration: line-through;
+}
+
+.lwf-leave-button {
+  appearance: none;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 7px;
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  color: inherit;
+}
+
+.lwf-leave-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.lwf-student-meta {
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.lwf-student-note {
+  flex-basis: 100%;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.lwf-status {
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.lwf-status--left,
+.lwf-status--absent {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.lwf-status--english {
+  background: rgba(130, 80, 190, 0.14);
+  color: #6b3fa6;
+}
+
+.lwf-split-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.lwf-split-actions small {
+  opacity: 0.65;
+}
+
+/* ---------- 交接單 ---------- */
+
+.lwf-handover {
+  padding: 14px 16px 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.lwf-handover-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.lwf-handover-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.lwf-handover-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-right: auto;
+  font-size: 13px;
+}
+
+.lwf-handover-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.lwf-handover-options small {
+  opacity: 0.6;
+}
+
+/* ---------- 底部 ---------- */
+
+.lwf-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 26px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.lwf-footer-text {
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.lwf-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lwf-ok {
+  color: #2f7a4b;
+}
+
+/* ---------- 手機 ---------- */
+
+@media (max-width: 900px) {
+  .lwf-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lwf-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .lwf-item-row {
+    grid-template-columns: 1fr;
+  }
+
+  .lwf-item-status {
+    justify-content: flex-start;
+  }
+
+  .lwf-preview-row {
+    grid-template-columns: 1fr auto 32px;
+  }
+
+  .lwf-preview-row > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .lwf-my-ack {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lwf-handover-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lwf-footer,
+  .lwf-detail-head,
+  .lwf-build-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
