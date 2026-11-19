@@ -122,13 +122,44 @@ export async function getCurrentTeacher() {
 
 /** 請假流程用的老師名單：在職老師（含 role，主管帳號由畫面另外處理） */
 export async function getWorkflowTeachers() {
-  const { data, error } = await supabase
-    .from("teachers")
-    .select("id, chinese_name, english_name, status, role")
-    .eq("status", "active")
-    .order("chinese_name", { ascending: true });
+  const directory = await getTeacherDirectory();
+  return directory
+    .filter((t) => t.status === "active")
+    .sort((a, b) => String(a.chinese_name || "").localeCompare(String(b.chinese_name || ""), "zh-Hant"));
+}
+
+/**
+ * 全體老師名字（只有 id、姓名、角色、狀態）。
+ * 老師帳號讀不到 teachers 表的其他人，所以走資料庫函式 leave_teacher_directory。
+ */
+let directoryCache = null;
+let directoryCacheAt = 0;
+export async function getTeacherDirectory() {
+  if (directoryCache && Date.now() - directoryCacheAt < 60_000) return directoryCache;
+  const { data, error } = await supabase.rpc("leave_teacher_directory");
   if (error) throw error;
-  return data || [];
+  directoryCache = data || [];
+  directoryCacheAt = Date.now();
+  return directoryCache;
+}
+
+/** 把請假單裡的老師名字補齊（老師帳號的關聯查詢拿不到別人的名字） */
+async function fillTeacherNames(requests) {
+  const directory = await getTeacherDirectory();
+  const byId = new Map(directory.map((t) => [String(t.id), t]));
+  const pick = (id) => {
+    const t = byId.get(String(id));
+    return t ? { id: t.id, chinese_name: t.chinese_name, english_name: t.english_name } : null;
+  };
+  return requests.map((request) => ({
+    ...request,
+    teachers: request.teachers || (request.teacher_id ? pick(request.teacher_id) : null),
+    leave_request_items: (request.leave_request_items || []).map((item) => ({
+      ...item,
+      substitute_teacher:
+        item.substitute_teacher || (item.substitute_teacher_id ? pick(item.substitute_teacher_id) : null),
+    })),
+  }));
 }
 
 export async function getWorkflowRequests() {
@@ -153,7 +184,8 @@ export async function getWorkflowRequests() {
 
   if (error) throw error;
 
-  return (data || []).map((request) => ({
+  const filled = await fillTeacherNames(data || []);
+  return filled.map((request) => ({
     ...request,
     leave_request_items: sortItems(request.leave_request_items || []),
   }));
@@ -172,12 +204,7 @@ export function sortItems(items) {
 /** 期間內其他老師的請假（用來檢查代理人那天是不是也請假） */
 export async function getLeavesInRange(startDate, endDate) {
   const [recordsResult, requestsResult] = await Promise.all([
-    supabase
-      .from("teacher_leave_records")
-      .select("id, teacher_id, start_date, end_date")
-      .not("teacher_id", "is", null)
-      .gte("end_date", startDate)
-      .lte("start_date", endDate),
+    supabase.rpc("leave_busy_ranges", { p_start: startDate, p_end: endDate }),
     supabase
       .from(REQUEST_TABLE)
       .select("id, teacher_id, start_date, end_date, status")
@@ -1216,7 +1243,8 @@ async function fetchRequestForSheet(requestId) {
     .eq("id", requestId)
     .single();
   if (error) throw error;
-  return data;
+  const [filled] = await fillTeacherNames([data]);
+  return filled;
 }
 
 /**

@@ -139,3 +139,27 @@ insert into storage.buckets (id, name, public) values ('leave-sheets', 'leave-sh
 drop policy if exists "leave_sheets_auth_rw" on storage.objects;
 create policy "leave_sheets_auth_rw" on storage.objects for all to authenticated
   using (bucket_id = 'leave-sheets') with check (bucket_id = 'leave-sheets');
+
+-- v9：老師帳號也能用請假流程（只開放名字與日期，不含電話、Email、LINE）
+drop policy if exists "leave_types_read_all" on public.leave_types;
+create policy "leave_types_read_all" on public.leave_types for select to authenticated using (true);
+
+drop policy if exists "leave_external_staff_read_all" on public.leave_external_staff;
+create policy "leave_external_staff_read_all" on public.leave_external_staff for select to authenticated using (true);
+
+create or replace function public.leave_teacher_directory()
+returns table (id uuid, chinese_name text, english_name text, role text, status text)
+language sql stable security definer set search_path = public as $$
+  select t.id, t.chinese_name, t.english_name, t.role, t.status from public.teachers t
+$$;
+revoke all on function public.leave_teacher_directory() from public, anon;
+grant execute on function public.leave_teacher_directory() to authenticated;
+
+create or replace function public.leave_busy_ranges(p_start date, p_end date)
+returns table (id uuid, teacher_id uuid, start_date date, end_date date)
+language sql stable security definer set search_path = public as $$
+  select r.id, r.teacher_id, r.start_date, r.end_date from public.teacher_leave_records r
+  where r.teacher_id is not null and r.end_date >= p_start and r.start_date <= p_end
+$$;
+revoke all on function public.leave_busy_ranges(date, date) from public, anon;
+grant execute on function public.leave_busy_ranges(date, date) to authenticated;
