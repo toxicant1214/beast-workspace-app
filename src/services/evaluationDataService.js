@@ -24,8 +24,8 @@ export function evaluationYearInfo(year) {
     label: `${year} 考核年度`,
     semesters: `${roc - 1} 下＋${roc} 上`,
     range: { from: `${year}-02-01`, to: `${year + 1}-01-31` },
-    spring: { label: `${roc - 1} 下`, from: `${year}-02-01`, to: `${year}-07-31` },
-    fall: { label: `${roc} 上`, from: `${year}-08-01`, to: `${year + 1}-01-31` },
+    spring: { label: `${roc - 1} 下`, from: `${year}-02-01`, to: `${year}-07-31`, academicYear: String(roc - 1), term: "下" },
+    fall: { label: `${roc} 上`, from: `${year}-08-01`, to: `${year + 1}-01-31`, academicYear: String(roc), term: "上" },
   };
 }
 
@@ -55,6 +55,7 @@ export function defaultYearSettings(year) {
     campTarget: 70,
     courseTarget: 50,
     courseIds: [],
+    disabledIndicators: [],
     countScore: [100, 70, 40],
     bonusCap: 10,
     base_months: 1,
@@ -124,7 +125,7 @@ const SOURCES = {
   classes: ["classes", "id, class_name, course_type, start_date, end_date"],
   classStudents: ["class_students", "id, class_id, student_id, joined_at, left_at, status"],
   students: ["students", "id, chinese_name, current_grade, is_test"],
-  exams: ["score_exams", "id, title, exam_date, exam_type, exam_period, is_active"],
+  exams: ["score_exams", "id, title, exam_date, exam_type, exam_period, academic_year, term, is_active"],
   examClasses: ["score_exam_classes", "id, exam_id, class_id"],
   examStudents: ["score_exam_students", "id, exam_class_id, student_id, grade_snapshot, is_active"],
   examSubjects: ["score_exam_subjects", "exam_student_id, score, status"],
@@ -236,7 +237,12 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const retention = enrolledIds.size ? clamp((1 - deducted / enrolledIds.size) * 100) : null;
 
   // ---- A 成績達標率 ----
-  const examIds = new Set(sources.exams.filter((e) => e.is_active !== false && inRange(e.exam_date, range)).map((e) => e.id));
+  // 考試沒有填日期時，用學年度＋學期判斷（例：115＋上學期）
+  const examInSemester = (e) =>
+    e.exam_date
+      ? inRange(e.exam_date, range)
+      : String(e.academic_year || "").replace(/\D/g, "") === range.academicYear && String(e.term || "").includes(range.term);
+  const examIds = new Set(sources.exams.filter((e) => e.is_active !== false && examInSemester(e)).map((e) => e.id));
   const examClassIds = new Set(sources.examClasses.filter((c) => examIds.has(c.exam_id) && classIds.has(c.class_id)).map((c) => c.id));
   const examStudents = sources.examStudents.filter((s) => examClassIds.has(s.exam_class_id) && s.is_active !== false);
   const scoreMap = new Map();
@@ -259,7 +265,8 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
 
   // ---- D 營隊報名率（營隊開始日落在學期內）----
   const campStudentName = new Map(sources.campStudents.map((c) => [c.id, (c.chinese_name || "").trim()]));
-  const camps = sources.camps.filter((c) => inRange(c.start_date, range));
+  const campsWithRegs = new Set(sources.campRegs.map((r) => r.camp_id));
+  const camps = sources.camps.filter((c) => inRange(c.start_date, range) && campsWithRegs.has(c.id));
   let campSigned = 0;
   let campBase = 0;
   for (const camp of camps) {
@@ -287,7 +294,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
       .map((c) => c.student_id)
   );
   const courseDay = [range.to, todayText()].sort()[0];
-  const courseActive = [...activeOn(courseDay)];
+  const courseActive = courseStudentIds.size ? [...activeOn(courseDay)] : [];
   const courseSigned = courseActive.filter((id) => courseStudentIds.has(id)).length;
   const courseRate = courseActive.length ? (courseSigned / courseActive.length) * 100 : null;
 
@@ -331,10 +338,20 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
       ind("inspect_env", "教室環境抽查", "2027 起實施", null, "抽查"),
     ],
     D: [
-      ind("camp", "營隊報名率", camps.length ? `${campSigned}/${campBase}（${pct(campSigned, campBase)}%）・目標 ${settings.campTarget}%` : "這學期沒有營隊", campRate === null ? null : clamp((campRate / Number(settings.campTarget || 100)) * 100), "系統"),
-      ind("course", "平日課程報名率", courseActive.length ? `${courseSigned}/${courseActive.length}（${pct(courseSigned, courseActive.length)}%）・目標 ${settings.courseTarget}%` : "沒有在班學生", courseRate === null ? null : clamp((courseRate / Number(settings.courseTarget || 100)) * 100), "系統"),
+      ind("camp", "營隊報名率", camps.length ? `${campSigned}/${campBase}（${pct(campSigned, campBase)}%）・目標 ${settings.campTarget}%` : "這學期的營隊在系統裡沒有報名資料", campRate === null ? null : clamp((campRate / Number(settings.campTarget || 100)) * 100), "系統"),
+      ind("course", "平日課程報名率", courseStudentIds.size ? `${courseSigned}/${courseActive.length}（${pct(courseSigned, courseActive.length)}%）・目標 ${settings.courseTarget}%` : "系統裡還沒有這學期的課程報名資料", courseRate === null ? null : clamp((courseRate / Number(settings.courseTarget || 100)) * 100), "系統"),
     ],
   };
+
+  const disabled = new Set(settings.disabledIndicators || []);
+  for (const list of Object.values(categories)) {
+    for (const item of list) {
+      if (disabled.has(item.key) && item.score !== null) {
+        item.score = null;
+        item.detail = `${item.detail}・本年度不列入計分`;
+      }
+    }
+  }
 
   const catScores = Object.fromEntries(
     Object.entries(categories).map(([k, list]) => [k, avg(list.filter((i) => i.score !== null).map((i) => i.score))])
@@ -402,3 +419,16 @@ export function computeTeacherYear({ teacher, info, sources, events, assignments
 
   return { teacher, spring, fall, bonus, bonusRaw, bonusList, base, total, factor, salary, isLeader, pay };
 }
+
+/** 可以在年度設定關掉的系統指標 */
+export const TOGGLEABLE_INDICATORS = [
+  { key: "exam", name: "A 成績達標率" },
+  { key: "retention", name: "B 留班率" },
+  { key: "safety", name: "B 安全事件" },
+  { key: "complaint", name: "B 家長客訴" },
+  { key: "tasks", name: "C 任務準時率" },
+  { key: "attendance", name: "C 出勤" },
+  { key: "mistakes", name: "C 工作疏失／沒交接" },
+  { key: "camp", name: "D 營隊報名率" },
+  { key: "course", name: "D 平日課程報名率" },
+];

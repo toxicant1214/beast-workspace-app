@@ -23,6 +23,7 @@ import {
   loadEvaluationSources,
   saveWithdrawal,
   saveYearSettings,
+  TOGGLEABLE_INDICATORS,
 } from "../../services/evaluationDataService";
 
 // =========================================================
@@ -1045,6 +1046,25 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, locked, s
         {field("事件 1 次得分", ["countScore", 1], draft.countScore[1])}
         {field("事件 2 次以上得分", ["countScore", 2], draft.countScore[2])}
         {field("額外加分上限", ["bonusCap"], draft.bonusCap)}
+      </div>
+
+      <h3 style={S.subTitle}>本年度列入計分的指標</h3>
+      <p style={S.hint}>資料還不完整的指標可以先取消勾選，該類別會用其他指標平均。</p>
+      <div style={S.actionRow}>
+        {TOGGLEABLE_INDICATORS.map((ind) => {
+          const off = new Set(draft.disabledIndicators || []);
+          return (
+            <label key={ind.key} style={{ ...S.muted, display: "flex", gap: 4, alignItems: "center" }}>
+              <input type="checkbox" disabled={locked} checked={!off.has(ind.key)} onChange={(e) => {
+                const next = new Set(off);
+                if (e.target.checked) next.delete(ind.key);
+                else next.add(ind.key);
+                set(["disabledIndicators"], [...next]);
+              }} />
+              {ind.name}
+            </label>
+          );
+        })}
       </div>
 
       <h3 style={S.subTitle}>平日課程報名率要算哪些課程</h3>
