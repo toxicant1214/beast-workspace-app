@@ -24,8 +24,8 @@ export function evaluationYearInfo(year) {
     label: `${year} 考核年度`,
     semesters: `${roc - 1} 下＋${roc} 上`,
     range: { from: `${year}-02-01`, to: `${year + 1}-01-31` },
-    spring: { label: `${roc - 1} 下`, from: `${year}-02-01`, to: `${year}-07-31`, academicYear: String(roc - 1), term: "下" },
-    fall: { label: `${roc} 上`, from: `${year}-08-01`, to: `${year + 1}-01-31`, academicYear: String(roc), term: "上" },
+    spring: { key: "spring", label: `${roc - 1} 下`, from: `${year}-02-01`, to: `${year}-07-31`, academicYear: String(roc - 1), term: "下" },
+    fall: { key: "fall", label: `${roc} 上`, from: `${year}-08-01`, to: `${year + 1}-01-31`, academicYear: String(roc), term: "上" },
   };
 }
 
@@ -56,6 +56,9 @@ export function defaultYearSettings(year) {
     courseTarget: 50,
     courseIds: [],
     disabledIndicators: [],
+    // 成績記在教室系統：預設由主管每學期手動填「達標人數／應考人數」
+    examMode: "manual",
+    manualExam: {},
     countScore: [100, 70, 40],
     bonusCap: 10,
     base_months: 1,
@@ -261,6 +264,13 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
     examTotal += 1;
     if (avg(scores) >= line) examPass += 1;
   }
+  let examSource = "系統";
+  if ((settings.examMode || "manual") === "manual") {
+    const m = settings.manualExam?.[range.key]?.[teacherId] || {};
+    examTotal = Number(m.total) || 0;
+    examPass = Math.min(Number(m.pass) || 0, examTotal);
+    examSource = "手動";
+  }
   const examRate = examTotal ? clamp((examPass / examTotal) * 100) : null;
 
   // ---- D 營隊報名率（營隊開始日落在學期內）----
@@ -323,7 +333,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
 
   const categories = {
     A: [
-      ind("exam", "成績達標率", examTotal ? `${examPass}/${examTotal} 人次達基準線（${baselineText}）` : "這學期還沒有成績資料", examRate, "系統"),
+      ind("exam", "成績達標率", examTotal ? `${examPass}/${examTotal} 人達基準線（${baselineText}）` : examSource === "手動" ? "尚未填寫（年度設定）" : "這學期還沒有成績資料", examRate, examSource),
       ind("inspect_hw", "作業／訂正／評量抽查", "2027 起實施", null, "抽查"),
     ],
     B: [

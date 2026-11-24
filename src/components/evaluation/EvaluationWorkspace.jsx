@@ -372,7 +372,7 @@ function EventList({ events, teacherMap, showTeacher, onChanged }) {
 // 主元件：年度資料夾 + 四個分頁
 // ---------------------------------------------------------
 
-const SOURCE_TAG = { 系統: "sys", 事件: "ev", 抽查: "ins" };
+const SOURCE_TAG = { 系統: "sys", 事件: "ev", 抽查: "ins", 手動: "ins" };
 
 function r1(x) {
   return x === null || x === undefined ? "—" : Math.round(x * 10) / 10;
@@ -1026,6 +1026,52 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, locked, s
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      <h3 style={S.subTitle}>成績達標（從教室系統抄過來）</h3>
+      <div style={S.settingsGrid}>
+        <label style={S.label}>
+          成績資料來源
+          <select style={S.input} value={draft.examMode || "manual"} disabled={locked} onChange={(e) => set(["examMode"], e.target.value)}>
+            <option value="manual">手動填達標人數</option>
+            <option value="system">BEAST 學生成績（逐筆）</option>
+          </select>
+        </label>
+      </div>
+      {(draft.examMode || "manual") === "manual" && (
+        <>
+          <p style={S.hint}>每位老師班上「平均達年級基準線的人數／應考人數」，例如 15／20。</p>
+          <div style={S.tableWrap}>
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th}>老師</th>
+                  {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => (
+                    <th key={sem.key} style={S.thNum} colSpan={2}>{sem.label}：達標／應考</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {teachers.map((t) => (
+                  <tr key={t.id}>
+                    <td style={S.td}>{teacherName(t)}</td>
+                    {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => {
+                      const cur = draft.manualExam?.[sem.key]?.[t.id] || {};
+                      const put = (k, v) => set(["manualExam"], {
+                        ...(draft.manualExam || {}),
+                        [sem.key]: { ...(draft.manualExam?.[sem.key] || {}), [t.id]: { ...cur, [k]: v } },
+                      });
+                      return [
+                        <td key={sem.key + "p"} style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={cur.pass ?? ""} onChange={(e) => put("pass", num(e.target.value))} /></td>,
+                        <td key={sem.key + "t"} style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={cur.total ?? ""} onChange={(e) => put("total", num(e.target.value))} /></td>,
+                      ];
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
