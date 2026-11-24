@@ -1036,7 +1036,7 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, classGrad
         </>
       )}
 
-      <h3 style={S.subTitle}>營隊報名（手填）</h3>
+      <h3 style={S.subTitle}>班上人數與營隊報名（手填）</h3>
       <p style={S.hint}>填班上報名人數／班上人數；年級預設看班級名稱（G5A = 5），可以改。目標：三年級 {draft.campTargets?.[3]}%、四年級 {draft.campTargets?.[4]}%、五年級 {draft.campTargets?.[5]}%、六年級 {draft.campTargets?.[6]}%。</p>
       <div style={S.tableWrap}>
         <table style={S.table}>
@@ -1073,6 +1073,66 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, classGrad
           </tbody>
         </table>
       </div>
+
+      <h3 style={S.subTitle}>平日課程報名（手填）</h3>
+      <p style={S.hint}>每門課填各班報名人數；班上人數用上面那張表。報名率 = 各課人次加總 ÷ 班上人數，跟全校平均比：等於平均 80 分、高出平均 25% 以上 100 分。</p>
+      {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => {
+        const block = draft.manualCourse?.[sem.key] || { courses: [], counts: {} };
+        const putBlock = (next) => set(["manualCourse"], { ...(draft.manualCourse || {}), [sem.key]: next });
+        return (
+          <div key={sem.key} style={{ marginBottom: 12 }}>
+            <div style={S.actionRow}>
+              <strong style={{ fontSize: 14 }}>{sem.label}</strong>
+              {!locked && (
+                <button type="button" style={S.ghostButton} onClick={() => {
+                  const name = window.prompt("課程名稱（例如：野性實驗室）", "");
+                  if (!name || !name.trim()) return;
+                  putBlock({ ...block, courses: [...(block.courses || []), { id: `c${Date.now()}`, name: name.trim() }] });
+                }}>＋ 新增課程</button>
+              )}
+            </div>
+            {(block.courses || []).length ? (
+              <div style={S.tableWrap}>
+                <table style={S.table}>
+                  <thead>
+                    <tr>
+                      <th style={S.th}>老師</th>
+                      {block.courses.map((c) => (
+                        <th key={c.id} style={S.thNum}>
+                          {c.name}
+                          {!locked && (
+                            <button type="button" style={S.linkButton} onClick={() => {
+                              if (!window.confirm(`刪除「${c.name}」這門課的報名資料？`)) return;
+                              putBlock({ ...block, courses: block.courses.filter((x) => x.id !== c.id) });
+                            }}>刪除</button>
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teachers.map((t) => (
+                      <tr key={t.id}>
+                        <td style={S.td}>{teacherName(t)}</td>
+                        {block.courses.map((c) => (
+                          <td key={c.id} style={S.tdNum}>
+                            <input style={S.smallInput} type="number" min="0" disabled={locked} value={block.counts?.[t.id]?.[c.id] ?? ""} onChange={(e) => putBlock({
+                              ...block,
+                              counts: { ...(block.counts || {}), [t.id]: { ...(block.counts?.[t.id] || {}), [c.id]: num(e.target.value) } },
+                            })} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p style={S.muted}>還沒有課程，按「新增課程」加入。</p>
+            )}
+          </div>
+        );
+      })}
 
       <h3 style={S.subTitle}>成績達標（從教室系統抄過來）</h3>
       <div style={S.settingsGrid}>
@@ -1135,7 +1195,6 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, classGrad
         {field("四年級 %", ["campTargets", "4"], draft.campTargets?.[4])}
         {field("五年級 %", ["campTargets", "5"], draft.campTargets?.[5])}
         {field("六年級 %", ["campTargets", "6"], draft.campTargets?.[6])}
-        {field("平日課程報名率目標 %", ["courseTarget"], draft.courseTarget)}
         {field("事件 0 次得分", ["countScore", 0], draft.countScore[0])}
         {field("事件 1 次得分", ["countScore", 1], draft.countScore[1])}
         {field("事件 2 次以上得分", ["countScore", 2], draft.countScore[2])}
@@ -1159,22 +1218,6 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, classGrad
             </label>
           );
         })}
-      </div>
-
-      <h3 style={S.subTitle}>平日課程報名率要算哪些課程</h3>
-      <p style={S.hint}>都不勾 = 全部課程都算。</p>
-      <div style={S.actionRow}>
-        {courses.map((c) => (
-          <label key={c.id} style={{ ...S.muted, display: "flex", gap: 4, alignItems: "center" }}>
-            <input type="checkbox" disabled={locked} checked={courseSet.has(c.id)} onChange={(e) => {
-              const next = new Set(courseSet);
-              if (e.target.checked) next.add(c.id);
-              else next.delete(c.id);
-              set(["courseIds"], [...next]);
-            }} />
-            {c.course_name}
-          </label>
-        ))}
       </div>
 
       <h3 style={S.subTitle}>年終</h3>

@@ -290,25 +290,8 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const campBase = Number(campEntry.total) || 0;
   const campScoreValue = campBase ? clamp(((campSigned / campBase) * 100 / campTarget) * 100) : null;
 
-  // ---- D 平日課程報名率 ----
-  const courseFilter = new Set(settings.courseIds || []);
-  const courseClassIds = new Set(
-    sources.courseClasses.filter((c) => !courseFilter.size || courseFilter.has(c.course_id)).map((c) => c.id)
-  );
-  const courseStudentIds = new Set(
-    sources.courseStudents
-      .filter(
-        (c) =>
-          courseClassIds.has(c.course_class_id) &&
-          (!c.joined_at || c.joined_at <= range.to) &&
-          (!c.left_at || c.left_at >= range.from)
-      )
-      .map((c) => c.student_id)
-  );
-  const courseDay = [range.to, todayText()].sort()[0];
-  const courseActive = courseStudentIds.size ? [...activeOn(courseDay)] : [];
-  const courseSigned = courseActive.filter((id) => courseStudentIds.has(id)).length;
-  const courseRate = courseActive.length ? (courseSigned / courseActive.length) * 100 : null;
+  // ---- D 平日課程報名率：主管手填各課報名人數；跟全校平均比 ----
+  const course = courseScoreFor(settings, range.key, teacherId);
 
   // ---- 事件 ----
   const own = events.filter(
@@ -359,7 +342,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
         campScoreValue,
         "手動"
       ),
-      ind("course", "平日課程報名率", courseStudentIds.size ? `${courseSigned}/${courseActive.length}（${pct(courseSigned, courseActive.length)}%）・目標 ${settings.courseTarget}%` : "系統裡還沒有這學期的課程報名資料", courseRate === null ? null : clamp((courseRate / Number(settings.courseTarget || 100)) * 100), "系統"),
+      ind("course", "平日課程報名率", course.detail, course.score, "手動"),
     ],
   };
 
@@ -467,4 +450,38 @@ export function teacherClassGrade(teacherId, sources) {
     if (g) return g;
   }
   return null;
+}
+
+/**
+ * 平日課程報名率（手填）
+ * 報名率 = 班上各課報名人次加總 ÷ 班上人數；跟全校平均比：
+ * 等於平均 80 分、達平均 1.25 倍以上 100 分、低於平均照比例（0 人 = 0 分）
+ * 班上人數沿用「營隊報名（手填）」那一欄
+ */
+export function courseScoreFor(settings, semKey, teacherId) {
+  const block = settings.manualCourse?.[semKey] || {};
+  const courses = block.courses || [];
+  const counts = block.counts || {};
+  const sizes = settings.manualCamp?.[semKey] || {};
+  if (!courses.length) return { score: null, detail: "這學期還沒有新增課程（年度設定）" };
+  const sumFor = (tid) => courses.reduce((a, c) => a + (Number(counts[tid]?.[c.id]) || 0), 0);
+  let allSigned = 0;
+  let allSize = 0;
+  for (const [tid, v] of Object.entries(sizes)) {
+    const size = Number(v?.total) || 0;
+    if (!size) continue;
+    allSize += size;
+    allSigned += sumFor(tid);
+  }
+  const size = Number(sizes[teacherId]?.total) || 0;
+  if (!size) return { score: null, detail: "尚未填班上人數（年度設定）" };
+  const avg = allSize ? allSigned / allSize : 0;
+  const mine = sumFor(teacherId) / size;
+  if (!avg) return { score: null, detail: `全校還沒有人報名（${courses.length} 門課）` };
+  const ratio = mine / avg;
+  const score = ratio >= 1.25 ? 100 : ratio >= 1 ? 80 + ((ratio - 1) / 0.25) * 20 : ratio * 80;
+  return {
+    score: Math.round(score * 10) / 10,
+    detail: `${sumFor(teacherId)} 人次／${size} 人（${Math.round(mine * 100)}%）・全校平均 ${Math.round(avg * 100)}%・${courses.length} 門課`,
+  };
 }
