@@ -17,13 +17,16 @@ import {
 } from "../../services/evaluationService";
 import {
   availableEvaluationYears,
+  computeManualSemester,
+  computeSystemSemester,
   computeTeacherYear,
   evaluationYearInfo,
+  semEntry,
+  semesterBasics,
   getYearSettings,
   loadEvaluationSources,
   saveWithdrawal,
   saveYearSettings,
-  teacherClassGrade,
   TOGGLEABLE_INDICATORS,
 } from "../../services/evaluationDataService";
 
@@ -446,7 +449,7 @@ export default function EvaluationWorkspace({ tab }) {
   const results = useMemo(() => {
     if (!settings || !sources) return [];
     const rows = teachers.map((teacher) =>
-      computeTeacherYear({ teacher, info, sources, events, assignments, exclusions, settings, typeMap })
+      computeTeacherYear({ teacher, info, sources, events, assignments, exclusions, settings, typeMap, teacherIds: teachers.map((t) => t.id) })
     );
     rows.sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
     return rows;
@@ -505,11 +508,12 @@ export default function EvaluationWorkspace({ tab }) {
   }
 
   async function updateWithdrawal(item, patch) {
+    const csId = item.classStudentId || item.id;
     try {
-      await saveWithdrawal(item.id, { reason: item.reason, deduct: item.deduct, ...patch });
+      await saveWithdrawal(csId, { reason: item.reason, deduct: item.deduct, ...patch });
       const next = { ...sources };
-      const list = next.withdrawals.filter((w) => w.class_student_id !== item.id);
-      list.push({ class_student_id: item.id, reason: patch.reason ?? item.reason, deduct: patch.deduct ?? item.deduct });
+      const list = next.withdrawals.filter((w) => w.class_student_id !== csId);
+      list.push({ class_student_id: csId, reason: patch.reason ?? item.reason, deduct: patch.deduct ?? item.deduct });
       next.withdrawals = list;
       setSources(next);
     } catch (error) {
@@ -675,6 +679,23 @@ export default function EvaluationWorkspace({ tab }) {
         />
       )}
 
+      {tab === "data" && (
+        <SemesterDataPanel
+          info={info}
+          settings={settings}
+          teachers={teachers}
+          sources={sources}
+          events={events}
+          assignments={assignments}
+          exclusions={exclusions}
+          typeMap={typeMap}
+          locked={locked}
+          saving={saving}
+          onWithdrawal={updateWithdrawal}
+          onSave={(next, text) => persist(next, text)}
+        />
+      )}
+
       {tab === "yearend" && (
         <YearEndPanel
           rows={locked ? snapshotRows : results}
@@ -691,8 +712,6 @@ export default function EvaluationWorkspace({ tab }) {
           settings={settings}
           types={types}
           teachers={teachers}
-          courses={sources?.courses || []}
-          classGrades={sources ? Object.fromEntries(teachers.map((t) => [t.id, teacherClassGrade(t.id, sources)])) : {}}
           locked={locked}
           saving={saving}
           onSave={async (next, typeDraft) => {
@@ -764,15 +783,65 @@ function CategoryCard({ code, name, weight, score, indicators }) {
 
 const CAT_NAMES = { A: "教學成效", B: "班級經營與親師", C: "行政與配合", D: "招生貢獻" };
 
+function MovesList({ moves, locked, onWithdrawal, onRemove }) {
+  if (!moves.length) return <div style={S.empty}>這學期沒有進退班。</div>;
+  return (
+    <div style={S.list}>
+      {moves.map((m) => (
+        <div key={m.id} style={S.listRow}>
+          <div style={S.listDate}>{(m.date || "").slice(5).replace("-", "/")}</div>
+          <div style={S.listMain}>
+            <div>
+              <span style={{ ...S.chip, ...(m.type === "進班" ? S.chipOk : S.chipAlert), marginRight: 6 }}>{m.type}</span>
+              {m.name}
+              <span style={{ ...S.chip, ...S.chipMuted, marginLeft: 6 }}>{m.auto ? "系統" : "手填"}</span>
+              {m.type === "退班" && m.auto && !m.reason && <span style={{ ...S.chip, ...S.chipWarn, marginLeft: 6 }}>待填原因</span>}
+            </div>
+            {m.type === "退班" && (m.auto ? (
+              <input
+                style={{ ...S.input, padding: "6px 9px", fontSize: "13px" }}
+                defaultValue={m.reason}
+                placeholder="退班原因（例如搬家、轉班、對帶班不滿）"
+                disabled={locked}
+                onBlur={(e) => e.target.value !== (m.reason || "") && onWithdrawal(m, { reason: e.target.value })}
+              />
+            ) : (
+              m.reason && <div style={S.muted}>{m.reason}</div>
+            ))}
+          </div>
+          {m.type === "退班" && (
+            <label style={{ ...S.muted, display: "flex", gap: 4, alignItems: "center", whiteSpace: "nowrap" }}>
+              <input type="checkbox" checked={Boolean(m.deduct)} disabled={locked || !m.auto} onChange={(e) => onWithdrawal(m, { deduct: e.target.checked })} />
+              列入扣分
+            </label>
+          )}
+          {!m.auto && onRemove && !locked && (
+            <button type="button" style={S.linkButton} onClick={() => onRemove(m.manualIndex)}>刪除</button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SemesterCard({ title, sem, settings, perDay, onToggleExclusion, onWithdrawal, locked }) {
+  const b = sem.basics || {};
+  if (sem.taught === false) {
+    return (
+      <div style={S.section}>
+        <h2 style={S.sectionTitle}>{title}<span style={{ ...S.chip, ...S.chipMuted }}>這學期未帶班</span></h2>
+        <p style={S.hint}>年度總分只看另一學期。</p>
+      </div>
+    );
+  }
   if (sem.mode === "manual") {
     return (
       <div style={S.section}>
         <h2 style={S.sectionTitle}>{title}<span style={{ ...S.chip, ...S.chipMuted }}>手動輸入</span></h2>
-        <p style={S.hint}>系統尚未上線，用每月考核與營隊報名數；在「年度設定」輸入。學期分數 <strong>{r1(sem.score)}</strong></p>
+        <p style={S.hint}>系統尚未上線，用每月考核與營隊報名數；在「學期資料」輸入。學期分數 <strong>{r1(sem.score)}</strong></p>
         <div style={S.catCard}>
           <div style={S.rowBetween}><strong>每月考核（代替 A＋B＋C）</strong><span style={S.muted}>平均 <strong>{r1(sem.monthlyAvg)}</strong></span></div>
-          <div style={S.muted}>{(sem.monthly || []).length ? sem.monthly.map((m, i) => `${i + 2}月 ${m || "—"}`).join("・") : "尚未輸入"}</div>
+          <div style={S.muted}>{(sem.monthly || []).length ? sem.monthly.map((m, i) => `${i + 2}月 ${m === "" || m === undefined ? "—" : m}`).join("・") : "尚未輸入"}</div>
         </div>
         <div style={S.catCard}>
           <div style={S.rowBetween}><strong>D 暑假營隊報名率</strong><span style={S.muted}><strong>{r1(sem.campScore)}</strong> 分</span></div>
@@ -784,7 +853,7 @@ function SemesterCard({ title, sem, settings, perDay, onToggleExclusion, onWithd
   return (
     <div style={S.section}>
       <h2 style={S.sectionTitle}>{title}<span style={{ ...S.chip, ...S.chipBlue }}>系統計算</span></h2>
-      <p style={S.hint}>學期分數 <strong>{r1(sem.score)}</strong></p>
+      <p style={S.hint}>學期分數 <strong>{r1(sem.score)}</strong>・{b.grade || "?"} 年級・開學 {b.start ?? "?"} 人 → 目前 {b.size ?? "?"} 人</p>
       {["A", "B", "C", "D"].map((k) => (
         <CategoryCard key={k} code={k} name={CAT_NAMES[k]} weight={settings.w[k]} score={sem.catScores[k]} indicators={sem.categories[k]} />
       ))}
@@ -792,32 +861,8 @@ function SemesterCard({ title, sem, settings, perDay, onToggleExclusion, onWithd
       <h3 style={S.subTitle}>行政配合明細</h3>
       <AdminItemList items={sem.admin.items} perDay={perDay} onToggle={onToggleExclusion} onlyProblems />
 
-      <h3 style={S.subTitle}>退班登記</h3>
-      {sem.leftList.length ? (
-        <div style={S.list}>
-          {sem.leftList.map((l) => (
-            <div key={l.id} style={S.listRow}>
-              <div style={S.listDate}>{l.leftAt.slice(5).replace("-", "/")}</div>
-              <div style={S.listMain}>
-                <div>{l.studentName}{!l.recorded && <span style={{ ...S.chip, ...S.chipWarn, marginLeft: 6 }}>待填原因</span>}</div>
-                <input
-                  style={{ ...S.input, padding: "6px 9px", fontSize: "13px" }}
-                  defaultValue={l.reason}
-                  placeholder="退班原因（例如搬家、轉班、對帶班不滿）"
-                  disabled={locked}
-                  onBlur={(e) => e.target.value !== l.reason && onWithdrawal(l, { reason: e.target.value })}
-                />
-              </div>
-              <label style={{ ...S.muted, display: "flex", gap: 4, alignItems: "center", whiteSpace: "nowrap" }}>
-                <input type="checkbox" checked={l.deduct} disabled={locked} onChange={(e) => onWithdrawal(l, { deduct: e.target.checked })} />
-                列入扣分
-              </label>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div style={S.empty}>這學期沒有退班。</div>
-      )}
+      <h3 style={S.subTitle}>進班／退班</h3>
+      <MovesList moves={b.moves || []} locked={locked} onWithdrawal={onWithdrawal} />
     </div>
   );
 }
@@ -937,12 +982,248 @@ function YearEndPanel({ rows, locked, settings, saving, onSave }) {
 }
 
 // ---------------------------------------------------------
+// 學期資料：一位一位老師填
+// ---------------------------------------------------------
+
+const hasVal = (v) => v !== undefined && v !== null && v !== "";
+
+function semProgress(entry, basics, manualMode) {
+  if (entry.taught === false) return { done: true, missing: [] };
+  const missing = [];
+  if (!basics.grade) missing.push("年級");
+  if (basics.start === null) missing.push("開學人數");
+  if (manualMode) {
+    if (!(entry.monthly || []).some(hasVal)) missing.push("每月考核");
+  } else {
+    if (!hasVal(entry.midT)) missing.push("期中");
+    if (!hasVal(entry.finT)) missing.push("期末");
+  }
+  if (!hasVal(entry.camp)) missing.push("營隊");
+  return { done: missing.length === 0, missing };
+}
+
+function SemesterDataPanel({ info, settings, teachers, sources, events, assignments, exclusions, typeMap, locked, saving, onWithdrawal, onSave }) {
+  const [semKey, setSemKey] = useState("fall");
+  const [teacherId, setTeacherId] = useState(teachers[0]?.id || "");
+  const [draft, setDraft] = useState({});
+  const [newMove, setNewMove] = useState({ date: "", name: "", type: "退班", reason: "", deduct: true });
+  const range = info[semKey];
+  const manualMode = semKey === "spring" && settings.springMode === "manual";
+  const teacherIds = teachers.map((t) => t.id);
+
+  useEffect(() => {
+    if (!teacherId && teachers[0]) setTeacherId(teachers[0].id);
+  }, [teachers, teacherId]);
+  useEffect(() => {
+    setDraft(JSON.parse(JSON.stringify(semEntry(settings, semKey, teacherId) || {})));
+  }, [settings, semKey, teacherId]);
+
+  const withDraft = (base, tid, entry) => ({
+    ...base,
+    semData: { ...(base.semData || {}), [semKey]: { ...(base.semData?.[semKey] || {}), [tid]: entry } },
+  });
+  const liveSettings = withDraft(settings, teacherId, draft);
+
+  const cards = teachers.map((t) => {
+    const entry = semEntry(settings, semKey, t.id);
+    const basics = semesterBasics({ teacherId: t.id, range, sources, settings, systemData: !manualMode });
+    return { t, entry, ...semProgress(entry, basics, manualMode) };
+  });
+  const doneCount = cards.filter((c) => c.done).length;
+
+  const basics = semesterBasics({ teacherId, range, sources, settings: liveSettings, systemData: !manualMode });
+  const sem = manualMode
+    ? computeManualSemester({ teacherId, range, sources, settings: liveSettings })
+    : computeSystemSemester({ teacherId, range, sources, events, assignments, exclusions, settings: liveSettings, typeMap, teacherIds });
+
+  const put = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+  const num = (v) => (v === "" ? "" : Number(v));
+  const numInput = (k, props = {}) => (
+    <input style={S.smallInput} type="number" min="0" disabled={locked} value={draft[k] ?? ""} onChange={(e) => put(k, num(e.target.value))} {...props} />
+  );
+  const campLabel = semKey === "fall" ? "寒假營隊報名" : "暑假營隊報名";
+  const taught = draft.taught !== false;
+
+  async function save(goNext) {
+    await onSave(withDraft(settings, teacherId, draft), `${teacherName(teachers.find((t) => t.id === teacherId))} 的 ${range.label} 資料已儲存。`);
+    if (goNext) {
+      const idx = teachers.findIndex((t) => t.id === teacherId);
+      if (teachers[idx + 1]) setTeacherId(teachers[idx + 1].id);
+    }
+  }
+
+  function addMove() {
+    if (!newMove.date || !newMove.name.trim()) return;
+    put("moves", [...(draft.moves || []), { ...newMove, name: newMove.name.trim(), deduct: newMove.type === "退班" ? newMove.deduct : false }]);
+    setNewMove({ date: "", name: "", type: "退班", reason: "", deduct: true });
+  }
+
+  const step = (n, title, children, note) => (
+    <div style={S.catCard}>
+      <div style={S.rowBetween}><strong>{n}. {title}</strong>{note && <span style={S.muted}>{note}</span>}</div>
+      <div style={{ marginTop: 8 }}>{children}</div>
+    </div>
+  );
+
+  return (
+    <>
+      <section style={S.section}>
+        <div style={S.actionRow}>
+          {["spring", "fall"].map((k) => (
+            <button key={k} type="button" onClick={() => setSemKey(k)} style={k === semKey ? S.primaryButton : S.ghostButton}>
+              {info[k].label}{k === "spring" && settings.springMode === "manual" ? "（手動）" : ""}
+            </button>
+          ))}
+          <span style={S.muted}>已完成 {doneCount}/{teachers.length} 位</span>
+        </div>
+        <div style={{ ...S.cardGrid, marginTop: 10 }}>
+          {cards.map((c) => (
+            <button
+              key={c.t.id}
+              type="button"
+              onClick={() => setTeacherId(c.t.id)}
+              style={{ ...S.folder, textAlign: "left", ...(c.t.id === teacherId ? S.folderOn : {}) }}
+            >
+              <strong>
+                {teacherName(c.t)}
+                {c.entry.taught === false
+                  ? <span style={{ ...S.chip, ...S.chipMuted, marginLeft: 6 }}>未帶班</span>
+                  : c.done
+                    ? <span style={{ ...S.chip, ...S.chipOk, marginLeft: 6 }}>完成</span>
+                    : <span style={{ ...S.chip, ...S.chipWarn, marginLeft: 6 }}>缺 {c.missing.length}</span>}
+              </strong>
+              <span style={S.muted}>{c.done ? "—" : `缺：${c.missing.join("、")}`}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {teacherId && (
+        <section style={S.section}>
+          <h2 style={S.sectionTitle}>
+            {teacherName(teachers.find((t) => t.id === teacherId))}・{range.label}
+            <span style={{ ...S.chip, ...(manualMode ? S.chipMuted : S.chipBlue) }}>{manualMode ? "手動學期" : "系統學期"}</span>
+          </h2>
+          {locked && <p style={S.hint}>此年度已封存，只能查看。</p>}
+
+          {step(1, "任教狀態", (
+            <div style={S.actionRow}>
+              <label style={S.muted}><input type="radio" checked={taught} disabled={locked} onChange={() => put("taught", true)} /> 有帶班</label>
+              <label style={S.muted}><input type="radio" checked={!taught} disabled={locked} onChange={() => put("taught", false)} /> 這學期沒帶（新進／請長假）</label>
+            </div>
+          ), !taught ? "年度分數只算另一學期" : null)}
+
+          {taught && (
+            <>
+              {step(2, "帶班年級", (
+                <select style={S.rangeSelect} disabled={locked} value={draft.grade ?? ""} onChange={(e) => put("grade", num(e.target.value))}>
+                  <option value="">{basics.grade ? `預設 ${basics.grade} 年級（看班級名稱）` : "請選擇"}</option>
+                  {[1, 2, 3, 4, 5, 6].map((g) => <option key={g} value={g}>{g} 年級</option>)}
+                </select>
+              ), `營隊目標 ${settings.campTargets?.[basics.grade] ?? "—"}%`)}
+
+              {step(3, "班上人數與進退班", (
+                <>
+                  <div style={S.actionRow}>
+                    <span>開學人數</span>
+                    {numInput("start", { placeholder: basics.startFromSystem ? String(basics.start) : "" })}
+                    {basics.startFromSystem && !hasVal(draft.start) && <span style={S.muted}>（系統抓開學名單 {basics.start} 人，可改）</span>}
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <MovesList
+                      moves={basics.moves}
+                      locked={locked}
+                      onWithdrawal={onWithdrawal}
+                      onRemove={(i) => put("moves", (draft.moves || []).filter((_, idx) => idx !== i))}
+                    />
+                  </div>
+                  {!locked && (
+                    <div style={{ ...S.actionRow, marginTop: 8 }}>
+                      <input style={{ ...S.smallInput, width: 140 }} type="date" value={newMove.date} min={range.from} max={range.to} onChange={(e) => setNewMove({ ...newMove, date: e.target.value })} />
+                      <select style={S.rangeSelect} value={newMove.type} onChange={(e) => setNewMove({ ...newMove, type: e.target.value })}>
+                        <option>退班</option>
+                        <option>進班</option>
+                      </select>
+                      <input style={{ ...S.smallInput, width: 90 }} placeholder="學生" value={newMove.name} onChange={(e) => setNewMove({ ...newMove, name: e.target.value })} />
+                      {newMove.type === "退班" && (
+                        <>
+                          <input style={{ ...S.smallInput, width: 150 }} placeholder="原因" value={newMove.reason} onChange={(e) => setNewMove({ ...newMove, reason: e.target.value })} />
+                          <label style={S.muted}><input type="checkbox" checked={newMove.deduct} onChange={(e) => setNewMove({ ...newMove, deduct: e.target.checked })} /> 列入扣分</label>
+                        </>
+                      )}
+                      <button type="button" style={S.ghostButton} onClick={addMove}>＋ 加一筆</button>
+                    </div>
+                  )}
+                  <p style={S.hint}>
+                    目前人數 = 開學 {basics.start ?? "?"} ＋ 進班 {basics.joins} − 退班 {basics.leaves.length} = <strong>{basics.size ?? "?"}</strong> 人
+                    {!manualMode && "・系統名單裡的進退班會自動列出，只要補原因"}
+                  </p>
+                </>
+              ))}
+
+              {manualMode
+                ? step(4, "每月考核（代替 A＋B＋C）", (
+                  <div style={S.actionRow}>
+                    {["2月", "3月", "4月", "5月", "6月"].map((m, i) => (
+                      <label key={m} style={S.muted}>
+                        {m}{" "}
+                        <input style={S.smallInput} type="number" min="0" max="100" disabled={locked} value={(draft.monthly || [])[i] ?? ""} onChange={(e) => {
+                          const next = [...(draft.monthly || [])];
+                          next[i] = num(e.target.value);
+                          put("monthly", next);
+                        }} />
+                      </label>
+                    ))}
+                  </div>
+                ), `平均 ${r1(sem.monthlyAvg)}`)
+                : step(4, "成績達標（期中、期末）", (
+                  <>
+                    <div style={S.actionRow}>
+                      <span style={{ width: 40 }}>期中</span>{numInput("midP", { placeholder: "達標" })}<span>/</span>{numInput("midT", { placeholder: "應考" })}
+                    </div>
+                    <div style={{ ...S.actionRow, marginTop: 6 }}>
+                      <span style={{ width: 40 }}>期末</span>{numInput("finP", { placeholder: "達標" })}<span>/</span>{numInput("finT", { placeholder: "應考" })}
+                    </div>
+                    <p style={S.hint}>從教室系統抄：平均達 {basics.grade || "?"} 年級基準線（{settings.baseline?.[basics.grade] ?? "—"} 分）的人數／應考人數。兩次平均。</p>
+                  </>
+                ), `達標率 ${r1(sem.examRate)}`)}
+
+              {step(5, campLabel, (
+                <div style={S.actionRow}>
+                  {numInput("camp")}<span>/ {basics.size ?? "?"} 人</span>
+                </div>
+              ), `得分 ${r1(sem.campScore)}`)}
+
+              {!manualMode && step(6, "單日課程（系統自動算）", (
+                <p style={S.muted}>
+                  班上學生報名 {sem.courseCount ?? 0} 人次／{basics.size ?? "?"} 人・全校平均 {Math.round((sem.courseAvg || 0) * 100)}%
+                  {sem.courseAvg ? "" : "（這學期還沒有單日課程報名，先不計分）"}
+                </p>
+              ), `得分 ${r1(sem.courseScore)}`)}
+            </>
+          )}
+
+          <div style={{ ...S.rowBetween, marginTop: 12 }}>
+            <span style={S.muted}>這學期試算 <strong style={{ fontSize: 18, color: "#413832" }}>{taught ? r1(sem.score) : "不計"}</strong></span>
+            {!locked && (
+              <span style={S.actionRow}>
+                <button type="button" style={S.ghostButton} disabled={saving} onClick={() => save(false)}>儲存</button>
+                <button type="button" style={S.primaryButton} disabled={saving} onClick={() => save(true)}>{saving ? "儲存中…" : "儲存，下一位老師"}</button>
+              </span>
+            )}
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------
 // 年度設定（只套用這個年度）
 // ---------------------------------------------------------
 
-const MONTHS_SPRING = ["2月", "3月", "4月", "5月", "6月", "7月"];
 
-function YearSettingsPanel({ info, settings, types, teachers, courses, classGrades = {}, locked, saving, onSave }) {
+function YearSettingsPanel({ info, settings, types, locked, saving, onSave }) {
   const [draft, setDraft] = useState(settings);
   const [typeDraft, setTypeDraft] = useState(types);
   useEffect(() => setDraft(settings), [settings]);
@@ -965,7 +1246,6 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, classGrad
       <input style={S.input} type="number" step={step} value={value ?? ""} disabled={locked} onChange={(e) => set(path, num(e.target.value))} />
     </label>
   );
-  const courseSet = new Set(draft.courseIds || []);
 
   return (
     <section style={S.section}>
@@ -992,196 +1272,7 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, classGrad
         </label>
       </div>
 
-      {draft.springMode === "manual" && (
-        <>
-          <h3 style={S.subTitle}>{info.spring.label} 手動資料</h3>
-          <p style={S.hint}>每月考核填 0～100 分，沒有的月份留白；營隊填班上報名人數／班上總人數。</p>
-          <div style={S.tableWrap}>
-            <table style={S.table}>
-              <thead>
-                <tr>
-                  <th style={S.th}>老師</th>
-                  {MONTHS_SPRING.slice(0, 5).map((m) => <th key={m} style={S.thNum}>{m}</th>)}
-                  <th style={S.thNum}>暑假營隊報名</th>
-                  <th style={S.thNum}>班上人數</th>
-                  <th style={S.thNum}>當時年級</th>
-                </tr>
-              </thead>
-              <tbody>
-                {teachers.map((t) => {
-                  const m = draft.manual?.[t.id] || {};
-                  const monthly = m.monthly || [];
-                  const setManual = (key, value) => set(["manual"], { ...(draft.manual || {}), [t.id]: { ...m, [key]: value } });
-                  return (
-                    <tr key={t.id}>
-                      <td style={S.td}>{teacherName(t)}</td>
-                      {[0, 1, 2, 3, 4].map((i) => (
-                        <td key={i} style={S.tdNum}>
-                          <input style={S.smallInput} type="number" min="0" max="100" disabled={locked} value={monthly[i] ?? ""} onChange={(e) => {
-                            const next = [...monthly];
-                            next[i] = num(e.target.value);
-                            setManual("monthly", next);
-                          }} />
-                        </td>
-                      ))}
-                      <td style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={m.campSigned ?? ""} onChange={(e) => setManual("campSigned", num(e.target.value))} /></td>
-                      <td style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={m.campTotal ?? ""} onChange={(e) => setManual("campTotal", num(e.target.value))} /></td>
-                      <td style={S.tdNum}><input style={S.smallInput} type="number" min="1" max="6" disabled={locked} placeholder={String(Math.max(1, (classGrades[t.id] || 1) - 1))} value={m.grade ?? ""} onChange={(e) => setManual("grade", num(e.target.value))} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-
-      <h3 style={S.subTitle}>班上人數與營隊報名（手填）</h3>
-      <p style={S.hint}>填班上報名人數／班上人數；年級預設看班級名稱（G5A = 5），可以改。目標：三年級 {draft.campTargets?.[3]}%、四年級 {draft.campTargets?.[4]}%、五年級 {draft.campTargets?.[5]}%、六年級 {draft.campTargets?.[6]}%。</p>
-      <div style={S.tableWrap}>
-        <table style={S.table}>
-          <thead>
-            <tr>
-              <th style={S.th}>老師</th>
-              {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => (
-                [
-                  <th key={sem.key + "a"} style={S.thNum}>{sem.label}{sem.key === "fall" ? "寒假" : "暑假"}報名</th>,
-                  <th key={sem.key + "b"} style={S.thNum}>班上人數</th>,
-                  <th key={sem.key + "c"} style={S.thNum}>班級年級</th>,
-                ]
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {teachers.map((t) => (
-              <tr key={t.id}>
-                <td style={S.td}>{teacherName(t)}</td>
-                {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => {
-                  const cur = draft.manualCamp?.[sem.key]?.[t.id] || {};
-                  const put = (k, v) => set(["manualCamp"], {
-                    ...(draft.manualCamp || {}),
-                    [sem.key]: { ...(draft.manualCamp?.[sem.key] || {}), [t.id]: { ...cur, [k]: v } },
-                  });
-                  return [
-                    <td key={sem.key + "s"} style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={cur.signed ?? ""} onChange={(e) => put("signed", num(e.target.value))} /></td>,
-                    <td key={sem.key + "t"} style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={cur.total ?? ""} onChange={(e) => put("total", num(e.target.value))} /></td>,
-                    <td key={sem.key + "g"} style={S.tdNum}><input style={S.smallInput} type="number" min="1" max="6" disabled={locked} placeholder={String(classGrades[t.id] || "")} value={cur.grade ?? ""} onChange={(e) => put("grade", num(e.target.value))} /></td>,
-                  ];
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <h3 style={S.subTitle}>平日課程報名（手填）</h3>
-      <p style={S.hint}>每門課填各班報名人數；班上人數用上面那張表。報名率 = 各課人次加總 ÷ 班上人數，跟全校平均比：等於平均 80 分、高出平均 25% 以上 100 分。</p>
-      {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => {
-        const block = draft.manualCourse?.[sem.key] || { courses: [], counts: {} };
-        const putBlock = (next) => set(["manualCourse"], { ...(draft.manualCourse || {}), [sem.key]: next });
-        return (
-          <div key={sem.key} style={{ marginBottom: 12 }}>
-            <div style={S.actionRow}>
-              <strong style={{ fontSize: 14 }}>{sem.label}</strong>
-              {!locked && (
-                <button type="button" style={S.ghostButton} onClick={() => {
-                  const name = window.prompt("課程名稱（例如：野性實驗室）", "");
-                  if (!name || !name.trim()) return;
-                  putBlock({ ...block, courses: [...(block.courses || []), { id: `c${Date.now()}`, name: name.trim() }] });
-                }}>＋ 新增課程</button>
-              )}
-            </div>
-            {(block.courses || []).length ? (
-              <div style={S.tableWrap}>
-                <table style={S.table}>
-                  <thead>
-                    <tr>
-                      <th style={S.th}>老師</th>
-                      {block.courses.map((c) => (
-                        <th key={c.id} style={S.thNum}>
-                          {c.name}
-                          {!locked && (
-                            <button type="button" style={S.linkButton} onClick={() => {
-                              if (!window.confirm(`刪除「${c.name}」這門課的報名資料？`)) return;
-                              putBlock({ ...block, courses: block.courses.filter((x) => x.id !== c.id) });
-                            }}>刪除</button>
-                          )}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {teachers.map((t) => (
-                      <tr key={t.id}>
-                        <td style={S.td}>{teacherName(t)}</td>
-                        {block.courses.map((c) => (
-                          <td key={c.id} style={S.tdNum}>
-                            <input style={S.smallInput} type="number" min="0" disabled={locked} value={block.counts?.[t.id]?.[c.id] ?? ""} onChange={(e) => putBlock({
-                              ...block,
-                              counts: { ...(block.counts || {}), [t.id]: { ...(block.counts?.[t.id] || {}), [c.id]: num(e.target.value) } },
-                            })} />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p style={S.muted}>還沒有課程，按「新增課程」加入。</p>
-            )}
-          </div>
-        );
-      })}
-
-      <h3 style={S.subTitle}>成績達標（從教室系統抄過來）</h3>
-      <div style={S.settingsGrid}>
-        <label style={S.label}>
-          成績資料來源
-          <select style={S.input} value={draft.examMode || "manual"} disabled={locked} onChange={(e) => set(["examMode"], e.target.value)}>
-            <option value="manual">手動填達標人數</option>
-            <option value="system">BEAST 學生成績（逐筆）</option>
-          </select>
-        </label>
-      </div>
-      {(draft.examMode || "manual") === "manual" && (
-        <>
-          <p style={S.hint}>每位老師班上「平均達年級基準線的人數／應考人數」，例如 15／20。</p>
-          <div style={S.tableWrap}>
-            <table style={S.table}>
-              <thead>
-                <tr>
-                  <th style={S.th}>老師</th>
-                  {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => (
-                    [
-                      <th key={sem.key + "a"} style={S.thNum}>{sem.label} 達標人數</th>,
-                      <th key={sem.key + "b"} style={S.thNum}>應考人數</th>,
-                    ]
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {teachers.map((t) => (
-                  <tr key={t.id}>
-                    <td style={S.td}>{teacherName(t)}</td>
-                    {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => {
-                      const cur = draft.manualExam?.[sem.key]?.[t.id] || {};
-                      const put = (k, v) => set(["manualExam"], {
-                        ...(draft.manualExam || {}),
-                        [sem.key]: { ...(draft.manualExam?.[sem.key] || {}), [t.id]: { ...cur, [k]: v } },
-                      });
-                      return [
-                        <td key={sem.key + "p"} style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={cur.pass ?? ""} onChange={(e) => put("pass", num(e.target.value))} /></td>,
-                        <td key={sem.key + "t"} style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={cur.total ?? ""} onChange={(e) => put("total", num(e.target.value))} /></td>,
-                      ];
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+      <p style={S.hint}>每學期的人數、進退班、成績、營隊報名都在「學期資料」分頁填。</p>
 
       <h3 style={S.subTitle}>指標規則</h3>
       <div style={S.settingsGrid}>

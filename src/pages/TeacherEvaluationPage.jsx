@@ -353,7 +353,7 @@ function TeacherEvaluationPage({
       <div style={styles.tabRow}>
         {[
           ["overview", "總覽"],
-          ["teacher", "個別教師"],
+          ["data", "學期資料"], ["teacher", "個別教師"],
           ["yearend", "正式考核"],
           ["settings", "年度設定"],
         ].map(([key, label]) => (

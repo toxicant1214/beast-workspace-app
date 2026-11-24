@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabase";
 import { computeAdminCooperation } from "./evaluationService";
 
 // =========================================================
-// BEAST Workspace｜教師考核 v2
+// BEAST Workspace｜教師考核 v3
 // 考核年度 = 下學期 + 上學期（例：2026 = 114 下 + 115 上）
 // 每個年度一份設定（evaluation_settings key = "year:2026"），可結算封存
 // =========================================================
@@ -149,6 +149,8 @@ const SOURCES = {
   courseStudents: ["course_class_students", "course_class_id, student_id, joined_at, left_at, is_active"],
   leaves: ["teacher_leave_records", "id, teacher_id, start_date, is_last_minute"],
   withdrawals: ["evaluation_withdrawals", "class_student_id, reason, deduct"],
+  singleDay: ["single_day_courses", "id, course_name, course_date, status"],
+  singleDayStudents: ["single_day_course_students", "single_day_course_id, student_id"],
 };
 
 export async function loadEvaluationSources() {
@@ -213,11 +215,49 @@ function factorFor(total, bands) {
   return hit ? Number(hit.factor) : 1;
 }
 
-/** 依名單、學期與各來源算出某位老師某學期的 A/B/C/D */
-export function computeSystemSemester({ teacherId, range, sources, events, assignments, exclusions, settings, typeMap }) {
+// ---------------------------------------------------------
+// 學期資料（主管在「學期資料」分頁一位一位填）
+// settings.semData[spring|fall][teacherId] =
+//   { taught, grade, start, moves:[{date,name,type,reason,deduct}], midP, midT, finP, finT, camp, monthly:[] }
+// ---------------------------------------------------------
+
+/** 開學基準日：上學期 9/1、下學期 2/15（之後的進出班才算學期中異動） */
+export function semesterStartDay(range) {
+  const y = range.from.slice(0, 4);
+  return range.key === "fall" ? `${y}-09-01` : `${y}-02-15`;
+}
+
+/** 讀學期資料，沿用舊版欄位（manual / manualCamp / manualExam）當預設 */
+export function semEntry(settings, key, teacherId) {
+  const own = settings.semData?.[key]?.[teacherId];
+  if (own) return own;
+  const legacy = {};
+  if (key === "spring") {
+    const m = settings.manual?.[teacherId] || {};
+    if (m.monthly) legacy.monthly = m.monthly;
+    if (m.campSigned !== undefined && m.campSigned !== "") legacy.camp = m.campSigned;
+    if (m.campTotal !== undefined && m.campTotal !== "") legacy.start = m.campTotal;
+    if (m.grade) legacy.grade = m.grade;
+  }
+  const c = settings.manualCamp?.[key]?.[teacherId] || {};
+  if (c.signed !== undefined && c.signed !== "") legacy.camp = c.signed;
+  if (c.total !== undefined && c.total !== "") legacy.start = c.total;
+  if (c.grade) legacy.grade = c.grade;
+  const e = settings.manualExam?.[key]?.[teacherId] || {};
+  if (e.total) {
+    legacy.midP = e.pass;
+    legacy.midT = e.total;
+  }
+  return legacy;
+}
+
+const has = (v) => v !== undefined && v !== null && v !== "";
+
+/** 系統名單：開學人數與學期中的進出班（只有系統上線後的學期才有） */
+export function systemRoster(teacherId, range, sources) {
   const classIds = new Set(sources.classTeachers.filter((r) => r.teacher_id === teacherId).map((r) => r.class_id));
   const studentMap = new Map(sources.students.map((s) => [s.id, s]));
-
+  const startDay = semesterStartDay(range);
   const roster = sources.classStudents.filter(
     (r) =>
       classIds.has(r.class_id) &&
@@ -225,104 +265,121 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
       (!r.left_at || r.left_at >= range.from) &&
       !studentMap.get(r.student_id)?.is_test
   );
-  const enrolledIds = new Set(roster.map((r) => r.student_id));
-  const activeOn = (day) =>
-    new Set(roster.filter((r) => (!r.joined_at || r.joined_at <= day) && (!r.left_at || r.left_at >= day)).map((r) => r.student_id));
-
-  // ---- B 留班率 ----
+  const startCount = new Set(
+    roster.filter((r) => (!r.joined_at || r.joined_at <= startDay) && (!r.left_at || r.left_at >= startDay)).map((r) => r.student_id)
+  ).size;
   const withdrawalMap = new Map(sources.withdrawals.map((w) => [w.class_student_id, w]));
-  const leftList = roster
-    .filter((r) => r.left_at && inRange(r.left_at, range))
-    .map((r) => {
+  const moves = [];
+  for (const r of roster) {
+    const name = studentMap.get(r.student_id)?.chinese_name || "學生";
+    if (r.joined_at && r.joined_at > startDay && r.joined_at <= range.to) {
+      moves.push({ id: `in-${r.id}`, classStudentId: r.id, date: r.joined_at, name, type: "進班", auto: true });
+    }
+    if (r.left_at && r.left_at >= startDay && r.left_at <= range.to) {
       const w = withdrawalMap.get(r.id);
-      return {
-        id: r.id,
-        studentName: studentMap.get(r.student_id)?.chinese_name || "學生",
-        leftAt: r.left_at,
-        reason: w?.reason || "",
-        deduct: w ? w.deduct : true,
-        recorded: Boolean(w),
-      };
-    })
-    .sort((a, b) => b.leftAt.localeCompare(a.leftAt));
-  const deducted = leftList.filter((l) => l.deduct).length;
-  const retention = enrolledIds.size ? clamp((1 - deducted / enrolledIds.size) * 100) : null;
-
-  // ---- A 成績達標率 ----
-  // 考試沒有填日期時，用學年度＋學期判斷（例：115＋上學期）
-  const examInSemester = (e) =>
-    e.exam_date
-      ? inRange(e.exam_date, range)
-      : String(e.academic_year || "").replace(/\D/g, "") === range.academicYear && String(e.term || "").includes(range.term);
-  const examIds = new Set(sources.exams.filter((e) => e.is_active !== false && examInSemester(e)).map((e) => e.id));
-  const examClassIds = new Set(sources.examClasses.filter((c) => examIds.has(c.exam_id) && classIds.has(c.class_id)).map((c) => c.id));
-  const examStudents = sources.examStudents.filter((s) => examClassIds.has(s.exam_class_id) && s.is_active !== false);
-  const scoreMap = new Map();
-  for (const sub of sources.examSubjects) {
-    if (sub.status !== "SCORED" || sub.score === null || sub.score === undefined) continue;
-    if (!scoreMap.has(sub.exam_student_id)) scoreMap.set(sub.exam_student_id, []);
-    scoreMap.get(sub.exam_student_id).push(Number(sub.score));
+      moves.push({ id: `out-${r.id}`, classStudentId: r.id, date: r.left_at, name, type: "退班", reason: w?.reason || "", deduct: w ? w.deduct : true, auto: true });
+    }
   }
-  let examPass = 0;
-  let examTotal = 0;
-  for (const es of examStudents) {
-    const scores = scoreMap.get(es.id);
-    if (!scores?.length) continue;
-    const grade = parseGrade(es.grade_snapshot) || parseGrade(studentMap.get(es.student_id)?.current_grade);
-    const line = Number(settings.baseline?.[grade] ?? 85);
-    examTotal += 1;
-    if (avg(scores) >= line) examPass += 1;
-  }
-  let examSource = "系統";
-  if ((settings.examMode || "manual") === "manual") {
-    const m = settings.manualExam?.[range.key]?.[teacherId] || {};
-    examTotal = Number(m.total) || 0;
-    examPass = Math.min(Number(m.pass) || 0, examTotal);
-    examSource = "手動";
-  }
-  const examRate = examTotal ? clamp((examPass / examTotal) * 100) : null;
+  moves.sort((a, b) => a.date.localeCompare(b.date));
+  return { startCount, moves, studentIds: new Set(roster.map((r) => r.student_id)) };
+}
 
-  // ---- D 營隊報名率：主管手填（報名人數／班上人數），目標看班級年級（G5A = 5 年級）----
-  const campEntry = settings.manualCamp?.[range.key]?.[teacherId] || {};
-  const campGrade = Number(campEntry.grade) || teacherClassGrade(teacherId, sources) || null;
-  const campTarget = Number(settings.campTargets?.[campGrade] ?? settings.campTarget ?? 70);
-  const campSigned = Number(campEntry.signed) || 0;
-  const campBase = Number(campEntry.total) || 0;
-  const campScoreValue = campBase ? clamp(((campSigned / campBase) * 100 / campTarget) * 100) : null;
+/** 整理一位老師一學期的基本資料（任教、年級、人數、進退班） */
+export function semesterBasics({ teacherId, range, sources, settings, systemData = true }) {
+  const entry = semEntry(settings, range.key, teacherId);
+  const sys = systemData ? systemRoster(teacherId, range, sources) : { startCount: 0, moves: [], studentIds: new Set() };
+  const taught = entry.taught !== false;
+  const grade = Number(entry.grade) || (range.key === "fall" ? teacherClassGrade(teacherId, sources) : null) || null;
+  const start = has(entry.start) ? Number(entry.start) : sys.startCount || null;
+  const manualMoves = (entry.moves || []).map((m, i) => ({ ...m, id: `m-${i}`, manualIndex: i }));
+  const moves = [...sys.moves, ...manualMoves];
+  const joins = moves.filter((m) => m.type === "進班").length;
+  const leaves = moves.filter((m) => m.type === "退班");
+  const size = start === null ? null : Math.max(0, start + joins - leaves.length);
+  const deducted = leaves.filter((m) => m.deduct).length;
+  return { entry, taught, grade, start, startFromSystem: !has(entry.start) && Boolean(sys.startCount), moves, joins, leaves, size, deducted, studentIds: sys.studentIds };
+}
 
-  // ---- D 平日課程報名率：主管手填各課報名人數；跟全校平均比 ----
-  const course = courseScoreFor(settings, range.key, teacherId);
+/** 單日課程：老師班上學生這學期報名的人次（同一人報兩堂算 2） */
+function singleDayCount(studentIds, range, sources) {
+  const courseIds = new Set(
+    sources.singleDay
+      .filter((c) => inRange(c.course_date, range) && !["cancelled", "CANCELLED", "canceled"].includes(c.status))
+      .map((c) => c.id)
+  );
+  return sources.singleDayStudents.filter((s) => courseIds.has(s.single_day_course_id) && studentIds.has(s.student_id)).length;
+}
+
+/** 全校平均：所有有帶班老師的人次加總 ÷ 所有班上人數 */
+export function singleDayAverage({ teacherIds, range, sources, settings }) {
+  let count = 0;
+  let size = 0;
+  for (const tid of teacherIds) {
+    const b = semesterBasics({ teacherId: tid, range, sources, settings });
+    if (!b.taught || !b.size) continue;
+    count += singleDayCount(b.studentIds, range, sources);
+    size += b.size;
+  }
+  return size ? count / size : 0;
+}
+
+/** 系統計算的學期（115 上起） */
+export function computeSystemSemester({ teacherId, range, sources, events, assignments, exclusions, settings, typeMap, teacherIds }) {
+  const b = semesterBasics({ teacherId, range, sources, settings });
+  if (!b.taught) return { mode: "system", taught: false, score: null, categories: {}, catScores: {}, basics: b, admin: { items: [] } };
+  const e = b.entry;
+
+  // ---- A 成績：期中、期末各一次（達標人數／應考人數），兩次平均 ----
+  const rates = [];
+  if (has(e.midT) && Number(e.midT) > 0) rates.push(Math.min(Number(e.midP) || 0, Number(e.midT)) / Number(e.midT));
+  if (has(e.finT) && Number(e.finT) > 0) rates.push(Math.min(Number(e.finP) || 0, Number(e.finT)) / Number(e.finT));
+  const examRate = rates.length ? clamp(avg(rates) * 100) : null;
+  const examDetail = [
+    has(e.midT) ? `期中 ${e.midP || 0}/${e.midT}` : "期中未填",
+    has(e.finT) ? `期末 ${e.finP || 0}/${e.finT}` : "期末未填",
+  ].join("・");
+
+  // ---- B 留班率：開學人數＋進班 為分母，列入扣分的退班為分子 ----
+  const base = (b.start || 0) + b.joins;
+  const retention = base ? clamp((1 - b.deducted / base) * 100) : null;
+
+  // ---- D 營隊：報名人數 ÷ 目前人數，目標看帶班年級 ----
+  const campTarget = Number(settings.campTargets?.[b.grade] ?? settings.campTarget ?? 70);
+  const campScore = has(e.camp) && b.size ? clamp((((Number(e.camp) / b.size) * 100) / campTarget) * 100) : null;
+
+  // ---- D 單日課程：系統自動算，跟全校平均比 ----
+  const courseCount = singleDayCount(b.studentIds, range, sources);
+  const courseAvg = singleDayAverage({ teacherIds: teacherIds || [teacherId], range, sources, settings });
+  let courseScore = null;
+  if (b.size && courseAvg) {
+    const ratio = courseCount / b.size / courseAvg;
+    courseScore = ratio >= 1.25 ? 100 : ratio >= 1 ? 80 + ((ratio - 1) / 0.25) * 20 : ratio * 80;
+  }
 
   // ---- 事件 ----
   const own = events.filter(
-    (e) => e.teacher_id === teacherId && inRange(e.event_date, range) && !["void", "disputed", "disputing"].includes(e.status)
+    (ev) => ev.teacher_id === teacherId && inRange(ev.event_date, range) && !["void", "disputed", "disputing"].includes(ev.status)
   );
-  const countOf = (...names) => own.filter((e) => names.includes(e.type_name)).length;
+  const countOf = (...names) => own.filter((ev) => names.includes(ev.type_name)).length;
   const safety = countOf("安全問題");
   const complaint = countOf("家長客訴");
   const mistakes = countOf("工作疏失", "沒交接");
   const lateEvents = countOf("遲到", "臨時請假");
   const lastMinuteLeaves = sources.leaves.filter((l) => l.teacher_id === teacherId && l.is_last_minute && inRange(l.start_date, range)).length;
-  const bonusEvents = own.filter((e) => Number(e.points) > 0 && typeMap?.[e.type_name]?.direction !== "minus");
 
   // ---- C 任務 ----
-  const admin = computeAdminCooperation(assignments, teacherId, {
-    from: range.from,
-    to: range.to,
-    perDay: settings.perDay,
-    exclusions,
-  });
+  const admin = computeAdminCooperation(assignments, teacherId, { from: range.from, to: range.to, perDay: settings.perDay, exclusions });
 
   const ind = (key, name, detail, score, source) => ({ key, name, detail, score: score === null ? null : Math.round(score * 10) / 10, source });
-  const baselineText = [3, 4, 5, 6].map((g) => `${g}年級${settings.baseline?.[g]}`).join("／");
+  const campName = range.key === "fall" ? "寒假營隊報名率" : "暑假營隊報名率";
 
   const categories = {
     A: [
-      ind("exam", "成績達標率", examTotal ? `${examPass}/${examTotal} 人達基準線（${baselineText}）` : examSource === "手動" ? "尚未填寫（年度設定）" : "這學期還沒有成績資料", examRate, examSource),
+      ind("exam", "成績達標率", examDetail, examRate, "手動"),
       ind("inspect_hw", "作業／訂正／評量抽查", "2027 起實施", null, "抽查"),
     ],
     B: [
-      ind("retention", "留班率", `在班 ${enrolledIds.size} 人・退班 ${leftList.length} 人・列入扣分 ${deducted} 人`, retention, "系統"),
+      ind("retention", "留班率", `開學 ${b.start ?? "?"} 人＋進班 ${b.joins}・退班 ${b.leaves.length} 人（列入扣分 ${b.deducted}）`, retention, "系統"),
       ind("safety", "安全事件", `${safety} 次`, countScore(safety, settings), "事件"),
       ind("complaint", "家長客訴", `${complaint} 次`, countScore(complaint, settings), "事件"),
     ],
@@ -333,16 +390,8 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
       ind("inspect_env", "教室環境抽查", "2027 起實施", null, "抽查"),
     ],
     D: [
-      ind(
-        "camp",
-        range.key === "fall" ? "寒假營隊報名率" : "暑假營隊報名率",
-        campBase
-          ? `${campSigned}/${campBase}（${pct(campSigned, campBase)}%）・${campGrade || "?"} 年級班目標 ${campTarget}%`
-          : "尚未填寫（年度設定）",
-        campScoreValue,
-        "手動"
-      ),
-      ind("course", "平日課程報名率", course.detail, course.score, "手動"),
+      ind("camp", campName, has(e.camp) && b.size ? `${e.camp}/${b.size}（${pct(Number(e.camp), b.size)}%）・${b.grade || "?"} 年級目標 ${campTarget}%` : "尚未填寫（學期資料）", campScore, "手動"),
+      ind("course", "單日課程報名率", b.size ? `${courseCount} 人次／${b.size} 人（${pct(courseCount, b.size)}%）・全校平均 ${Math.round(courseAvg * 100)}%` : "需要班上人數", courseAvg ? courseScore : null, "系統"),
     ],
   };
 
@@ -360,7 +409,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
     Object.entries(categories).map(([k, list]) => [k, avg(list.filter((i) => i.score !== null).map((i) => i.score))])
   );
 
-  return { mode: "system", categories, catScores, score: weighted(catScores, settings.w), leftList, admin, bonusEvents };
+  return { mode: "system", taught: true, categories, catScores, score: weighted(catScores, settings.w), basics: b, admin, campScore, courseScore, courseCount, courseAvg, examRate };
 }
 
 function weighted(catScores, w) {
@@ -374,31 +423,30 @@ function weighted(catScores, w) {
   return weight ? sum / weight : null;
 }
 
-/** 手動學期（2026 年度的 114 下）：每月考核平均代替 A＋B＋C，營隊報名率當 D */
-export function computeManualSemester(teacherId, settings, sources) {
-  const m = settings.manual?.[teacherId] || {};
-  const monthly = (m.monthly || []).map(Number).filter((x) => !Number.isNaN(x) && x > 0);
+/** 手動學期（2026 年度的 114 下）：每月考核平均代替 A＋B＋C，暑假營隊報名率當 D */
+export function computeManualSemester({ teacherId, range, sources, settings }) {
+  const b = semesterBasics({ teacherId, range, sources, settings, systemData: false });
+  if (!b.taught) return { mode: "manual", taught: false, score: null, basics: b };
+  const e = b.entry;
+  const monthly = (e.monthly || []).map(Number).filter((x) => !Number.isNaN(x) && x > 0);
   const monthlyAvg = avg(monthly);
-  const campTotal = Number(m.campTotal) || 0;
-  const campRate = campTotal ? (Number(m.campSigned || 0) / campTotal) * 100 : null;
-  const classGrade = sources ? teacherClassGrade(teacherId, sources) : null;
-  const grade = Number(m.grade) || (classGrade ? Math.max(1, classGrade - 1) : null);
-  const target = Number(settings.campTargets?.[grade] ?? settings.campTarget ?? 70);
+  const target = Number(settings.campTargets?.[b.grade] ?? settings.campTarget ?? 70);
+  const campRate = has(e.camp) && b.size ? (Number(e.camp) / b.size) * 100 : null;
   const campScore = campRate === null ? null : clamp((campRate / target) * 100);
   const wD = Number(settings.w.D || 0);
   const wABC = Number(settings.w.A || 0) + Number(settings.w.B || 0) + Number(settings.w.C || 0);
   let score = null;
   if (monthlyAvg !== null && campScore !== null) score = (monthlyAvg * wABC + campScore * wD) / (wABC + wD);
   else if (monthlyAvg !== null) score = monthlyAvg;
-  return { mode: "manual", monthly: m.monthly || [], monthlyAvg, campSigned: m.campSigned, campTotal: m.campTotal, campRate, campScore, campTarget: target, campGrade: grade, score };
+  return { mode: "manual", taught: true, monthly: e.monthly || [], monthlyAvg, campSigned: e.camp, campTotal: b.size, campRate, campScore, campTarget: target, campGrade: b.grade, score, basics: b };
 }
 
 /** 一位老師的年度結果 */
-export function computeTeacherYear({ teacher, info, sources, events, assignments, exclusions, settings, typeMap }) {
-  const common = { sources, events, assignments, exclusions, settings, typeMap, teacherId: teacher.id };
+export function computeTeacherYear({ teacher, info, sources, events, assignments, exclusions, settings, typeMap, teacherIds }) {
+  const common = { sources, events, assignments, exclusions, settings, typeMap, teacherId: teacher.id, teacherIds };
   const spring =
     settings.springMode === "manual"
-      ? computeManualSemester(teacher.id, settings, sources)
+      ? computeManualSemester({ teacherId: teacher.id, range: info.spring, sources, settings })
       : computeSystemSemester({ ...common, range: info.spring });
   const fall = computeSystemSemester({ ...common, range: info.fall });
 
@@ -436,7 +484,7 @@ export const TOGGLEABLE_INDICATORS = [
   { key: "attendance", name: "C 出勤" },
   { key: "mistakes", name: "C 工作疏失／沒交接" },
   { key: "camp", name: "D 營隊報名率" },
-  { key: "course", name: "D 平日課程報名率" },
+  { key: "course", name: "D 單日課程報名率" },
 ];
 
 /** 老師帶的班級年級：看班級名稱（G5A → 5）；帶多班取人數最多的班 */
@@ -452,36 +500,3 @@ export function teacherClassGrade(teacherId, sources) {
   return null;
 }
 
-/**
- * 平日課程報名率（手填）
- * 報名率 = 班上各課報名人次加總 ÷ 班上人數；跟全校平均比：
- * 等於平均 80 分、達平均 1.25 倍以上 100 分、低於平均照比例（0 人 = 0 分）
- * 班上人數沿用「營隊報名（手填）」那一欄
- */
-export function courseScoreFor(settings, semKey, teacherId) {
-  const block = settings.manualCourse?.[semKey] || {};
-  const courses = block.courses || [];
-  const counts = block.counts || {};
-  const sizes = settings.manualCamp?.[semKey] || {};
-  if (!courses.length) return { score: null, detail: "這學期還沒有新增課程（年度設定）" };
-  const sumFor = (tid) => courses.reduce((a, c) => a + (Number(counts[tid]?.[c.id]) || 0), 0);
-  let allSigned = 0;
-  let allSize = 0;
-  for (const [tid, v] of Object.entries(sizes)) {
-    const size = Number(v?.total) || 0;
-    if (!size) continue;
-    allSize += size;
-    allSigned += sumFor(tid);
-  }
-  const size = Number(sizes[teacherId]?.total) || 0;
-  if (!size) return { score: null, detail: "尚未填班上人數（年度設定）" };
-  const avg = allSize ? allSigned / allSize : 0;
-  const mine = sumFor(teacherId) / size;
-  if (!avg) return { score: null, detail: `全校還沒有人報名（${courses.length} 門課）` };
-  const ratio = mine / avg;
-  const score = ratio >= 1.25 ? 100 : ratio >= 1 ? 80 + ((ratio - 1) / 0.25) * 20 : ratio * 80;
-  return {
-    score: Math.round(score * 10) / 10,
-    detail: `${sumFor(teacherId)} 人次／${size} 人（${Math.round(mine * 100)}%）・全校平均 ${Math.round(avg * 100)}%・${courses.length} 門課`,
-  };
-}
