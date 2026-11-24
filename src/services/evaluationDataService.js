@@ -253,6 +253,13 @@ export function semEntry(settings, key, teacherId) {
 
 const has = (v) => v !== undefined && v !== null && v !== "";
 
+/** 營隊報名率（%）：直接填的報名率優先；舊資料用報名人數 ÷ 人數換算 */
+export function campRateOf(entry, size) {
+  if (has(entry.campRate)) return Number(entry.campRate);
+  if (has(entry.camp) && size) return (Number(entry.camp) / size) * 100;
+  return null;
+}
+
 /** 系統名單：開學人數與學期中的進出班（只有系統上線後的學期才有） */
 export function systemRoster(teacherId, range, sources) {
   const classIds = new Set(sources.classTeachers.filter((r) => r.teacher_id === teacherId).map((r) => r.class_id));
@@ -345,7 +352,8 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
 
   // ---- D 營隊：報名人數 ÷ 目前人數，目標看帶班年級 ----
   const campTarget = Number(settings.campTargets?.[b.grade] ?? settings.campTarget ?? 70);
-  const campScore = has(e.camp) && b.size ? clamp((((Number(e.camp) / b.size) * 100) / campTarget) * 100) : null;
+  const campRate = campRateOf(e, b.size);
+  const campScore = campRate === null ? null : clamp((campRate / campTarget) * 100);
 
   // ---- D 單日課程：系統自動算，跟全校平均比 ----
   const courseCount = singleDayCount(b.studentIds, range, sources);
@@ -390,7 +398,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
       ind("inspect_env", "教室環境抽查", "2027 起實施", null, "抽查"),
     ],
     D: [
-      ind("camp", campName, has(e.camp) && b.size ? `${e.camp}/${b.size}（${pct(Number(e.camp), b.size)}%）・${b.grade || "?"} 年級目標 ${campTarget}%` : "尚未填寫（學期資料）", campScore, "手動"),
+      ind("camp", campName, campRate !== null ? `報名率 ${Math.round(campRate * 10) / 10}%・${b.grade || "?"} 年級目標 ${campTarget}%` : "尚未填寫（學期資料）", campScore, "手動"),
       ind("course", "單日課程報名率", b.size ? `${courseCount} 人次／${b.size} 人（${pct(courseCount, b.size)}%）・全校平均 ${Math.round(courseAvg * 100)}%` : "需要班上人數", courseAvg ? courseScore : null, "系統"),
     ],
   };
@@ -431,7 +439,7 @@ export function computeManualSemester({ teacherId, range, sources, settings }) {
   const monthly = (e.monthly || []).map(Number).filter((x) => !Number.isNaN(x) && x > 0);
   const monthlyAvg = avg(monthly);
   const target = Number(settings.campTargets?.[b.grade] ?? settings.campTarget ?? 70);
-  const campRate = has(e.camp) && b.size ? (Number(e.camp) / b.size) * 100 : null;
+  const campRate = campRateOf(e, b.size);
   const campScore = campRate === null ? null : clamp((campRate / target) * 100);
   const wD = Number(settings.w.D || 0);
   const wABC = Number(settings.w.A || 0) + Number(settings.w.B || 0) + Number(settings.w.C || 0);

@@ -845,7 +845,7 @@ function SemesterCard({ title, sem, settings, perDay, onToggleExclusion, onWithd
         </div>
         <div style={S.catCard}>
           <div style={S.rowBetween}><strong>D 暑假營隊報名率</strong><span style={S.muted}><strong>{r1(sem.campScore)}</strong> 分</span></div>
-          <div style={S.muted}>{sem.campTotal ? `${sem.campSigned || 0}/${sem.campTotal}・${sem.campGrade || "?"} 年級班目標 ${sem.campTarget}%` : "尚未輸入"}</div>
+          <div style={S.muted}>{sem.campRate !== null && sem.campRate !== undefined ? `報名率 ${r1(sem.campRate)}%・${sem.campGrade || "?"} 年級班目標 ${sem.campTarget}%` : "尚未輸入"}</div>
         </div>
       </div>
     );
@@ -998,7 +998,7 @@ function semProgress(entry, basics, manualMode) {
     if (!hasVal(entry.midT)) missing.push("期中");
     if (!hasVal(entry.finT)) missing.push("期末");
   }
-  if (!hasVal(entry.camp)) missing.push("營隊");
+  if (!hasVal(entry.campRate) && !hasVal(entry.camp)) missing.push("營隊");
   return { done: missing.length === 0, missing };
 }
 
@@ -1189,9 +1189,16 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
                 ), `達標率 ${r1(sem.examRate)}`)}
 
               {step(5, campLabel, (
-                <div style={S.actionRow}>
-                  {numInput("camp")}<span>/ {basics.size ?? "?"} 人</span>
-                </div>
+                <>
+                  <div style={S.actionRow}>
+                    <span>報名率</span>
+                    <input style={S.smallInput} type="number" min="0" max="100" step="0.1" disabled={locked}
+                      placeholder={hasVal(draft.camp) && basics.size ? String(Math.round((draft.camp / basics.size) * 1000) / 10) : ""}
+                      value={draft.campRate ?? ""} onChange={(e) => put("campRate", num(e.target.value))} />
+                    <span>%</span>
+                  </div>
+                  <p style={S.hint}>照報表填班級報名率；{basics.grade || "?"} 年級目標 {settings.campTargets?.[basics.grade] ?? "—"}%，達標 100 分，未達按比例。</p>
+                </>
               ), `得分 ${r1(sem.campScore)}`)}
 
               {!manualMode && step(6, "單日課程（系統自動算）", (
