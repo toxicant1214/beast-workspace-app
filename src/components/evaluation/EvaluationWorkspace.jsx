@@ -55,11 +55,22 @@ function notifyMessage(result) {
   return result.message || "LINE 通知沒有送出。";
 }
 
+// 考核年度 = 下學期＋上學期（例：2026 年度 = 114 下＋115 上，2026/2/1～2027/1/31）
+function currentEvaluationYear() {
+  const now = new Date();
+  return now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+}
+
+function evaluationYearLabel(year) {
+  const roc = year - 1911;
+  return `${year} 考核年度（${roc - 1} 下＋${roc} 上）`;
+}
+
 function buildRangeOptions(periods) {
-  const year = new Date().getFullYear();
+  const year = currentEvaluationYear();
   const options = [
-    { value: `year:${year}`, label: `${year} 整年` },
-    { value: `year:${year - 1}`, label: `${year - 1} 整年` },
+    { value: `eyear:${year}`, label: evaluationYearLabel(year) },
+    { value: `eyear:${year - 1}`, label: evaluationYearLabel(year - 1) },
   ];
   for (const period of periods || []) {
     if (!period.is_active) continue;
@@ -73,8 +84,8 @@ function resolveRange(value, periods) {
     const period = (periods || []).find((p) => `period:${p.id}` === value);
     if (period) return { from: period.start_date, to: period.end_date };
   }
-  const year = Number(value?.split(":")[1]) || new Date().getFullYear();
-  return { from: `${year}-01-01`, to: `${year}-12-31` };
+  const year = Number(value?.split(":")[1]) || currentEvaluationYear();
+  return { from: `${year}-02-01`, to: `${year + 1}-01-31` };
 }
 
 function StatusChip({ status }) {
