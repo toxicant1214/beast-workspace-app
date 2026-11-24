@@ -23,6 +23,7 @@ import {
   loadEvaluationSources,
   saveWithdrawal,
   saveYearSettings,
+  teacherClassGrade,
   TOGGLEABLE_INDICATORS,
 } from "../../services/evaluationDataService";
 
@@ -691,6 +692,7 @@ export default function EvaluationWorkspace({ tab }) {
           types={types}
           teachers={teachers}
           courses={sources?.courses || []}
+          classGrades={sources ? Object.fromEntries(teachers.map((t) => [t.id, teacherClassGrade(t.id, sources)])) : {}}
           locked={locked}
           saving={saving}
           onSave={async (next, typeDraft) => {
@@ -773,8 +775,8 @@ function SemesterCard({ title, sem, settings, perDay, onToggleExclusion, onWithd
           <div style={S.muted}>{(sem.monthly || []).length ? sem.monthly.map((m, i) => `${i + 2}月 ${m || "—"}`).join("・") : "尚未輸入"}</div>
         </div>
         <div style={S.catCard}>
-          <div style={S.rowBetween}><strong>D 營隊報名率</strong><span style={S.muted}><strong>{r1(sem.campScore)}</strong> 分</span></div>
-          <div style={S.muted}>{sem.campTotal ? `${sem.campSigned || 0}/${sem.campTotal}・目標 ${settings.campTarget}%` : "尚未輸入"}</div>
+          <div style={S.rowBetween}><strong>D 暑假營隊報名率</strong><span style={S.muted}><strong>{r1(sem.campScore)}</strong> 分</span></div>
+          <div style={S.muted}>{sem.campTotal ? `${sem.campSigned || 0}/${sem.campTotal}・${sem.campGrade || "?"} 年級班目標 ${sem.campTarget}%` : "尚未輸入"}</div>
         </div>
       </div>
     );
@@ -940,7 +942,7 @@ function YearEndPanel({ rows, locked, settings, saving, onSave }) {
 
 const MONTHS_SPRING = ["2月", "3月", "4月", "5月", "6月", "7月"];
 
-function YearSettingsPanel({ info, settings, types, teachers, courses, locked, saving, onSave }) {
+function YearSettingsPanel({ info, settings, types, teachers, courses, classGrades = {}, locked, saving, onSave }) {
   const [draft, setDraft] = useState(settings);
   const [typeDraft, setTypeDraft] = useState(types);
   useEffect(() => setDraft(settings), [settings]);
@@ -1000,8 +1002,9 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, locked, s
                 <tr>
                   <th style={S.th}>老師</th>
                   {MONTHS_SPRING.slice(0, 5).map((m) => <th key={m} style={S.thNum}>{m}</th>)}
-                  <th style={S.thNum}>營隊報名</th>
+                  <th style={S.thNum}>暑假營隊報名</th>
                   <th style={S.thNum}>班上人數</th>
+                  <th style={S.thNum}>當時年級</th>
                 </tr>
               </thead>
               <tbody>
@@ -1023,6 +1026,7 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, locked, s
                       ))}
                       <td style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={m.campSigned ?? ""} onChange={(e) => setManual("campSigned", num(e.target.value))} /></td>
                       <td style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={m.campTotal ?? ""} onChange={(e) => setManual("campTotal", num(e.target.value))} /></td>
+                      <td style={S.tdNum}><input style={S.smallInput} type="number" min="1" max="6" disabled={locked} placeholder={String(Math.max(1, (classGrades[t.id] || 1) - 1))} value={m.grade ?? ""} onChange={(e) => setManual("grade", num(e.target.value))} /></td>
                     </tr>
                   );
                 })}
@@ -1031,6 +1035,44 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, locked, s
           </div>
         </>
       )}
+
+      <h3 style={S.subTitle}>營隊報名（手填）</h3>
+      <p style={S.hint}>填班上報名人數／班上人數；年級預設看班級名稱（G5A = 5），可以改。目標：三年級 {draft.campTargets?.[3]}%、四年級 {draft.campTargets?.[4]}%、五年級 {draft.campTargets?.[5]}%、六年級 {draft.campTargets?.[6]}%。</p>
+      <div style={S.tableWrap}>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              <th style={S.th}>老師</th>
+              {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => (
+                [
+                  <th key={sem.key + "a"} style={S.thNum}>{sem.label}{sem.key === "fall" ? "寒假" : "暑假"}報名</th>,
+                  <th key={sem.key + "b"} style={S.thNum}>班上人數</th>,
+                  <th key={sem.key + "c"} style={S.thNum}>班級年級</th>,
+                ]
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {teachers.map((t) => (
+              <tr key={t.id}>
+                <td style={S.td}>{teacherName(t)}</td>
+                {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => {
+                  const cur = draft.manualCamp?.[sem.key]?.[t.id] || {};
+                  const put = (k, v) => set(["manualCamp"], {
+                    ...(draft.manualCamp || {}),
+                    [sem.key]: { ...(draft.manualCamp?.[sem.key] || {}), [t.id]: { ...cur, [k]: v } },
+                  });
+                  return [
+                    <td key={sem.key + "s"} style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={cur.signed ?? ""} onChange={(e) => put("signed", num(e.target.value))} /></td>,
+                    <td key={sem.key + "t"} style={S.tdNum}><input style={S.smallInput} type="number" min="0" disabled={locked} value={cur.total ?? ""} onChange={(e) => put("total", num(e.target.value))} /></td>,
+                    <td key={sem.key + "g"} style={S.tdNum}><input style={S.smallInput} type="number" min="1" max="6" disabled={locked} placeholder={String(classGrades[t.id] || "")} value={cur.grade ?? ""} onChange={(e) => put("grade", num(e.target.value))} /></td>,
+                  ];
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <h3 style={S.subTitle}>成績達標（從教室系統抄過來）</h3>
       <div style={S.settingsGrid}>
@@ -1051,7 +1093,10 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, locked, s
                 <tr>
                   <th style={S.th}>老師</th>
                   {[...(draft.springMode === "system" ? [info.spring] : []), info.fall].map((sem) => (
-                    <th key={sem.key} style={S.thNum} colSpan={2}>{sem.label}：達標／應考</th>
+                    [
+                      <th key={sem.key + "a"} style={S.thNum}>{sem.label} 達標人數</th>,
+                      <th key={sem.key + "b"} style={S.thNum}>應考人數</th>,
+                    ]
                   ))}
                 </tr>
               </thead>
@@ -1086,7 +1131,10 @@ function YearSettingsPanel({ info, settings, types, teachers, courses, locked, s
         {field("六年級", ["baseline", "6"], draft.baseline[6])}
         {field("任務逾期每天扣", ["perDay"], draft.perDay, 0.5)}
         {field("臨時請假／遲到每次扣", ["attendancePenalty"], draft.attendancePenalty)}
-        {field("營隊報名率目標 %", ["campTarget"], draft.campTarget)}
+        {field("營隊報名率目標：三年級 %", ["campTargets", "3"], draft.campTargets?.[3])}
+        {field("四年級 %", ["campTargets", "4"], draft.campTargets?.[4])}
+        {field("五年級 %", ["campTargets", "5"], draft.campTargets?.[5])}
+        {field("六年級 %", ["campTargets", "6"], draft.campTargets?.[6])}
         {field("平日課程報名率目標 %", ["courseTarget"], draft.courseTarget)}
         {field("事件 0 次得分", ["countScore", 0], draft.countScore[0])}
         {field("事件 1 次得分", ["countScore", 1], draft.countScore[1])}

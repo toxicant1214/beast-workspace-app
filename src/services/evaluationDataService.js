@@ -53,6 +53,8 @@ export function defaultYearSettings(year) {
     attendancePenalty: 10,
     baseline: { 1: 90, 2: 90, 3: 90, 4: 85, 5: 80, 6: 80 },
     campTarget: 70,
+    // 營隊（寒假算上學期、暑假算下學期）依年級設報名率目標，達標 100 分
+    campTargets: { 1: 70, 2: 70, 3: 70, 4: 70, 5: 65, 6: 65 },
     courseTarget: 50,
     courseIds: [],
     disabledIndicators: [],
@@ -88,7 +90,14 @@ export async function getYearSettings(year) {
   if (error) throw error;
   const own = data?.find((r) => r.key === `year:${year}`)?.value;
   const base = defaultYearSettings(year);
-  if (own) return { ...base, ...own, w: { ...base.w, ...(own.w || {}) }, baseline: { ...base.baseline, ...(own.baseline || {}) } };
+  if (own)
+    return {
+      ...base,
+      ...own,
+      w: { ...base.w, ...(own.w || {}) },
+      baseline: { ...base.baseline, ...(own.baseline || {}) },
+      campTargets: { ...base.campTargets, ...(own.campTargets || {}) },
+    };
   // 第一次打開：沿用舊版設定裡的月薪、組長、月數
   const legacy = data?.find((r) => r.key === "year_end")?.value || {};
   return {
@@ -273,20 +282,13 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   }
   const examRate = examTotal ? clamp((examPass / examTotal) * 100) : null;
 
-  // ---- D 營隊報名率（營隊開始日落在學期內）----
-  const campStudentName = new Map(sources.campStudents.map((c) => [c.id, (c.chinese_name || "").trim()]));
-  const campsWithRegs = new Set(sources.campRegs.map((r) => r.camp_id));
-  const camps = sources.camps.filter((c) => inRange(c.start_date, range) && campsWithRegs.has(c.id));
-  let campSigned = 0;
-  let campBase = 0;
-  for (const camp of camps) {
-    const names = new Set(sources.campRegs.filter((r) => r.camp_id === camp.id).map((r) => campStudentName.get(r.student_id)).filter(Boolean));
-    const day = camp.start_date < todayText() ? camp.start_date : [range.to, todayText()].sort()[0];
-    const active = [...activeOn(day)];
-    campBase += active.length;
-    campSigned += active.filter((id) => names.has((studentMap.get(id)?.chinese_name || "").trim())).length;
-  }
-  const campRate = camps.length && campBase ? (campSigned / campBase) * 100 : null;
+  // ---- D 營隊報名率：主管手填（報名人數／班上人數），目標看班級年級（G5A = 5 年級）----
+  const campEntry = settings.manualCamp?.[range.key]?.[teacherId] || {};
+  const campGrade = Number(campEntry.grade) || teacherClassGrade(teacherId, sources) || null;
+  const campTarget = Number(settings.campTargets?.[campGrade] ?? settings.campTarget ?? 70);
+  const campSigned = Number(campEntry.signed) || 0;
+  const campBase = Number(campEntry.total) || 0;
+  const campScoreValue = campBase ? clamp(((campSigned / campBase) * 100 / campTarget) * 100) : null;
 
   // ---- D 平日課程報名率 ----
   const courseFilter = new Set(settings.courseIds || []);
@@ -348,7 +350,15 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
       ind("inspect_env", "教室環境抽查", "2027 起實施", null, "抽查"),
     ],
     D: [
-      ind("camp", "營隊報名率", camps.length ? `${campSigned}/${campBase}（${pct(campSigned, campBase)}%）・目標 ${settings.campTarget}%` : "這學期的營隊在系統裡沒有報名資料", campRate === null ? null : clamp((campRate / Number(settings.campTarget || 100)) * 100), "系統"),
+      ind(
+        "camp",
+        range.key === "fall" ? "寒假營隊報名率" : "暑假營隊報名率",
+        campBase
+          ? `${campSigned}/${campBase}（${pct(campSigned, campBase)}%）・${campGrade || "?"} 年級班目標 ${campTarget}%`
+          : "尚未填寫（年度設定）",
+        campScoreValue,
+        "手動"
+      ),
       ind("course", "平日課程報名率", courseStudentIds.size ? `${courseSigned}/${courseActive.length}（${pct(courseSigned, courseActive.length)}%）・目標 ${settings.courseTarget}%` : "系統裡還沒有這學期的課程報名資料", courseRate === null ? null : clamp((courseRate / Number(settings.courseTarget || 100)) * 100), "系統"),
     ],
   };
@@ -382,19 +392,22 @@ function weighted(catScores, w) {
 }
 
 /** 手動學期（2026 年度的 114 下）：每月考核平均代替 A＋B＋C，營隊報名率當 D */
-export function computeManualSemester(teacherId, settings) {
+export function computeManualSemester(teacherId, settings, sources) {
   const m = settings.manual?.[teacherId] || {};
   const monthly = (m.monthly || []).map(Number).filter((x) => !Number.isNaN(x) && x > 0);
   const monthlyAvg = avg(monthly);
   const campTotal = Number(m.campTotal) || 0;
   const campRate = campTotal ? (Number(m.campSigned || 0) / campTotal) * 100 : null;
-  const campScore = campRate === null ? null : clamp((campRate / Number(settings.campTarget || 100)) * 100);
+  const classGrade = sources ? teacherClassGrade(teacherId, sources) : null;
+  const grade = Number(m.grade) || (classGrade ? Math.max(1, classGrade - 1) : null);
+  const target = Number(settings.campTargets?.[grade] ?? settings.campTarget ?? 70);
+  const campScore = campRate === null ? null : clamp((campRate / target) * 100);
   const wD = Number(settings.w.D || 0);
   const wABC = Number(settings.w.A || 0) + Number(settings.w.B || 0) + Number(settings.w.C || 0);
   let score = null;
   if (monthlyAvg !== null && campScore !== null) score = (monthlyAvg * wABC + campScore * wD) / (wABC + wD);
   else if (monthlyAvg !== null) score = monthlyAvg;
-  return { mode: "manual", monthly: m.monthly || [], monthlyAvg, campSigned: m.campSigned, campTotal: m.campTotal, campRate, campScore, score };
+  return { mode: "manual", monthly: m.monthly || [], monthlyAvg, campSigned: m.campSigned, campTotal: m.campTotal, campRate, campScore, campTarget: target, campGrade: grade, score };
 }
 
 /** 一位老師的年度結果 */
@@ -402,7 +415,7 @@ export function computeTeacherYear({ teacher, info, sources, events, assignments
   const common = { sources, events, assignments, exclusions, settings, typeMap, teacherId: teacher.id };
   const spring =
     settings.springMode === "manual"
-      ? computeManualSemester(teacher.id, settings)
+      ? computeManualSemester(teacher.id, settings, sources)
       : computeSystemSemester({ ...common, range: info.spring });
   const fall = computeSystemSemester({ ...common, range: info.fall });
 
@@ -442,3 +455,16 @@ export const TOGGLEABLE_INDICATORS = [
   { key: "camp", name: "D 營隊報名率" },
   { key: "course", name: "D 平日課程報名率" },
 ];
+
+/** 老師帶的班級年級：看班級名稱（G5A → 5）；帶多班取人數最多的班 */
+export function teacherClassGrade(teacherId, sources) {
+  const classIds = sources.classTeachers.filter((r) => r.teacher_id === teacherId).map((r) => r.class_id);
+  const size = (id) => sources.classStudents.filter((r) => r.class_id === id && !r.left_at).length;
+  const ordered = [...classIds].sort((a, b) => size(b) - size(a));
+  for (const id of ordered) {
+    const cls = sources.classes.find((c) => c.id === id);
+    const g = parseGrade(cls?.class_name);
+    if (g) return g;
+  }
+  return null;
+}
