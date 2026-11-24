@@ -7,6 +7,7 @@ import {
   computeAdminCooperation,
   createEvent,
   factorForScore,
+  getAdminExclusions,
   getEventTypes,
   getEvents,
   getYearEndSettings,
@@ -14,6 +15,7 @@ import {
   resolveDispute,
   saveEventType,
   saveYearEndSettings,
+  setAdminExclusion,
   summarizeTeacher,
   syncEvaluation,
   voidEvent,
@@ -243,6 +245,86 @@ function DisputeCard({ event, teacher, onDone }) {
 }
 
 // ---------------------------------------------------------
+// 行政配合明細（可設定不列入計算）
+// ---------------------------------------------------------
+
+function AdminItemList({ items, perDay, onToggle, onlyProblems = false }) {
+  const [busyId, setBusyId] = useState("");
+  const list = onlyProblems
+    ? items.filter((i) => i.status === "late" || i.status === "open" || i.excluded)
+    : items;
+
+  async function toggle(item) {
+    let note = "";
+    if (!item.excluded) {
+      note = window.prompt(`「${item.title}」不列入計算的原因（可留白）`, "") ?? null;
+      if (note === null) return;
+    }
+    try {
+      setBusyId(item.id);
+      await onToggle(item, !item.excluded, note);
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  if (!list.length) {
+    return <div style={S.empty}>{onlyProblems ? "沒有逾期的任務。" : "這段期間沒有任務。"}</div>;
+  }
+
+  return (
+    <div style={S.list}>
+      {list.map((item) => (
+        <div key={item.id} style={{ ...S.listRow, ...(item.excluded ? S.voidRow : {}) }}>
+          <div style={S.listDate}>{item.deadline.slice(5).replace("-", "/")}</div>
+          <div style={S.listMain}>
+            <div>{item.title}</div>
+            <div style={S.muted}>
+              截止 {item.deadline.replace(/-/g, "/")}
+              {item.completedDay && `・回報 ${item.completedDay.replace(/-/g, "/")}`}
+            </div>
+            {item.excluded && (
+              <div style={S.muted}>不列入計算{item.excludeNote ? `：${item.excludeNote}` : ""}</div>
+            )}
+          </div>
+          <div style={S.listSide}>
+            {item.status === "ontime" && <span style={{ ...S.chip, ...S.chipOk }}>準時完成</span>}
+            {item.status === "late" && <span style={{ ...S.chip, ...S.chipAlert }}>逾期 {item.days} 天完成</span>}
+            {item.status === "open" && <span style={{ ...S.chip, ...S.chipAlert }}>已逾期 {item.days} 天・未回報</span>}
+            {item.status === "upcoming" && <span style={{ ...S.chip, ...S.chipMuted }}>未到期</span>}
+            {item.days > 0 && !item.excluded && <strong style={S.minusText}>{pointsText(-item.days * perDay)}</strong>}
+            {(item.days > 0 || item.excluded) && (
+              <button type="button" style={S.linkButton} disabled={busyId === item.id} onClick={() => toggle(item)}>
+                {item.excluded ? "恢復計算" : "不列入計算"}
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AdminDetailModal({ row, perDay, onToggle, onClose }) {
+  return (
+    <div style={S.overlay}>
+      <button type="button" aria-label="關閉" style={S.backdrop} onClick={onClose} />
+      <div style={{ ...S.modal, width: "min(620px, 100%)" }}>
+        <div style={S.rowBetween}>
+          <h3 style={S.modalTitle}>{teacherName(row.teacher)}・行政配合</h3>
+          <button type="button" style={S.ghostButton} onClick={onClose}>關閉</button>
+        </div>
+        <p style={S.hint}>
+          準時 {row.admin.onTime}/{row.admin.total}・累計逾期 {row.admin.overdueDays} 天・{pointsText(row.admin.score)} 分
+          {row.admin.excludedCount > 0 && `・${row.admin.excludedCount} 件不列入計算`}
+        </p>
+        <AdminItemList items={row.admin.items} perDay={perDay} onToggle={onToggle} onlyProblems />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------
 // 事件列表（時間軸）
 // ---------------------------------------------------------
 
@@ -316,6 +398,8 @@ export default function EvaluationWorkspace({ tab, periods }) {
   const [events, setEvents] = useState([]);
   const [settings, setSettings] = useState(null);
   const [assignments, setAssignments] = useState([]);
+  const [exclusions, setExclusions] = useState({});
+  const [adminDetailId, setAdminDetailId] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [message, setMessage] = useState({ text: "", error: false });
@@ -327,13 +411,15 @@ export default function EvaluationWorkspace({ tab, periods }) {
   const loadAll = useCallback(async () => {
     try {
       setLoadError("");
-      const [teacherRows, typeRows, eventRows, settingValue, assignments] = await Promise.all([
+      const [teacherRows, typeRows, eventRows, settingValue, assignments, exclusionValue] = await Promise.all([
         getActiveTeachers(),
         getEventTypes(),
         getEvents(range),
         getYearEndSettings(),
         getTeacherAssignments().catch(() => []),
+        getAdminExclusions().catch(() => ({})),
       ]);
+      setExclusions(exclusionValue || {});
       const staff = teacherRows.filter((t) => t.role !== "admin");
       setTeachers(staff);
       setTypes(typeRows);
@@ -380,12 +466,24 @@ export default function EvaluationWorkspace({ tab, periods }) {
         to: range.to,
         since: settings?.overdue_since,
         perDay,
+        exclusions,
       });
       return { teacher, ...summary, admin, score: summary.score + admin.score };
     });
     rows.sort((a, b) => b.score - a.score);
     return rows.map((row, index) => ({ ...row, rank: index + 1 }));
-  }, [teachers, events, baseScore, assignments, range, settings, perDay]);
+  }, [teachers, events, baseScore, assignments, range, settings, perDay, exclusions]);
+
+  async function toggleExclusion(item, excluded, note) {
+    try {
+      const next = await setAdminExclusion(item.id, excluded, note);
+      setExclusions(next);
+      showMessage(excluded ? `「${item.title}」已不列入計算。` : `「${item.title}」已恢復計算。`);
+    } catch (error) {
+      console.error("設定不列入計算失敗：", error);
+      showMessage("設定失敗，請稍後再試。", true);
+    }
+  }
 
   const disputes = events.filter((e) => e.status === "disputed" || e.status === "disputing");
 
@@ -435,7 +533,7 @@ export default function EvaluationWorkspace({ tab, periods }) {
           <section style={S.section}>
             <h2 style={S.sectionTitle}>分數排行</h2>
             <p style={S.hint}>
-              每人從 {baseScore} 分開始。行政配合直接從老師任務計算：每逾期 1 天扣 {perDay} 分，還沒回報的照目前天數算。
+              每人從 {baseScore} 分開始。行政配合直接從老師任務計算：截止日隔天起算，每逾期 1 天扣 {perDay} 分，還沒回報的照目前天數算。點行政配合可看明細、設定不列入計算。
               事件裡有異議、待主管處理的紀錄先不計分。
             </p>
             <div style={S.tableWrap}>
@@ -463,8 +561,15 @@ export default function EvaluationWorkspace({ tab, periods }) {
                         {leaders.has(row.teacher.id) && <span style={S.leaderTag}>組長</span>}
                         {row.disputed > 0 && <span style={S.alertTag}>異議 {row.disputed}</span>}
                       </td>
-                      <td style={S.tdNum}>
-                        <span style={S.muted}>
+                      <td
+                        style={{ ...S.tdNum, cursor: "pointer" }}
+                        title="點開看逾期明細"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAdminDetailId(row.teacher.id);
+                        }}
+                      >
+                        <span style={{ ...S.muted, textDecoration: "underline dotted" }}>
                           準時 {row.admin.onTime}/{row.admin.total}
                           {row.admin.overdueDays > 0 && `・逾期 ${row.admin.overdueDays} 天`}
                           {row.admin.open > 0 && `（${row.admin.open} 件未回報）`}
@@ -524,25 +629,7 @@ export default function EvaluationWorkspace({ tab, periods }) {
                       準時 {row?.admin.onTime ?? 0}/{row?.admin.total ?? 0}・累計逾期 {row?.admin.overdueDays ?? 0} 天
                     </span>
                   </h3>
-                  {row?.admin.items.length ? (
-                    <div style={S.list}>
-                      {row.admin.items.map((item) => (
-                        <div key={item.id} style={S.listRow}>
-                          <div style={S.listDate}>{item.deadline.slice(5).replace("-", "/")}</div>
-                          <div style={S.listMain}>{item.title}</div>
-                          <div style={S.listSide}>
-                            {item.status === "ontime" && <span style={{ ...S.chip, ...S.chipOk }}>準時完成</span>}
-                            {item.status === "late" && <span style={{ ...S.chip, ...S.chipAlert }}>逾期 {item.days} 天完成</span>}
-                            {item.status === "open" && <span style={{ ...S.chip, ...S.chipAlert }}>已逾期 {item.days} 天・未回報</span>}
-                            {item.status === "upcoming" && <span style={{ ...S.chip, ...S.chipMuted }}>未到期</span>}
-                            {item.days > 0 && <strong style={S.minusText}>{pointsText(-item.days * perDay)}</strong>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={S.empty}>這段期間沒有任務。</div>
-                  )}
+                  <AdminItemList items={row?.admin.items || []} perDay={perDay} onToggle={toggleExclusion} />
 
                   <h3 style={S.subTitle}>事件紀錄</h3>
                   <EventList events={own} teacherMap={teacherMap} onChanged={afterChange} />
@@ -561,6 +648,15 @@ export default function EvaluationWorkspace({ tab, periods }) {
           settings={settings}
           types={types}
           onSaved={(text, error) => afterChange(text, error)}
+        />
+      )}
+
+      {adminDetailId && ranking.find((r) => r.teacher.id === adminDetailId) && (
+        <AdminDetailModal
+          row={ranking.find((r) => r.teacher.id === adminDetailId)}
+          perDay={perDay}
+          onToggle={toggleExclusion}
+          onClose={() => setAdminDetailId("")}
         />
       )}
 

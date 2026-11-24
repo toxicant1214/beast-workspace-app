@@ -267,22 +267,18 @@ function localDateText(value) {
   return new Date(date - offset).toISOString().slice(0, 10);
 }
 
+/** 以日期計算：截止日當天完成算準時，隔天才算逾期第 1 天 */
 function lateDays(deadline, finishedAt) {
-  const diffMs = finishedAt - deadline;
-  if (diffMs <= 0) return 0;
-  const dayDiff = Math.round(
-    (new Date(`${localDateText(finishedAt)}T00:00:00`) -
-      new Date(`${localDateText(deadline)}T00:00:00`)) /
-      86400000
-  );
-  return Math.max(1, dayDiff, Math.floor(diffMs / 86400000));
+  const dueDay = new Date(`${localDateText(deadline)}T00:00:00`);
+  const doneDay = new Date(`${localDateText(finishedAt)}T00:00:00`);
+  return Math.max(0, Math.round((doneDay - dueDay) / 86400000));
 }
 
 /**
  * 某位老師在期間內的任務配合情形
  * 期間以任務截止日判斷；逾期每天扣 perDay 分（尚未回報的照目前天數算）
  */
-export function computeAdminCooperation(assignments, teacherId, { from, to, since, perDay = 1 } = {}) {
+export function computeAdminCooperation(assignments, teacherId, { from, to, since, perDay = 1, exclusions = {} } = {}) {
   const now = new Date();
   const start = [from, since].filter(Boolean).sort().pop();
   const items = [];
@@ -315,18 +311,22 @@ export function computeAdminCooperation(assignments, teacherId, { from, to, sinc
         status = "upcoming";
       }
 
+      const exclusion = exclusions[member.id];
       items.push({
         id: member.id,
         title: assignment.title || "未命名任務",
         deadline: deadlineDay,
+        completedDay: completedAt ? localDateText(completedAt) : null,
         status,
         days,
+        excluded: Boolean(exclusion),
+        excludeNote: exclusion?.note || "",
       });
     }
   }
 
   items.sort((a, b) => b.deadline.localeCompare(a.deadline));
-  const due = items.filter((i) => i.status !== "upcoming");
+  const due = items.filter((i) => i.status !== "upcoming" && !i.excluded);
   const onTime = due.filter((i) => i.status === "ontime").length;
   const late = due.filter((i) => i.status === "late").length;
   const open = due.filter((i) => i.status === "open").length;
@@ -334,6 +334,7 @@ export function computeAdminCooperation(assignments, teacherId, { from, to, sinc
 
   return {
     items,
+    excludedCount: items.filter((i) => i.excluded).length,
     total: due.length,
     onTime,
     late,
@@ -341,4 +342,33 @@ export function computeAdminCooperation(assignments, teacherId, { from, to, sinc
     overdueDays,
     score: -overdueDays * (Number(perDay) || 0),
   };
+}
+
+// ---------------------------------------------------------
+// 行政配合：主管設定「不列入計算」的任務
+// ---------------------------------------------------------
+
+export async function getAdminExclusions() {
+  const { data, error } = await supabase
+    .from(SETTINGS)
+    .select("value")
+    .eq("key", "admin_exclusions")
+    .maybeSingle();
+  if (error) throw error;
+  return data?.value || {};
+}
+
+export async function setAdminExclusion(memberId, excluded, note = "") {
+  const current = await getAdminExclusions();
+  const next = { ...current };
+  if (excluded) {
+    next[memberId] = { note: note.trim(), at: new Date().toISOString() };
+  } else {
+    delete next[memberId];
+  }
+  const { error } = await supabase
+    .from(SETTINGS)
+    .upsert({ key: "admin_exclusions", value: next, updated_at: new Date().toISOString() });
+  if (error) throw error;
+  return next;
 }
