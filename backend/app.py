@@ -34,6 +34,8 @@ from services.leave_workflow_service import (
     notify_substitutes_approved,
 )
 
+from services import evaluation_service
+
 
 app = Flask(__name__)
 CORS(app)
@@ -135,6 +137,53 @@ def complete_teacher_assignment_from_web(
         "already_completed": False,
         "member": result.get("member"),
     }
+
+
+# =========================================================
+# 教師考核｜事件通知、主管處理結果通知、逾期同步
+# 內容一律由後端從資料庫讀取，前端只傳事件 id。
+# =========================================================
+
+@app.route(
+    "/api/evaluation/events/<event_id>/notify",
+    methods=["POST"],
+)
+def evaluation_notify_event(event_id):
+    try:
+        result = evaluation_service.notify_event(event_id)
+    except Exception as error:
+        print("考核通知失敗：", error)
+        return {"success": False, "message": str(error)}, 500
+
+    return result, (200 if result.get("success") else 400)
+
+
+@app.route(
+    "/api/evaluation/events/<event_id>/notify-decision",
+    methods=["POST"],
+)
+def evaluation_notify_decision(event_id):
+    try:
+        result = evaluation_service.notify_decision(event_id)
+    except Exception as error:
+        print("考核處理結果通知失敗：", error)
+        return {"success": False, "message": str(error)}, 500
+
+    return result, (200 if result.get("success") else 400)
+
+
+@app.route(
+    "/api/evaluation/sync",
+    methods=["POST"],
+)
+def evaluation_sync():
+    try:
+        result = evaluation_service.sync_evaluation()
+    except Exception as error:
+        print("考核同步失敗：", error)
+        return {"success": False, "message": str(error)}, 500
+
+    return result, 200
 
 
 # =========================================================

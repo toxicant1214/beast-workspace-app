@@ -33,6 +33,7 @@ from services.workflow_service import (
     get_workflow,
     update_workflow,
 )
+from services import evaluation_service
 
 ADMIN_LINE_USER_ID = os.getenv("ADMIN_LINE_USER_ID")
 
@@ -45,6 +46,19 @@ def handle_text_message(text, reply_token, line_user_id):
     bound_teacher = get_teacher_by_line_user_id(
         line_user_id
     )
+
+    # -------------------------------------------------
+    # 教師考核：老師按了「有異議」後回覆的原因
+    # （沒有待填原因時回傳 None，照原本流程繼續）
+    # -------------------------------------------------
+    dispute_reply = evaluation_service.capture_dispute_reason(
+        bound_teacher,
+        text,
+    )
+
+    if dispute_reply:
+        reply_message(reply_token, dispute_reply)
+        return
 
     # -------------------------------------------------
     # 取消目前的新增流程

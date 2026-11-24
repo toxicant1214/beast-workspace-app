@@ -24,6 +24,7 @@ import ScoreManagementPage from "./pages/ScoreManagementPage";
 import CleaningPage from "./pages/CleaningPage";
 import LineReminderPage from "./pages/LineReminderPage";
 import FinancePage from "./pages/FinancePage";
+import TeacherEvaluationPage from "./pages/TeacherEvaluationPage";
 import LoginPage from "./pages/LoginPage";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AnnouncementPublicPage from "./pages/AnnouncementPublicPage";
@@ -124,6 +125,11 @@ const PAGE_OPTIONS = [
   {
     label: "LINE 提醒",
     key: "line_reminders",
+    adminOnly: true,
+  },
+  {
+    label: "教師考核",
+    key: "teacher_evaluation",
     adminOnly: true,
   },
   {
@@ -1139,6 +1145,20 @@ function Workspace() {
     ) {
       return (
         <LineReminderPage />
+      );
+    }
+
+
+    if (
+      activePage ===
+      "教師考核"
+    ) {
+      return (
+        <TeacherEvaluationPage
+          currentTeacher={
+            currentTeacher
+          }
+        />
       );
     }
 

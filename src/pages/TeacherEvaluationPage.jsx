@@ -11,6 +11,8 @@ import {
   updateEvaluationWorkPeriod,
 } from "../services/evaluationWorkPeriodService";
 
+import EvaluationWorkspace from "../components/evaluation/EvaluationWorkspace";
+
 
 const EMPTY_FORM = {
   name: "",
@@ -58,6 +60,9 @@ function TeacherEvaluationPage({
 
   const [error, setError] =
     useState("");
+
+  const [activeTab, setActiveTab] =
+    useState("overview");
 
   const [
     successMessage,
@@ -346,66 +351,41 @@ function TeacherEvaluationPage({
 
 
       <div style={styles.tabRow}>
-        <button
-          type="button"
-          style={{
-            ...styles.tab,
-            ...styles.activeTab,
-          }}
-        >
-          總覽
-        </button>
-
-        <button
-          type="button"
-          style={styles.tab}
-          disabled
-        >
-          個別教師
-          <span style={styles.soon}>
-            後續
-          </span>
-        </button>
-
-        <button
-          type="button"
-          style={styles.tab}
-          disabled
-        >
-          正式考核
-          <span style={styles.soon}>
-            後續
-          </span>
-        </button>
+        {[
+          ["overview", "總覽"],
+          ["teacher", "個別教師"],
+          ["yearend", "正式考核"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            style={{
+              ...styles.tab,
+              ...(activeTab === key
+                ? styles.activeTab
+                : {}),
+              cursor: "pointer",
+            }}
+            onClick={() =>
+              setActiveTab(key)
+            }
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
 
-      <div style={styles.heroCard}>
-        <div>
-          <div style={styles.heroLabel}>
-            Phase 1
-          </div>
+      {!loading && (
+        <EvaluationWorkspace
+          tab={activeTab}
+          periods={periods}
+        />
+      )}
 
-          <h2 style={styles.heroTitle}>
-            先把工作紀錄整理好
-          </h2>
 
-          <p style={styles.heroText}>
-            任務、公告、請假與遲到會依工作區間整理。
-            現階段先建立資料基礎，不進行正式計分。
-          </p>
-        </div>
-
-        <div style={styles.heroMetric}>
-          <strong style={styles.metricNumber}>
-            {activePeriods.length}
-          </strong>
-          <span style={styles.metricLabel}>
-            使用中的工作區間
-          </span>
-        </div>
-      </div>
-
+      {activeTab === "overview" && (
+      <>
 
       <div style={styles.sectionHeader}>
         <div>
@@ -497,6 +477,8 @@ function TeacherEvaluationPage({
           )}
         </div>
       )}
+      </>
+      )}
 
 
       {settingsOpen && (
@@ -528,8 +510,8 @@ function TeacherEvaluationPage({
                 <p
                   style={styles.drawerSubtitle}
                 >
-                  先管理工作區間。
-                  計分制度之後再逐步加入。
+                  管理工作區間。
+                  計分項目、級距與年終設定在「正式考核」分頁。
                 </p>
               </div>
 

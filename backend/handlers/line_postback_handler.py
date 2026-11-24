@@ -39,6 +39,7 @@ from services.workflow_service import (
     start_workflow,
     update_workflow,
 )
+from services import evaluation_service
 
 
 
@@ -58,6 +59,26 @@ def handle_postback(event):
     priority_option = values.get("priority", [""])[0]
     reminder_option = values.get("reminder", [""])[0]
     task_type = values.get("task_type", [""])[0]
+    event_id = values.get("event_id", [""])[0]
+
+    # 教師考核：老師確認／提出異議
+    if action == "evaluation_confirm" and event_id:
+        message = evaluation_service.handle_teacher_confirm(
+            event_id,
+            line_user_id,
+        )
+        if reply_token:
+            reply_message(reply_token, message)
+        return
+
+    if action == "evaluation_dispute" and event_id:
+        message = evaluation_service.handle_teacher_dispute(
+            event_id,
+            line_user_id,
+        )
+        if reply_token:
+            reply_message(reply_token, message)
+        return
 
     # 選擇要新增的任務類型
     if action == "select_task_type":
