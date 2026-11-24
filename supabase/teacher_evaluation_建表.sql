@@ -140,3 +140,24 @@ create policy "evaluation_settings_admin" on public.evaluation_settings
   for all to authenticated using (public.evaluation_is_admin()) with check (public.evaluation_is_admin());
 
 notify pgrst, 'reload schema';
+
+-- ===== v2：退班登記（原因＋是否列入留班率扣分）與加分類型 =====
+create table if not exists public.evaluation_withdrawals (
+  class_student_id uuid primary key references public.class_students(id) on delete cascade,
+  reason      text,
+  deduct      boolean not null default true,
+  updated_at  timestamptz default now()
+);
+alter table public.evaluation_withdrawals enable row level security;
+drop policy if exists "evaluation_withdrawals_admin" on public.evaluation_withdrawals;
+create policy "evaluation_withdrawals_admin" on public.evaluation_withdrawals
+  for all to authenticated using (public.evaluation_is_admin()) with check (public.evaluation_is_admin());
+
+insert into public.evaluation_event_types (name, direction, points, per_day, is_system, sort_order) values
+  ('挽回退班', 'plus', 3, false, false, 15),
+  ('口碑招生', 'plus', 3, false, false, 16),
+  ('跨部合作', 'plus', 1, false, false, 17)
+on conflict (name) do nothing;
+update public.evaluation_event_types set points = 1 where name in ('主動代班','支援活動') and points = 2;
+
+notify pgrst, 'reload schema';
