@@ -26,6 +26,8 @@ import {
   courseEnrolled,
   semesterBasics,
   singleDayBlock,
+  INSPECTION_TYPES,
+  inspectionScore,
   SUBJECTS,
   getYearSettings,
   loadEvaluationSources,
@@ -488,6 +490,31 @@ export default function EvaluationWorkspace({ tab }) {
     setSettings(next);
   }
 
+  async function saveInspection(insp) {
+    const latest = await getYearSettings(year);
+    if (latest.locked) throw new Error("locked");
+    const list = (latest.inspections || []).filter((i) => i.id !== insp.id);
+    list.push(insp);
+    list.sort((a, b) => b.date.localeCompare(a.date));
+    const next = { ...latest, inspections: list };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
+  async function deleteInspection(id) {
+    const latest = await getYearSettings(year);
+    const next = { ...latest, inspections: (latest.inspections || []).filter((i) => i.id !== id) };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
+  async function saveSemToggles(semKey, list) {
+    const latest = await getYearSettings(year);
+    const next = { ...latest, disabledBySem: { ...(latest.disabledBySem || {}), [semKey]: list } };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
   async function saveSingleDay(semKey, block) {
     const latest = await getYearSettings(year);
     if (latest.locked) throw new Error("locked");
@@ -596,7 +623,6 @@ export default function EvaluationWorkspace({ tab }) {
           年度總分 = {springLabel} × {settings.springWeight}% ＋ {fallLabel} × {100 - settings.springWeight}% ＋ 額外加分（上限 {settings.bonusCap}）
         </span>
         <span style={S.actionRow}>
-          <button type="button" style={S.ghostButton} onClick={() => setFormOpen(true)}>＋ 登記事件</button>
           {!locked && <button type="button" style={S.primaryButton} disabled={saving} onClick={lockYear}>年度結算封存</button>}
         </span>
       </div>
@@ -705,6 +731,34 @@ export default function EvaluationWorkspace({ tab }) {
         />
       )}
 
+      {tab === "log" && (
+        <DailyLogPanel
+          info={info}
+          settings={settings}
+          teachers={teachers}
+          events={events}
+          teacherMap={teacherMap}
+          locked={locked}
+          onNewEvent={() => setFormOpen(true)}
+          onSaveInspection={async (insp) => {
+            try {
+              await saveInspection(insp);
+              showMessage(`${insp.date} ${INSPECTION_TYPES[insp.type]} 已儲存。`);
+              return true;
+            } catch (error) {
+              console.error(error);
+              showMessage("抽查儲存失敗，請再試一次。", true);
+              return false;
+            }
+          }}
+          onDeleteInspection={async (id) => {
+            await deleteInspection(id);
+            showMessage("已刪除這次抽查。");
+          }}
+          onChanged={afterChange}
+        />
+      )}
+
       {tab === "data" && (
         <SemesterDataPanel
           info={info}
@@ -720,6 +774,7 @@ export default function EvaluationWorkspace({ tab }) {
           onWithdrawal={updateWithdrawal}
           onAutoSave={saveSemEntry}
           onSaveSingleDay={saveSingleDay}
+          onSaveSemToggles={saveSemToggles}
         />
       )}
 
@@ -1032,6 +1087,215 @@ function semProgress(entry, basics, manualMode, semKey) {
   return { done: missing.length === 0, missing };
 }
 
+// ---------------------------------------------------------
+// 日常登記：事件＋抽查
+// ---------------------------------------------------------
+
+function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, onNewEvent, onSaveInspection, onDeleteInspection, onChanged }) {
+  const [editing, setEditing] = useState(null);
+  const [filter, setFilter] = useState("");
+  const inspections = (settings.inspections || []).slice().sort((a, b) => b.date.localeCompare(a.date));
+  const shownEvents = filter ? events.filter((e) => e.teacher_id === filter) : events;
+
+  function newInspection(type) {
+    setEditing({ id: `i${Date.now()}`, type, date: todayText(), results: Object.fromEntries(teachers.map((t) => [t.id, { issues: [], custom: [] }])), isNew: true });
+  }
+
+  return (
+    <>
+      <section style={S.section}>
+        <h2 style={S.sectionTitle}>日常登記</h2>
+        <p style={S.hint}>事件可以回溯登記，日期填發生當天。扣分事件會推 LINE 給老師確認；抽查不通知老師。</p>
+        {!locked && (
+          <div style={{ ...S.actionRow, gap: 10 }}>
+            <button type="button" style={S.primaryButton} onClick={onNewEvent}>＋ 登記事件</button>
+            <button type="button" style={S.primaryButton} onClick={() => newInspection("hw")}>＋ 作業抽查</button>
+            <button type="button" style={S.primaryButton} onClick={() => newInspection("env")}>＋ 環境抽查</button>
+          </div>
+        )}
+      </section>
+
+      <section style={S.section}>
+        <h2 style={S.sectionTitle}>抽查紀錄</h2>
+        {inspections.length ? (
+          <div style={S.list}>
+            {inspections.map((insp) => {
+              const scores = teachers.map((t) => inspectionScore(insp, t.id, settings)).filter((x) => x !== null);
+              const low = teachers.filter((t) => {
+                const sc = inspectionScore(insp, t.id, settings);
+                return sc !== null && sc < 100;
+              });
+              return (
+                <div key={insp.id} style={S.listRow}>
+                  <div style={S.listDate}>{insp.date.slice(5).replace("-", "/")}</div>
+                  <div style={S.listMain}>
+                    <div><strong>{INSPECTION_TYPES[insp.type]}</strong>・全校平均 {scores.length ? r1(avg(scores)) : "—"}</div>
+                    <div style={S.muted}>{low.length ? `有扣分：${low.map((t) => `${teacherName(t)} ${Math.round(inspectionScore(insp, t.id, settings))}`).join("、")}` : "全部 100"}</div>
+                  </div>
+                  {!locked && (
+                    <span style={S.actionRow}>
+                      <button type="button" style={S.linkButton} onClick={() => setEditing(JSON.parse(JSON.stringify(insp)))}>編輯</button>
+                      <button type="button" style={S.linkButton} onClick={() => window.confirm("刪除這次抽查？") && onDeleteInspection(insp.id)}>刪除</button>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={S.empty}>還沒有抽查紀錄。</div>
+        )}
+      </section>
+
+      <section style={S.section}>
+        <div style={S.rowBetween}>
+          <h2 style={S.sectionTitle}>事件紀錄</h2>
+          <select style={S.rangeSelect} value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option value="">全部老師</option>
+            {teachers.map((t) => <option key={t.id} value={t.id}>{teacherName(t)}</option>)}
+          </select>
+        </div>
+        <EventList events={shownEvents} teacherMap={teacherMap} showTeacher onChanged={onChanged} />
+      </section>
+
+      {editing && (
+        <InspectionEditor
+          draft={editing}
+          settings={settings}
+          teachers={teachers}
+          info={info}
+          onClose={() => setEditing(null)}
+          onSave={async (insp) => {
+            const ok = await onSaveInspection(insp);
+            if (ok) setEditing(null);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function avg(list) {
+  return list.length ? list.reduce((a, b) => a + b, 0) / list.length : null;
+}
+
+function InspectionEditor({ draft: initial, settings, teachers, info, onClose, onSave }) {
+  const [draft, setDraft] = useState(() => {
+    const d = JSON.parse(JSON.stringify(initial));
+    delete d.isNew;
+    for (const t of teachers) if (!d.results[t.id]) d.results[t.id] = { issues: [], custom: [] };
+    return d;
+  });
+  const [saving, setSaving] = useState(false);
+  const items = settings.inspectionItems?.[draft.type] || [];
+  const inYear = draft.date >= info.range.from && draft.date <= info.range.to;
+
+  const putRes = (tid, patch) => setDraft((d) => ({ ...d, results: { ...d.results, [tid]: { ...d.results[tid], ...patch } } }));
+
+  return (
+    <div style={S.overlay}>
+      <button type="button" aria-label="關閉" style={S.backdrop} onClick={onClose} />
+      <div style={{ ...S.modal, width: "min(900px, 100%)" }}>
+        <h3 style={S.modalTitle}>{INSPECTION_TYPES[draft.type]}</h3>
+        <div style={S.actionRow}>
+          <label style={S.muted}>抽查日期 <input style={S.smallInput} type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></label>
+          {!inYear && <span style={S.minusText}>日期不在 {info.label} 範圍內</span>}
+        </div>
+        <p style={S.hint}>每位老師勾發現的問題，100 分往下扣；也可以直接填調整後分數（要寫原因）。老師那天不在就勾「本次不計」。</p>
+
+        {teachers.map((t) => {
+          const res = draft.results[t.id] || { issues: [], custom: [] };
+          const score = inspectionScore(draft, t.id, settings);
+          const issues = new Set(res.issues || []);
+          return (
+            <div key={t.id} style={{ ...S.catCard, ...(res.skip ? { opacity: 0.5 } : {}) }}>
+              <div style={S.rowBetween}>
+                <strong>{teacherName(t)}</strong>
+                <span style={S.actionRow}>
+                  <label style={S.muted}><input type="checkbox" checked={Boolean(res.skip)} onChange={(e) => putRes(t.id, { skip: e.target.checked })} /> 本次不計</label>
+                  <strong style={{ fontSize: 18, color: score !== null && score < 100 ? "#c0392b" : "#413832" }}>{score === null ? "—" : Math.round(score)}</strong>
+                </span>
+              </div>
+              {!res.skip && (
+                <>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                    {items.map((it) => (
+                      <button
+                        key={it.id}
+                        type="button"
+                        onClick={() => {
+                          const next = new Set(issues);
+                          if (next.has(it.id)) next.delete(it.id);
+                          else next.add(it.id);
+                          putRes(t.id, { issues: [...next] });
+                        }}
+                        style={{ ...S.chip, cursor: "pointer", padding: "6px 10px", fontSize: 13, ...(issues.has(it.id) ? S.chipAlert : S.chipMuted) }}
+                      >
+                        {it.name} −{it.points}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      style={{ ...S.chip, cursor: "pointer", padding: "6px 10px", fontSize: 13, ...S.chipMuted }}
+                      onClick={() => {
+                        const name = window.prompt("其他問題（例如：作業本遺失）", "");
+                        if (!name || !name.trim()) return;
+                        const pts = Number(window.prompt("扣幾分？", "5"));
+                        if (Number.isNaN(pts)) return;
+                        putRes(t.id, { custom: [...(res.custom || []), { name: name.trim(), points: pts }] });
+                      }}
+                    >
+                      ＋ 其他
+                    </button>
+                  </div>
+                  {(res.custom || []).length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                      {res.custom.map((c, i) => (
+                        <span key={i} style={{ ...S.chip, ...S.chipAlert, padding: "6px 10px", fontSize: 13 }}>
+                          {c.name} −{c.points}
+                          <button type="button" style={S.linkButton} onClick={() => putRes(t.id, { custom: res.custom.filter((_, j) => j !== i) })}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ ...S.actionRow, marginTop: 8 }}>
+                    <span style={S.muted}>調整後分數</span>
+                    <input style={S.smallInput} type="number" min="0" max="100" value={res.override ?? ""} onChange={(e) => putRes(t.id, { override: e.target.value === "" ? "" : Number(e.target.value) })} />
+                    {res.override !== undefined && res.override !== "" && (
+                      <input style={{ ...S.smallInput, width: 260, ...(String(res.note || "").trim() ? {} : { borderColor: "#c0392b" }) }} placeholder="調整原因（必填）" value={res.note ?? ""} onChange={(e) => putRes(t.id, { note: e.target.value })} />
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+
+        <div style={S.modalActions}>
+          <button type="button" style={S.ghostButton} onClick={onClose}>取消</button>
+          <button
+            type="button"
+            style={S.primaryButton}
+            disabled={saving}
+            onClick={async () => {
+              const missingNote = teachers.find((t) => {
+                const res = draft.results[t.id] || {};
+                return !res.skip && res.override !== undefined && res.override !== "" && !String(res.note || "").trim();
+              });
+              if (missingNote) return window.alert(`${teacherName(missingNote)} 有調整分數，請填原因。`);
+              setSaving(true);
+              await onSave(draft);
+              setSaving(false);
+            }}
+          >
+            {saving ? "儲存中…" : "儲存這次抽查"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** 單日課程總表：一列一班、一欄一堂課，整學期填一次（可從試算表貼上） */
 function SingleDayTable({ semKey, label, settings, teachers, sources, locked, onSave }) {
   const [block, setBlock] = useState(() => JSON.parse(JSON.stringify(singleDayBlock(settings, semKey))));
@@ -1259,7 +1523,7 @@ function SingleDayTable({ semKey, label, settings, teachers, sources, locked, on
   );
 }
 
-function SemesterDataPanel({ info, settings, teachers, sources, events, assignments, exclusions, typeMap, locked, onWithdrawal, onAutoSave, onSaveSingleDay }) {
+function SemesterDataPanel({ info, settings, teachers, sources, events, assignments, exclusions, typeMap, locked, onWithdrawal, onAutoSave, onSaveSingleDay, onSaveSemToggles }) {
   const [semKey, setSemKey] = useState("fall");
   const [teacherId, setTeacherId] = useState(teachers[0]?.id || "");
   const [draft, setDraft] = useState({});
@@ -1408,6 +1672,35 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
           ))}
         </div>
       </section>
+
+      {!manualMode && (
+        <section style={S.section}>
+          <h2 style={S.sectionTitle}>{range.label} 列入計分的指標</h2>
+          <p style={S.hint}>這學期沒辦法做的項目取消勾選，該類別會用其他指標平均。注意：事件類 0 次就是 100 分，沒有從頭記錄就該取消。</p>
+          <div style={S.actionRow}>
+            {TOGGLEABLE_INDICATORS.map((ind) => {
+              const off = new Set(settings.disabledBySem?.[semKey] || []);
+              const yearOff = (settings.disabledIndicators || []).includes(ind.key);
+              return (
+                <label key={ind.key} style={{ ...S.muted, display: "flex", gap: 4, alignItems: "center", opacity: yearOff ? 0.5 : 1 }}>
+                  <input
+                    type="checkbox"
+                    disabled={locked || yearOff}
+                    checked={!off.has(ind.key) && !yearOff}
+                    onChange={(e) => {
+                      const next = new Set(off);
+                      if (e.target.checked) next.delete(ind.key);
+                      else next.add(ind.key);
+                      onSaveSemToggles(semKey, [...next]);
+                    }}
+                  />
+                  {ind.name}{yearOff && "（年度設定已關）"}
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {!manualMode && (
         <SingleDayTable
@@ -1658,6 +1951,29 @@ function YearSettingsPanel({ info, settings, types, locked, saving, onSave }) {
         {field("事件 2 次以上得分", ["countScore", 2], draft.countScore[2])}
         {field("額外加分上限", ["bonusCap"], draft.bonusCap)}
       </div>
+
+      <h3 style={S.subTitle}>抽查項目與扣分</h3>
+      <p style={S.hint}>抽查時可勾選的問題；改名或扣分會影響這年度所有抽查的計算。</p>
+      {Object.entries(INSPECTION_TYPES).map(([type, title]) => {
+        const items = draft.inspectionItems?.[type] || [];
+        const setItems = (next) => set(["inspectionItems"], { ...(draft.inspectionItems || {}), [type]: next });
+        return (
+          <div key={type} style={{ marginBottom: 12 }}>
+            <strong style={{ fontSize: 14 }}>{title}</strong>
+            {items.map((it, i) => (
+              <div key={it.id} style={{ ...S.actionRow, marginTop: 4 }}>
+                <input style={{ ...S.smallInput, width: 260 }} disabled={locked} value={it.name} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                <span style={S.muted}>扣</span>
+                <input style={S.smallInput} type="number" min="0" disabled={locked} value={it.points} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, points: num(e.target.value) } : x)))} />
+                {!locked && <button type="button" style={S.linkButton} onClick={() => setItems(items.filter((_, j) => j !== i))}>刪除</button>}
+              </div>
+            ))}
+            {!locked && (
+              <button type="button" style={{ ...S.ghostButton, marginTop: 6 }} onClick={() => setItems([...items, { id: `${type}${Date.now()}`, name: "新項目", points: 5 }])}>＋ 新增項目</button>
+            )}
+          </div>
+        );
+      })}
 
       <h3 style={S.subTitle}>本年度列入計分的指標</h3>
       <p style={S.hint}>資料還不完整的指標可以先取消勾選，該類別會用其他指標平均。</p>

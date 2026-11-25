@@ -43,6 +43,29 @@ export function availableEvaluationYears(now = new Date()) {
 // 年度設定
 // ---------------------------------------------------------
 
+export const DEFAULT_INSPECTION_ITEMS = {
+  hw: [
+    { id: "hw1", name: "進度未達標", points: 10 },
+    { id: "hw2", name: "過多未批閱", points: 15 },
+    { id: "hw3", name: "批改有錯誤", points: 10 },
+    { id: "hw4", name: "批改不仔細（沒標出錯處）", points: 5 },
+    { id: "hw5", name: "訂正未完成／未追訂正", points: 10 },
+    { id: "hw6", name: "評量未訂正", points: 10 },
+    { id: "hw7", name: "缺交未追蹤、未登記", points: 10 },
+    { id: "hw8", name: "聯絡簿未簽閱、未填寫", points: 5 },
+  ],
+  env: [
+    { id: "env1", name: "地面髒亂、有垃圾", points: 10 },
+    { id: "env2", name: "垃圾桶滿了沒倒", points: 5 },
+    { id: "env3", name: "桌椅未歸位", points: 5 },
+    { id: "env4", name: "書櫃、物品凌亂", points: 5 },
+    { id: "env5", name: "白板沒擦", points: 5 },
+    { id: "env6", name: "布置或公告過期", points: 5 },
+    { id: "env7", name: "電器未關", points: 10 },
+    { id: "env8", name: "安全隱患（延長線、尖銳物、地面濕滑）", points: 15 },
+  ],
+};
+
 export function defaultYearSettings(year) {
   return {
     w: { A: 25, B: 30, C: 30, D: 15 },
@@ -59,6 +82,9 @@ export function defaultYearSettings(year) {
     courseTarget: 50,
     courseIds: [],
     disabledIndicators: [],
+    disabledBySem: { spring: [], fall: [] },
+    inspectionItems: JSON.parse(JSON.stringify(DEFAULT_INSPECTION_ITEMS)),
+    inspections: [],
     // 成績記在教室系統：預設由主管每學期手動填「達標人數／應考人數」
     examMode: "manual",
     manualExam: {},
@@ -256,6 +282,34 @@ const has = (v) => v !== undefined && v !== null && v !== "";
 
 export const SUBJECTS = ["國語", "數學", "社會", "自然"];
 
+// ---------------------------------------------------------
+// 抽查：全校一次做完，每位老師勾問題扣分，可手動調整
+// settings.inspections = [{ id, type:"hw"|"env", date, results:{ [tid]: { issues:[itemId], custom:[{name,points}], override, note, skip } } }]
+// ---------------------------------------------------------
+export const INSPECTION_TYPES = { hw: "作業／評量／訂正抽查", env: "教室環境抽查" };
+
+/** 一位老師在一次抽查的分數（不計或沒資料回傳 null） */
+export function inspectionScore(insp, teacherId, settings) {
+  const res = insp.results?.[teacherId];
+  if (!res || res.skip) return null;
+  if (has(res.override)) return clamp(Number(res.override));
+  const items = settings.inspectionItems?.[insp.type] || [];
+  const lost =
+    (res.issues || []).reduce((sum, id) => sum + (Number(items.find((i) => i.id === id)?.points) || 0), 0) +
+    (res.custom || []).reduce((sum, c) => sum + (Number(c.points) || 0), 0);
+  return clamp(100 - lost);
+}
+
+function inspectionIndicator(type, teacherId, range, settings) {
+  const list = (settings.inspections || []).filter((i) => i.type === type && inRange(i.date, range) && i.results?.[teacherId]);
+  const scores = list.map((i) => ({ date: i.date, score: inspectionScore(i, teacherId, settings) })).filter((x) => x.score !== null);
+  if (!scores.length) return { score: null, detail: "這學期還沒有抽查" };
+  return {
+    score: avg(scores.map((x) => x.score)),
+    detail: `${scores.length} 次：${scores.map((x) => `${x.date.slice(5).replace("-", "/")} ${Math.round(x.score)}`).join("・")}`,
+  };
+}
+
 /** 畢業班（下學期帶六年級）預設不計暑假營隊；可手動改 */
 export function campExcluded(entry, key, grade) {
   if (entry.noCamp !== undefined) return Boolean(entry.noCamp);
@@ -447,6 +501,10 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
     courseScore = ratio >= 1.25 ? 100 : ratio >= 1 ? 80 + ((ratio - 1) / 0.25) * 20 : ratio * 80;
   }
 
+  // ---- 抽查 ----
+  const hwInsp = inspectionIndicator("hw", teacherId, range, settings);
+  const envInsp = inspectionIndicator("env", teacherId, range, settings);
+
   // ---- 事件 ----
   const own = events.filter(
     (ev) => ev.teacher_id === teacherId && inRange(ev.event_date, range) && !["void", "disputed", "disputing"].includes(ev.status)
@@ -467,7 +525,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const categories = {
     A: [
       ind("exam", "班級平均成績", examDetail, examRate, "手動"),
-      ind("inspect_hw", "作業／訂正／評量抽查", "2027 起實施", null, "抽查"),
+      ind("inspect_hw", "作業／訂正／評量抽查", hwInsp.detail, hwInsp.score, "抽查"),
     ],
     B: [
       ind("retention", "留班率", `開學 ${b.start ?? "?"} 人＋進班 ${b.joins}・退班 ${b.leaves.length} 人（列入扣分 ${b.deducted}）`, retention, "系統"),
@@ -478,7 +536,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
       ind("tasks", "任務準時率", `準時 ${admin.onTime}/${admin.total}・逾期 ${admin.overdueDays} 天`, admin.total ? clamp(100 - admin.overdueDays * Number(settings.perDay || 0)) : null, "系統"),
       ind("attendance", "出勤", `臨時請假 ${lastMinuteLeaves + countOf("臨時請假")}・遲到 ${countOf("遲到")}`, clamp(100 - (lastMinuteLeaves + lateEvents) * Number(settings.attendancePenalty || 0)), "系統"),
       ind("mistakes", "工作疏失／沒交接", `${mistakes} 次`, countScore(mistakes, settings), "事件"),
-      ind("inspect_env", "教室環境抽查", "2027 起實施", null, "抽查"),
+      ind("inspect_env", "教室環境抽查", envInsp.detail, envInsp.score, "抽查"),
     ],
     D: [
       ind("camp", campName, noCamp ? "畢業班，不計暑假營隊" : campRate !== null ? `報名率 ${Math.round(campRate * 10) / 10}%・${b.grade || "?"} 年級目標 ${campTarget}%` : "尚未填寫（學期資料）", campScore, "手動"),
@@ -487,12 +545,14 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   };
 
   const disabled = new Set(settings.disabledIndicators || []);
+  const semOff = new Set(settings.disabledBySem?.[range.key] || []);
   for (const list of Object.values(categories)) {
     for (const item of list) {
-      if (disabled.has(item.key) && item.score !== null) {
+      if ((disabled.has(item.key) || semOff.has(item.key)) && item.score !== null) {
         item.score = null;
-        item.detail = `${item.detail}・本年度不列入計分`;
+        item.detail = `${item.detail}・${semOff.has(item.key) ? "本學期" : "本年度"}不列入計分`;
       }
+      if (semOff.has(item.key)) item.off = true;
     }
   }
 
@@ -568,13 +628,15 @@ export function computeTeacherYear({ teacher, info, sources, events, assignments
 
 /** 可以在年度設定關掉的系統指標 */
 export const TOGGLEABLE_INDICATORS = [
-  { key: "exam", name: "A 成績達標率" },
+  { key: "exam", name: "A 班級平均成績" },
+  { key: "inspect_hw", name: "A 作業／評量／訂正抽查" },
   { key: "retention", name: "B 留班率" },
   { key: "safety", name: "B 安全事件" },
   { key: "complaint", name: "B 家長客訴" },
   { key: "tasks", name: "C 任務準時率" },
   { key: "attendance", name: "C 出勤" },
   { key: "mistakes", name: "C 工作疏失／沒交接" },
+  { key: "inspect_env", name: "C 教室環境抽查" },
   { key: "camp", name: "D 營隊報名率" },
   { key: "course", name: "D 單日課程報名率" },
 ];
