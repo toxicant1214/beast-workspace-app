@@ -24,6 +24,7 @@ import {
   campExcluded,
   semEntry,
   semesterBasics,
+  singleDayBlock,
   SUBJECTS,
   getYearSettings,
   loadEvaluationSources,
@@ -486,6 +487,14 @@ export default function EvaluationWorkspace({ tab }) {
     setSettings(next);
   }
 
+  async function saveSingleDay(semKey, block) {
+    const latest = await getYearSettings(year);
+    if (latest.locked) throw new Error("locked");
+    const next = { ...latest, singleDay: { ...(latest.singleDay || {}), [semKey]: block } };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
   async function lockYear() {
     if (!window.confirm(`確定封存「${info.label}」？封存後分數、設定與年終金額都會鎖定。`)) return;
     const rows = results.map((r) => ({
@@ -709,6 +718,7 @@ export default function EvaluationWorkspace({ tab }) {
           saving={saving}
           onWithdrawal={updateWithdrawal}
           onAutoSave={saveSemEntry}
+          onSaveSingleDay={saveSingleDay}
         />
       )}
 
@@ -1021,7 +1031,188 @@ function semProgress(entry, basics, manualMode, semKey) {
   return { done: missing.length === 0, missing };
 }
 
-function SemesterDataPanel({ info, settings, teachers, sources, events, assignments, exclusions, typeMap, locked, onWithdrawal, onAutoSave }) {
+/** 單日課程總表：一列一班、一欄一堂課，整學期填一次（可從試算表貼上） */
+function SingleDayTable({ semKey, label, settings, teachers, sources, locked, onSave }) {
+  const [block, setBlock] = useState(() => JSON.parse(JSON.stringify(singleDayBlock(settings, semKey))));
+  const [status, setStatus] = useState("idle");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [open, setOpen] = useState(true);
+  const timer = useRef(null);
+  const pendingRef = useRef(null);
+
+  const teacherIdSet = new Set(teachers.map((t) => t.id));
+  const classMap = new Map((sources?.classes || []).map((c) => [c.id, c]));
+  const rows = [];
+  for (const ct of sources?.classTeachers || []) {
+    if (!teacherIdSet.has(ct.teacher_id) || !classMap.has(ct.class_id)) continue;
+    if (rows.some((r) => r.classId === ct.class_id)) continue;
+    rows.push({ classId: ct.class_id, className: classMap.get(ct.class_id).class_name || "", teacher: teachers.find((t) => t.id === ct.teacher_id) });
+  }
+  rows.sort((a, b) => a.className.localeCompare(b.className));
+
+  const flush = useCallback(async () => {
+    clearTimeout(timer.current);
+    const job = pendingRef.current;
+    if (!job) return;
+    pendingRef.current = null;
+    setStatus("saving");
+    try {
+      await onSave(semKey, job);
+      setStatus(pendingRef.current ? "saving" : "saved");
+    } catch (error) {
+      console.error("單日課程儲存失敗：", error);
+      pendingRef.current = pendingRef.current || job;
+      setStatus("error");
+    }
+  }, [onSave, semKey]);
+  useEffect(() => () => { flush(); }, [flush]);
+
+  const update = (next) => {
+    if (locked) return;
+    setBlock(next);
+    pendingRef.current = next;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(flush, 800);
+    setStatus("dirty");
+  };
+  const num = (v) => (v === "" ? "" : Number(v));
+
+  function addCourse() {
+    const name = window.prompt("課程名稱（例如：不要對我尖叫）", "");
+    if (!name || !name.trim()) return;
+    update({ ...block, courses: [...(block.courses || []), { id: `c${Date.now()}`, name: name.trim() }] });
+  }
+  function removeCourse(c) {
+    if (!window.confirm(`刪除「${c.name}」和它的報名人數？`)) return;
+    update({ ...block, courses: block.courses.filter((x) => x.id !== c.id) });
+  }
+
+  /** 貼上：第一列是標題（班別、課程名…），之後每列「班別 人數 人數…」；合計、佔比欄會自動略過 */
+  function applyPaste() {
+    const lines = pasteText.split(/\r?\n/).map((l) => l.split("\t").map((x) => x.trim())).filter((l) => l.some(Boolean));
+    if (lines.length < 2) return window.alert("至少要有標題列和一列班級。");
+    const header = lines[0];
+    const courseCols = [];
+    header.forEach((h, i) => {
+      if (i === 0 || !h || /合計|總計|佔比|占比|%/.test(h)) return;
+      courseCols.push({ index: i, name: h });
+    });
+    if (!courseCols.length) return window.alert("找不到課程欄位，請連標題列一起複製。");
+    const courses = [...(block.courses || [])];
+    const idFor = {};
+    for (const col of courseCols) {
+      let c = courses.find((x) => x.name === col.name);
+      if (!c) {
+        c = { id: `c${Date.now()}${col.index}`, name: col.name };
+        courses.push(c);
+      }
+      idFor[col.index] = c.id;
+    }
+    const byName = new Map(rows.map((r) => [r.className.toUpperCase(), r.classId]));
+    const counts = JSON.parse(JSON.stringify(block.counts || {}));
+    let matched = 0;
+    for (const line of lines.slice(1)) {
+      const cid = byName.get((line[0] || "").toUpperCase());
+      if (!cid) continue;
+      matched += 1;
+      counts[cid] = counts[cid] || {};
+      for (const col of courseCols) {
+        const v = line[col.index];
+        if (v !== undefined && v !== "" && !Number.isNaN(Number(v))) counts[cid][idFor[col.index]] = Number(v);
+      }
+    }
+    update({ courses, counts });
+    setPasteOpen(false);
+    setPasteText("");
+    window.alert(`已貼上 ${courseCols.length} 堂課、${matched} 個班。`);
+  }
+
+  const courses = block.courses || [];
+  const rowTotal = (cid) => courses.reduce((s2, c) => s2 + (Number(block.counts?.[cid]?.[c.id]) || 0), 0);
+  const statusText = { idle: "", dirty: "輸入中…", saving: "儲存中…", saved: "✓ 已自動儲存", error: "儲存失敗" }[status];
+
+  return (
+    <section style={S.section}>
+      <div style={S.rowBetween}>
+        <h2 style={{ ...S.sectionTitle, cursor: "pointer" }} onClick={() => setOpen(!open)}>
+          {open ? "▾" : "▸"} {label} 單日課程總表
+          <span style={{ ...S.chip, ...(courses.length ? S.chipOk : S.chipWarn) }}>{courses.length ? `${courses.length} 堂課` : "未填"}</span>
+        </h2>
+        <span style={status === "error" ? S.minusText : S.muted}>
+          {statusText}{status === "error" && <button type="button" style={S.linkButton} onClick={flush}>重試</button>}
+        </span>
+      </div>
+      {open && (
+        <>
+          <p style={S.hint}>整學期填一次：每班每堂課的報名人數（不是佔比）。系統會用「該班人次 ÷ 班上人數」跟全校平均比，算進每位老師的 D 招生。</p>
+          {!locked && (
+            <div style={S.actionRow}>
+              <button type="button" style={S.ghostButton} onClick={() => setPasteOpen(!pasteOpen)}>從試算表貼上</button>
+              <button type="button" style={S.ghostButton} onClick={addCourse}>＋ 新增課程</button>
+            </div>
+          )}
+          {pasteOpen && (
+            <div style={{ marginTop: 8 }}>
+              <textarea
+                style={{ ...S.input, width: "100%", minHeight: 120, fontFamily: "monospace", fontSize: 12 }}
+                placeholder={"在試算表選取「班別」到最後一堂課（含標題列）→ 複製 → 貼在這裡\n合計、佔比欄可以一起選，會自動略過"}
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+              />
+              <div style={S.actionRow}>
+                <button type="button" style={S.primaryButton} onClick={applyPaste}>套用</button>
+                <button type="button" style={S.ghostButton} onClick={() => setPasteOpen(false)}>取消</button>
+              </div>
+            </div>
+          )}
+          {courses.length > 0 ? (
+            <div style={{ ...S.tableWrap, marginTop: 8 }}>
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={S.th}>班別</th>
+                    <th style={S.th}>老師</th>
+                    {courses.map((c) => (
+                      <th key={c.id} style={S.thNum}>
+                        {c.name}
+                        {!locked && <button type="button" style={S.linkButton} onClick={() => removeCourse(c)}>刪除</button>}
+                      </th>
+                    ))}
+                    <th style={S.thNum}>合計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.classId}>
+                      <td style={S.td}>{r.className}</td>
+                      <td style={S.td}>{teacherName(r.teacher)}</td>
+                      {courses.map((c) => (
+                        <td key={c.id} style={S.tdNum}>
+                          <input style={S.smallInput} type="number" min="0" disabled={locked}
+                            value={block.counts?.[r.classId]?.[c.id] ?? ""}
+                            onChange={(e) => update({
+                              ...block,
+                              counts: { ...(block.counts || {}), [r.classId]: { ...(block.counts?.[r.classId] || {}), [c.id]: num(e.target.value) } },
+                            })} />
+                        </td>
+                      ))}
+                      <td style={{ ...S.tdNum, fontWeight: 700 }}>{rowTotal(r.classId)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p style={S.muted}>還沒有課程，按「從試算表貼上」或「新增課程」。</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function SemesterDataPanel({ info, settings, teachers, sources, events, assignments, exclusions, typeMap, locked, onWithdrawal, onAutoSave, onSaveSingleDay }) {
   const [semKey, setSemKey] = useState("fall");
   const [teacherId, setTeacherId] = useState(teachers[0]?.id || "");
   const [draft, setDraft] = useState({});
@@ -1171,6 +1362,19 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
         </div>
       </section>
 
+      {!manualMode && (
+        <SingleDayTable
+          key={semKey}
+          semKey={semKey}
+          label={range.label}
+          settings={settings}
+          teachers={teachers}
+          sources={sources}
+          locked={locked}
+          onSave={onSaveSingleDay}
+        />
+      )}
+
       {teacherId && (
         <section style={S.section}>
           <h2 style={S.sectionTitle}>
@@ -1306,10 +1510,10 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
                 </>
               ), `得分 ${r1(sem.campScore)}`)}
 
-              {!manualMode && step(6, "單日課程（系統自動算）", (
+              {!manualMode && step(6, "單日課程（看上方總表，自動算）", (
                 <p style={S.muted}>
                   班上學生報名 {sem.courseCount ?? 0} 人次／{basics.size ?? "?"} 人・全校平均 {Math.round((sem.courseAvg || 0) * 100)}%
-                  {sem.courseAvg ? "" : "（這學期還沒有單日課程報名，先不計分）"}
+                  {sem.courseAvg ? "" : "（上方「單日課程」總表還沒填，先不計分）"}
                 </p>
               ), `得分 ${r1(sem.courseScore)}`)}
             </>

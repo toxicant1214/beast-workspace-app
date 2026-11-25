@@ -317,6 +317,24 @@ export function semesterBasics({ teacherId, range, sources, settings, systemData
 }
 
 /** 單日課程：老師班上學生這學期報名的人次（同一人報兩堂算 2） */
+/** 單日課程手填總表：settings.singleDay[spring|fall] = { courses:[{id,name}], counts:{ [classId]: { [courseId]: n } } } */
+export function singleDayBlock(settings, key) {
+  return settings.singleDay?.[key] || { courses: [], counts: {} };
+}
+
+/** 一位老師這學期的單日課程人次：有手填總表就用總表（加總他帶的班），沒有才用系統報名資料 */
+function teacherCourseCount(teacherId, studentIds, range, sources, settings) {
+  const block = singleDayBlock(settings, range.key);
+  if (block.courses?.length) {
+    const classIds = sources.classTeachers.filter((r) => r.teacher_id === teacherId).map((r) => r.class_id);
+    return classIds.reduce(
+      (sum, cid) => sum + block.courses.reduce((s2, c) => s2 + (Number(block.counts?.[cid]?.[c.id]) || 0), 0),
+      0
+    );
+  }
+  return singleDayCount(studentIds, range, sources);
+}
+
 function singleDayCount(studentIds, range, sources) {
   const courseIds = new Set(
     sources.singleDay
@@ -333,7 +351,7 @@ export function singleDayAverage({ teacherIds, range, sources, settings }) {
   for (const tid of teacherIds) {
     const b = semesterBasics({ teacherId: tid, range, sources, settings });
     if (!b.taught || !b.size) continue;
-    count += singleDayCount(b.studentIds, range, sources);
+    count += teacherCourseCount(tid, b.studentIds, range, sources, settings);
     size += b.size;
   }
   return size ? count / size : 0;
@@ -387,7 +405,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const campScore = campRate === null ? null : clamp((campRate / campTarget) * 100);
 
   // ---- D 單日課程：系統自動算，跟全校平均比 ----
-  const courseCount = singleDayCount(b.studentIds, range, sources);
+  const courseCount = teacherCourseCount(teacherId, b.studentIds, range, sources, settings);
   const courseAvg = singleDayAverage({ teacherIds: teacherIds || [teacherId], range, sources, settings });
   let courseScore = null;
   if (b.size && courseAvg) {
