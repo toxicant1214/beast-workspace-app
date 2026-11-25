@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getActiveTeachers } from "../../services/teacherService";
 import { getTeacherAssignments } from "../../services/teacherAssignmentService";
@@ -472,6 +472,18 @@ export default function EvaluationWorkspace({ tab }) {
     }
   }
 
+  /** 自動儲存單一老師的學期資料：先讀最新設定再只改這一格，避免蓋掉別的視窗 */
+  async function saveSemEntry(semKey, teacherId, entry) {
+    const latest = await getYearSettings(year);
+    if (latest.locked) throw new Error("locked");
+    const next = {
+      ...latest,
+      semData: { ...(latest.semData || {}), [semKey]: { ...(latest.semData?.[semKey] || {}), [teacherId]: entry } },
+    };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
   async function lockYear() {
     if (!window.confirm(`確定封存「${info.label}」？封存後分數、設定與年終金額都會鎖定。`)) return;
     const rows = results.map((r) => ({
@@ -692,7 +704,7 @@ export default function EvaluationWorkspace({ tab }) {
           locked={locked}
           saving={saving}
           onWithdrawal={updateWithdrawal}
-          onSave={(next, text) => persist(next, text)}
+          onAutoSave={saveSemEntry}
         />
       )}
 
@@ -1002,7 +1014,7 @@ function semProgress(entry, basics, manualMode) {
   return { done: missing.length === 0, missing };
 }
 
-function SemesterDataPanel({ info, settings, teachers, sources, events, assignments, exclusions, typeMap, locked, saving, onWithdrawal, onSave }) {
+function SemesterDataPanel({ info, settings, teachers, sources, events, assignments, exclusions, typeMap, locked, onWithdrawal, onAutoSave }) {
   const [semKey, setSemKey] = useState("fall");
   const [teacherId, setTeacherId] = useState(teachers[0]?.id || "");
   const [draft, setDraft] = useState({});
@@ -1014,9 +1026,49 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
   useEffect(() => {
     if (!teacherId && teachers[0]) setTeacherId(teachers[0].id);
   }, [teachers, teacherId]);
+  // 自動儲存：停手 0.8 秒就存；換老師／換學期／離開頁面前先存掉
+  const [saveState, setSaveState] = useState({ status: "idle", at: null });
+  const pending = useRef(null);
+  const timer = useRef(null);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  const flush = useCallback(async () => {
+    clearTimeout(timer.current);
+    const job = pending.current;
+    if (!job) return;
+    pending.current = null;
+    setSaveState({ status: "saving", at: null });
+    try {
+      await onAutoSave(job.semKey, job.teacherId, job.entry);
+      setSaveState({ status: pending.current ? "saving" : "saved", at: new Date() });
+    } catch (error) {
+      console.error("自動儲存失敗：", error);
+      pending.current = pending.current || job;
+      setSaveState({ status: "error", at: null });
+    }
+  }, [onAutoSave]);
+
   useEffect(() => {
-    setDraft(JSON.parse(JSON.stringify(semEntry(settings, semKey, teacherId) || {})));
-  }, [settings, semKey, teacherId]);
+    // 換老師或學期：先存上一位，再載入這一位
+    flush();
+    setDraft(JSON.parse(JSON.stringify(semEntry(settingsRef.current, semKey, teacherId) || {})));
+  }, [semKey, teacherId, flush]);
+
+  useEffect(() => {
+    const warn = (e) => {
+      if (pending.current) {
+        flush();
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      flush();
+    };
+  }, [flush]);
 
   const withDraft = (base, tid, entry) => ({
     ...base,
@@ -1036,7 +1088,17 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
     ? computeManualSemester({ teacherId, range, sources, settings: liveSettings })
     : computeSystemSemester({ teacherId, range, sources, events, assignments, exclusions, settings: liveSettings, typeMap, teacherIds });
 
-  const put = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+  const put = (k, v) => {
+    if (locked) return;
+    setDraft((d) => {
+      const next = { ...d, [k]: v };
+      pending.current = { semKey, teacherId, entry: next };
+      clearTimeout(timer.current);
+      timer.current = setTimeout(flush, 800);
+      setSaveState({ status: "dirty", at: null });
+      return next;
+    });
+  };
   const num = (v) => (v === "" ? "" : Number(v));
   const numInput = (k, props = {}) => (
     <input style={S.smallInput} type="number" min="0" disabled={locked} value={draft[k] ?? ""} onChange={(e) => put(k, num(e.target.value))} {...props} />
@@ -1044,13 +1106,17 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
   const campLabel = semKey === "fall" ? "寒假營隊報名" : "暑假營隊報名";
   const taught = draft.taught !== false;
 
-  async function save(goNext) {
-    await onSave(withDraft(settings, teacherId, draft), `${teacherName(teachers.find((t) => t.id === teacherId))} 的 ${range.label} 資料已儲存。`);
-    if (goNext) {
-      const idx = teachers.findIndex((t) => t.id === teacherId);
-      if (teachers[idx + 1]) setTeacherId(teachers[idx + 1].id);
-    }
+  function nextTeacher() {
+    const idx = teachers.findIndex((t) => t.id === teacherId);
+    if (teachers[idx + 1]) setTeacherId(teachers[idx + 1].id);
   }
+  const saveText = {
+    idle: "邊填邊自動儲存",
+    dirty: "輸入中…",
+    saving: "儲存中…",
+    saved: `已自動儲存 ${saveState.at ? saveState.at.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" }) : ""}`,
+    error: "儲存失敗，請檢查網路",
+  }[saveState.status];
 
   function addMove() {
     if (!newMove.date || !newMove.name.trim()) return;
@@ -1214,8 +1280,11 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
             <span style={S.muted}>這學期試算 <strong style={{ fontSize: 18, color: "#413832" }}>{taught ? r1(sem.score) : "不計"}</strong></span>
             {!locked && (
               <span style={S.actionRow}>
-                <button type="button" style={S.ghostButton} disabled={saving} onClick={() => save(false)}>儲存</button>
-                <button type="button" style={S.primaryButton} disabled={saving} onClick={() => save(true)}>{saving ? "儲存中…" : "儲存，下一位老師"}</button>
+                <span style={saveState.status === "error" ? S.minusText : S.muted}>
+                  {saveState.status === "saved" ? "✓ " : ""}{saveText}
+                  {saveState.status === "error" && <button type="button" style={S.linkButton} onClick={flush}>重試</button>}
+                </span>
+                <button type="button" style={S.primaryButton} onClick={nextTeacher}>下一位老師 →</button>
               </span>
             )}
           </div>
