@@ -644,7 +644,9 @@ export default function EvaluationWorkspace({ tab }) {
                           {(locked ? row.isLeader : row.isLeader) && <span style={S.leaderTag}>組長</span>}
                         </td>
                         <td style={S.tdNum}>{r1(springScore)}</td>
-                        <td style={S.tdNum}>{r1(cats.A)}</td>
+                        <td style={S.tdNum} title={!locked && row.fall?.adjusted ? "本學期調整成績基準線" : undefined}>
+                          {r1(cats.A)}{!locked && row.fall?.adjusted && <span style={{ ...S.chip, ...S.chipWarn, marginLeft: 4 }}>調</span>}
+                        </td>
                         <td style={S.tdNum}>{r1(cats.B)}</td>
                         <td
                           style={{ ...S.tdNum, ...(cats.C !== null && cats.C < 60 ? S.minusText : {}), cursor: locked ? "default" : "pointer", textDecoration: locked ? "none" : "underline dotted" }}
@@ -1013,6 +1015,7 @@ function semProgress(entry, basics, manualMode, semKey) {
       SUBJECTS.every((n) => hasVal(entry[key]?.[n])) || (!entry[key] && (hasVal(entry[avgKey]) || hasVal(entry[tKey])));
     if (!examDone("mid", "midAvg", "midT")) missing.push("期中");
     if (!examDone("fin", "finAvg", "finT")) missing.push("期末");
+    if (hasVal(entry.baselineOverride) && !String(entry.baselineReason || "").trim()) missing.push("調整原因");
   }
   if (!campExcluded(entry, semKey, basics.grade) && !hasVal(entry.campRate) && !hasVal(entry.camp)) missing.push("營隊");
   return { done: missing.length === 0, missing };
@@ -1253,7 +1256,7 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
                         <span style={{ width: 40 }}>{label}</span>
                         {SUBJECTS.map((n) => {
                           const v = draft[key]?.[n];
-                          const low = hasVal(v) && basics.grade && Number(v) < Number(settings.baseline?.[basics.grade] ?? 0);
+                          const low = hasVal(v) && sem.baseline && Number(v) < sem.baseline;
                           return (
                             <label key={n} style={S.muted}>
                               {n}{" "}
@@ -1268,7 +1271,19 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
                         })}
                       </div>
                     ))}
-                    <p style={S.hint}>照教室系統各科班平均填。{basics.grade || "?"} 年級基準線 {settings.baseline?.[basics.grade] ?? "—"} 分：每次從 100 分起扣，哪一科低於基準線就扣「差幾分 × {settings.subjectPenalty ?? 3}」，高分科不補分；期中、期末再平均。</p>
+                    <p style={S.hint}>照教室系統各科班平均填。{sem.adjusted ? "本學期調整基準線" : `${basics.grade || "?"} 年級基準線`} {sem.baseline ?? "—"} 分：每次從 100 分起扣，哪一科低於基準線就扣「差幾分 × {settings.subjectPenalty ?? 3}」，高分科不補分；期中、期末再平均。</p>
+                    <div style={{ ...S.actionRow, marginTop: 4 }}>
+                      <span style={S.muted}>本學期基準線調整（例外）</span>
+                      <input style={S.smallInput} type="number" min="0" max="100" disabled={locked}
+                        placeholder={String(settings.baseline?.[basics.grade] ?? "")}
+                        value={draft.baselineOverride ?? ""} onChange={(e) => put("baselineOverride", num(e.target.value))} />
+                      {hasVal(draft.baselineOverride) && (
+                        <input style={{ ...S.smallInput, width: 260, ...(String(draft.baselineReason || "").trim() ? {} : { borderColor: "#c0392b" }) }}
+                          placeholder="調整原因（必填，例如：班上程度落後、起點平均 75）" disabled={locked}
+                          value={draft.baselineReason ?? ""} onChange={(e) => put("baselineReason", e.target.value)} />
+                      )}
+                    </div>
+                    {sem.adjusted && <p style={{ ...S.hint, color: "#b26a00" }}>⚠ 這位老師本學期用調整後的基準線，總覽與個別教師都會標示。</p>}
                   </>
                 ), `得分 ${r1(sem.examRate)}`)}
 

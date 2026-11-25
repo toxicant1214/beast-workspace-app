@@ -346,7 +346,9 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const e = b.entry;
 
   // ---- A 成績：期中、期末各四科班平均；每次從 100 起扣，每科低於年級基準線 1 分扣 subjectPenalty，高分科不補 ----
-  const baseline = Number(settings.baseline?.[b.grade] ?? 80);
+  const gradeBaseline = Number(settings.baseline?.[b.grade] ?? 80);
+  const adjusted = has(e.baselineOverride);
+  const baseline = adjusted ? Number(e.baselineOverride) : gradeBaseline;
   const penalty = Number(settings.subjectPenalty ?? 3);
   const examPart = (key, avgKey, pKey, tKey, label) => {
     const subj = e[key] || {};
@@ -370,7 +372,9 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const fin = examPart("fin", "finAvg", "finP", "finT", "期末");
   const examScores = [mid.score, fin.score].filter((x) => x !== null);
   const examRate = examScores.length ? avg(examScores) : null;
-  const examDetail = `${mid.text}・${fin.text}・${b.grade || "?"} 年級基準 ${baseline}`;
+  const examDetail = `${mid.text}・${fin.text}・${
+    adjusted ? `本學期調整基準 ${baseline}（年級 ${gradeBaseline}；${e.baselineReason || "未填原因"}）` : `${b.grade || "?"} 年級基準 ${baseline}`
+  }`;
 
   // ---- B 留班率：開學人數＋進班 為分母，列入扣分的退班為分子 ----
   const base = (b.start || 0) + b.joins;
@@ -444,7 +448,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
     Object.entries(categories).map(([k, list]) => [k, avg(list.filter((i) => i.score !== null).map((i) => i.score))])
   );
 
-  return { mode: "system", taught: true, categories, catScores, score: weighted(catScores, settings.w), basics: b, admin, campScore, courseScore, courseCount, courseAvg, examRate };
+  return { mode: "system", taught: true, categories, catScores, score: weighted(catScores, settings.w), basics: b, admin, campScore, courseScore, courseCount, courseAvg, examRate, baseline, adjusted };
 }
 
 function weighted(catScores, w) {
