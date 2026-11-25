@@ -21,8 +21,10 @@ import {
   computeSystemSemester,
   computeTeacherYear,
   evaluationYearInfo,
+  campExcluded,
   semEntry,
   semesterBasics,
+  SUBJECTS,
   getYearSettings,
   loadEvaluationSources,
   saveWithdrawal,
@@ -857,7 +859,7 @@ function SemesterCard({ title, sem, settings, perDay, onToggleExclusion, onWithd
         </div>
         <div style={S.catCard}>
           <div style={S.rowBetween}><strong>D 暑假營隊報名率</strong><span style={S.muted}><strong>{r1(sem.campScore)}</strong> 分</span></div>
-          <div style={S.muted}>{sem.campRate !== null && sem.campRate !== undefined ? `報名率 ${r1(sem.campRate)}%・${sem.campGrade || "?"} 年級班目標 ${sem.campTarget}%` : "尚未輸入"}</div>
+          <div style={S.muted}>{sem.noCamp ? "畢業班，不計暑假營隊" : sem.campRate !== null && sem.campRate !== undefined ? `報名率 ${r1(sem.campRate)}%・${sem.campGrade || "?"} 年級班目標 ${sem.campTarget}%` : "尚未輸入"}</div>
         </div>
       </div>
     );
@@ -999,7 +1001,7 @@ function YearEndPanel({ rows, locked, settings, saving, onSave }) {
 
 const hasVal = (v) => v !== undefined && v !== null && v !== "";
 
-function semProgress(entry, basics, manualMode) {
+function semProgress(entry, basics, manualMode, semKey) {
   if (entry.taught === false) return { done: true, missing: [] };
   const missing = [];
   if (!basics.grade) missing.push("年級");
@@ -1007,10 +1009,12 @@ function semProgress(entry, basics, manualMode) {
   if (manualMode) {
     if (!(entry.monthly || []).some(hasVal)) missing.push("每月考核");
   } else {
-    if (!hasVal(entry.midAvg) && !hasVal(entry.midT)) missing.push("期中");
-    if (!hasVal(entry.finAvg) && !hasVal(entry.finT)) missing.push("期末");
+    const examDone = (key, avgKey, tKey) =>
+      SUBJECTS.every((n) => hasVal(entry[key]?.[n])) || (!entry[key] && (hasVal(entry[avgKey]) || hasVal(entry[tKey])));
+    if (!examDone("mid", "midAvg", "midT")) missing.push("期中");
+    if (!examDone("fin", "finAvg", "finT")) missing.push("期末");
   }
-  if (!hasVal(entry.campRate) && !hasVal(entry.camp)) missing.push("營隊");
+  if (!campExcluded(entry, semKey, basics.grade) && !hasVal(entry.campRate) && !hasVal(entry.camp)) missing.push("營隊");
   return { done: missing.length === 0, missing };
 }
 
@@ -1079,7 +1083,7 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
   const cards = teachers.map((t) => {
     const entry = semEntry(settings, semKey, t.id);
     const basics = semesterBasics({ teacherId: t.id, range, sources, settings, systemData: !manualMode });
-    return { t, entry, ...semProgress(entry, basics, manualMode) };
+    return { t, entry, ...semProgress(entry, basics, manualMode, semKey) };
   });
   const doneCount = cards.filter((c) => c.done).length;
 
@@ -1242,25 +1246,47 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
                     ))}
                   </div>
                 ), `平均 ${r1(sem.monthlyAvg)}`)
-                : step(4, "班級平均成績（期中、期末）", (
+                : step(4, "班級平均成績（期中、期末，各四科）", (
                   <>
-                    <div style={S.actionRow}>
-                      <span>期中平均</span>{numInput("midAvg", { step: "0.1", max: "100" })}
-                      <span style={{ marginLeft: 12 }}>期末平均</span>{numInput("finAvg", { step: "0.1", max: "100" })}
-                    </div>
-                    <p style={S.hint}>照教室系統的班級平均分數填。{basics.grade || "?"} 年級基準線 {settings.baseline?.[basics.grade] ?? "—"} 分：達標 100 分，每低 1 分扣 {settings.examPenalty ?? 5} 分，兩次平均。</p>
+                    {[["mid", "期中"], ["fin", "期末"]].map(([key, label]) => (
+                      <div key={key} style={{ ...S.actionRow, marginBottom: 6 }}>
+                        <span style={{ width: 40 }}>{label}</span>
+                        {SUBJECTS.map((n) => {
+                          const v = draft[key]?.[n];
+                          const low = hasVal(v) && basics.grade && Number(v) < Number(settings.baseline?.[basics.grade] ?? 0);
+                          return (
+                            <label key={n} style={S.muted}>
+                              {n}{" "}
+                              <input
+                                style={{ ...S.smallInput, ...(low ? { borderColor: "#c0392b", color: "#c0392b" } : {}) }}
+                                type="number" min="0" max="100" step="0.1" disabled={locked}
+                                value={v ?? ""}
+                                onChange={(e) => put(key, { ...(draft[key] || {}), [n]: num(e.target.value) })}
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ))}
+                    <p style={S.hint}>照教室系統各科班平均填。{basics.grade || "?"} 年級基準線 {settings.baseline?.[basics.grade] ?? "—"} 分：每次從 100 分起扣，哪一科低於基準線就扣「差幾分 × {settings.subjectPenalty ?? 3}」，高分科不補分；期中、期末再平均。</p>
                   </>
                 ), `得分 ${r1(sem.examRate)}`)}
 
               {step(5, campLabel, (
                 <>
-                  <div style={S.actionRow}>
+                  {semKey === "spring" && (
+                    <label style={{ ...S.muted, display: "flex", gap: 4, alignItems: "center", marginBottom: 6 }}>
+                      <input type="checkbox" disabled={locked} checked={campExcluded(draft, semKey, basics.grade)} onChange={(e) => put("noCamp", e.target.checked)} />
+                      畢業班，不計暑假營隊（六年級預設勾選；五六混班請取消，填五年級的報名率）
+                    </label>
+                  )}
+                  {!campExcluded(draft, semKey, basics.grade) && <div style={S.actionRow}>
                     <span>報名率</span>
                     <input style={S.smallInput} type="number" min="0" max="100" step="0.1" disabled={locked}
                       placeholder={hasVal(draft.camp) && basics.size ? String(Math.round((draft.camp / basics.size) * 1000) / 10) : ""}
                       value={draft.campRate ?? ""} onChange={(e) => put("campRate", num(e.target.value))} />
                     <span>%</span>
-                  </div>
+                  </div>}
                   <p style={S.hint}>照報表填班級報名率；{basics.grade || "?"} 年級目標 {settings.campTargets?.[basics.grade] ?? "—"}%，達標 100 分，未達按比例。</p>
                 </>
               ), `得分 ${r1(sem.campScore)}`)}
@@ -1354,7 +1380,7 @@ function YearSettingsPanel({ info, settings, types, locked, saving, onSave }) {
         {field("四年級", ["baseline", "4"], draft.baseline[4])}
         {field("五年級", ["baseline", "5"], draft.baseline[5])}
         {field("六年級", ["baseline", "6"], draft.baseline[6])}
-        {field("成績低於基準每 1 分扣", ["examPenalty"], draft.examPenalty, 0.5)}
+        {field("成績每科低於基準 1 分扣", ["subjectPenalty"], draft.subjectPenalty, 0.5)}
         {field("任務逾期每天扣", ["perDay"], draft.perDay, 0.5)}
         {field("臨時請假／遲到每次扣", ["attendancePenalty"], draft.attendancePenalty)}
         {field("營隊報名率目標：三年級 %", ["campTargets", "3"], draft.campTargets?.[3])}

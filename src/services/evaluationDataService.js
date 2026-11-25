@@ -52,7 +52,7 @@ export function defaultYearSettings(year) {
     perDay: 1,
     attendancePenalty: 10,
     baseline: { 1: 90, 2: 90, 3: 90, 4: 85, 5: 80, 6: 80 },
-    examPenalty: 5,
+    subjectPenalty: 3,
     campTarget: 70,
     // 營隊（寒假算上學期、暑假算下學期）依年級設報名率目標，達標 100 分
     campTargets: { 1: 70, 2: 70, 3: 70, 4: 70, 5: 65, 6: 65 },
@@ -254,6 +254,14 @@ export function semEntry(settings, key, teacherId) {
 
 const has = (v) => v !== undefined && v !== null && v !== "";
 
+export const SUBJECTS = ["國語", "數學", "社會", "自然"];
+
+/** 畢業班（下學期帶六年級）預設不計暑假營隊；可手動改 */
+export function campExcluded(entry, key, grade) {
+  if (entry.noCamp !== undefined) return Boolean(entry.noCamp);
+  return key === "spring" && Number(grade) === 6;
+}
+
 /** 營隊報名率（%）：直接填的報名率優先；舊資料用報名人數 ÷ 人數換算 */
 export function campRateOf(entry, size) {
   if (has(entry.campRate)) return Number(entry.campRate);
@@ -337,21 +345,29 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   if (!b.taught) return { mode: "system", taught: false, score: null, categories: {}, catScores: {}, basics: b, admin: { items: [] } };
   const e = b.entry;
 
-  // ---- A 成績：期中、期末各填班平均；達年級基準線 100 分，每低 1 分扣 examPenalty（舊資料：達標人數／應考人數）----
+  // ---- A 成績：期中、期末各四科班平均；每次從 100 起扣，每科低於年級基準線 1 分扣 subjectPenalty，高分科不補 ----
   const baseline = Number(settings.baseline?.[b.grade] ?? 80);
-  const penalty = Number(settings.examPenalty ?? 5);
-  const examPart = (avgKey, pKey, tKey, label) => {
+  const penalty = Number(settings.subjectPenalty ?? 3);
+  const examPart = (key, avgKey, pKey, tKey, label) => {
+    const subj = e[key] || {};
+    const filled = SUBJECTS.filter((n) => has(subj[n]));
+    if (filled.length) {
+      const lows = filled.filter((n) => Number(subj[n]) < baseline);
+      const lost = lows.reduce((sum, n) => sum + (baseline - Number(subj[n])) * penalty, 0);
+      const lowText = lows.length ? lows.map((n) => `${n} ${subj[n]}`).join("、") : "四科都達標";
+      return { score: clamp(100 - lost), text: `${label}：${lowText}${filled.length < SUBJECTS.length ? `（只填 ${filled.length} 科）` : ""}` };
+    }
     if (has(e[avgKey])) {
       const v = Number(e[avgKey]);
-      return { score: clamp(100 - Math.max(0, baseline - v) * penalty), text: `${label} ${v}` };
+      return { score: clamp(100 - Math.max(0, baseline - v) * penalty), text: `${label} 平均 ${v}` };
     }
     if (has(e[tKey]) && Number(e[tKey]) > 0) {
       return { score: clamp((Math.min(Number(e[pKey]) || 0, Number(e[tKey])) / Number(e[tKey])) * 100), text: `${label} ${e[pKey] || 0}/${e[tKey]}` };
     }
     return { score: null, text: `${label}未填` };
   };
-  const mid = examPart("midAvg", "midP", "midT", "期中");
-  const fin = examPart("finAvg", "finP", "finT", "期末");
+  const mid = examPart("mid", "midAvg", "midP", "midT", "期中");
+  const fin = examPart("fin", "finAvg", "finP", "finT", "期末");
   const examScores = [mid.score, fin.score].filter((x) => x !== null);
   const examRate = examScores.length ? avg(examScores) : null;
   const examDetail = `${mid.text}・${fin.text}・${b.grade || "?"} 年級基準 ${baseline}`;
@@ -362,7 +378,8 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
 
   // ---- D 營隊：報名人數 ÷ 目前人數，目標看帶班年級 ----
   const campTarget = Number(settings.campTargets?.[b.grade] ?? settings.campTarget ?? 70);
-  const campRate = campRateOf(e, b.size);
+  const noCamp = campExcluded(e, range.key, b.grade);
+  const campRate = noCamp ? null : campRateOf(e, b.size);
   const campScore = campRate === null ? null : clamp((campRate / campTarget) * 100);
 
   // ---- D 單日課程：系統自動算，跟全校平均比 ----
@@ -408,7 +425,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
       ind("inspect_env", "教室環境抽查", "2027 起實施", null, "抽查"),
     ],
     D: [
-      ind("camp", campName, campRate !== null ? `報名率 ${Math.round(campRate * 10) / 10}%・${b.grade || "?"} 年級目標 ${campTarget}%` : "尚未填寫（學期資料）", campScore, "手動"),
+      ind("camp", campName, noCamp ? "畢業班，不計暑假營隊" : campRate !== null ? `報名率 ${Math.round(campRate * 10) / 10}%・${b.grade || "?"} 年級目標 ${campTarget}%` : "尚未填寫（學期資料）", campScore, "手動"),
       ind("course", "單日課程報名率", b.size ? `${courseCount} 人次／${b.size} 人（${pct(courseCount, b.size)}%）・全校平均 ${Math.round(courseAvg * 100)}%` : "需要班上人數", courseAvg ? courseScore : null, "系統"),
     ],
   };
@@ -449,14 +466,15 @@ export function computeManualSemester({ teacherId, range, sources, settings }) {
   const monthly = (e.monthly || []).map(Number).filter((x) => !Number.isNaN(x) && x > 0);
   const monthlyAvg = avg(monthly);
   const target = Number(settings.campTargets?.[b.grade] ?? settings.campTarget ?? 70);
-  const campRate = campRateOf(e, b.size);
+  const noCamp = campExcluded(e, range.key, b.grade);
+  const campRate = noCamp ? null : campRateOf(e, b.size);
   const campScore = campRate === null ? null : clamp((campRate / target) * 100);
   const wD = Number(settings.w.D || 0);
   const wABC = Number(settings.w.A || 0) + Number(settings.w.B || 0) + Number(settings.w.C || 0);
   let score = null;
   if (monthlyAvg !== null && campScore !== null) score = (monthlyAvg * wABC + campScore * wD) / (wABC + wD);
   else if (monthlyAvg !== null) score = monthlyAvg;
-  return { mode: "manual", taught: true, monthly: e.monthly || [], monthlyAvg, campSigned: e.camp, campTotal: b.size, campRate, campScore, campTarget: target, campGrade: b.grade, score, basics: b };
+  return { mode: "manual", taught: true, noCamp, monthly: e.monthly || [], monthlyAvg, campSigned: e.camp, campTotal: b.size, campRate, campScore, campTarget: target, campGrade: b.grade, score, basics: b };
 }
 
 /** 一位老師的年度結果 */
