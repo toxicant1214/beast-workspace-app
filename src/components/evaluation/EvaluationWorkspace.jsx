@@ -1341,7 +1341,7 @@ function LeaveEditor({ draft: initial, settings, teachers, onClose, onSave }) {
         <label style={S.label}>假別</label>
         <select style={S.input} value={d.type} onChange={(e) => setD({ ...d, type: e.target.value })}>
           {LEAVE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          <optgroup label="只記錄、不扣分">
+          <optgroup label="不扣分">
             {PROTECTED_LEAVE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </optgroup>
         </select>

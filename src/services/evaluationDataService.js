@@ -47,10 +47,10 @@ export function availableEvaluationYears(now = new Date()) {
 // 請假（手動登記）：settings.leaveLog = [{ id, teacherId, from, to, type, hours, lastMinute, note }]
 // 出勤 = 100 －（請假天數 × 假別比重）－ 臨時請假／遲到次數 × attendancePenalty
 // ---------------------------------------------------------
-export const LEAVE_TYPES = ["事假", "病假", "特休", "婚假", "喪假", "公假", "其他"];
-/** 跟性別、懷孕、育兒有關的假：只記錄，一律不扣分 */
-export const PROTECTED_LEAVE_TYPES = ["生理假", "產假", "安胎假", "陪產檢及陪產假", "育嬰留停", "家庭照顧假"];
-export const DEFAULT_LEAVE_WEIGHTS = { 事假: 3, 病假: 1, 特休: 1, 婚假: 0, 喪假: 0, 公假: 0, 其他: 1 };
+export const LEAVE_TYPES = ["事假", "病假", "特休", "其他"];
+/** 只記錄、一律不扣分：婚喪公假，以及跟性別、懷孕、育兒有關的假 */
+export const PROTECTED_LEAVE_TYPES = ["婚假", "喪假", "公假", "生理假", "產假", "安胎假", "陪產檢及陪產假", "育嬰留停", "家庭照顧假"];
+export const DEFAULT_LEAVE_WEIGHTS = { 事假: 3, 病假: 1, 特休: 1, 其他: 1 };
 
 export function leaveWeight(settings, type) {
   if (PROTECTED_LEAVE_TYPES.includes(type)) return 0;
