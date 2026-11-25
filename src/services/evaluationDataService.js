@@ -51,7 +51,7 @@ export function defaultYearSettings(year) {
     springMode: year <= FIRST_EVALUATION_YEAR ? "manual" : "system",
     perDay: 1,
     attendancePenalty: 10,
-    baseline: { 1: 90, 2: 90, 3: 90, 4: 85, 5: 80, 6: 80 },
+    baseline: { 1: 90, 2: 90, 3: 90, 4: 88, 5: 85, 6: 85 },
     subjectPenalty: 3,
     campTarget: 70,
     // 營隊（寒假算上學期、暑假算下學期）依年級設報名率目標，達標 100 分
