@@ -23,6 +23,7 @@ import {
   evaluationYearInfo,
   campExcluded,
   semEntry,
+  courseEnrolled,
   semesterBasics,
   singleDayBlock,
   SUBJECTS,
@@ -1112,6 +1113,17 @@ function SingleDayTable({ semKey, label, settings, teachers, sources, locked, on
     const byName = new Map(rows.map((r) => [r.className.toUpperCase(), r.classId]));
     const counts = JSON.parse(JSON.stringify(block.counts || {}));
     let matched = 0;
+    // 全校報名人數：所有班別列加總（不含美語、合計列）
+    const enrolled = {};
+    for (const line of lines.slice(1)) {
+      const name = line[0] || "";
+      if (!name || /美語|合計|總計|小計/.test(name)) continue;
+      for (const col of courseCols) {
+        const v = Number(line[col.index]);
+        if (!Number.isNaN(v)) enrolled[idFor[col.index]] = (enrolled[idFor[col.index]] || 0) + v;
+      }
+    }
+    for (const c of courses) if (enrolled[c.id] !== undefined) c.enrolled = enrolled[c.id];
     for (const line of lines.slice(1)) {
       const cid = byName.get((line[0] || "").toUpperCase());
       if (!cid) continue;
@@ -1125,7 +1137,7 @@ function SingleDayTable({ semKey, label, settings, teachers, sources, locked, on
     update({ courses, counts });
     setPasteOpen(false);
     setPasteText("");
-    window.alert(`已貼上 ${courseCols.length} 堂課、${matched} 個班。`);
+    window.alert(`已貼上 ${courseCols.length} 堂課、${matched} 個班。記得在每堂課填「上課日」和「全校人數」。`);
   }
 
   const courses = block.courses || [];
@@ -1145,7 +1157,7 @@ function SingleDayTable({ semKey, label, settings, teachers, sources, locked, on
       </div>
       {open && (
         <>
-          <p style={S.hint}>整學期填一次：每班每堂課的報名人數（不是佔比）。系統會用「該班人次 ÷ 班上人數」跟全校平均比，算進每位老師的 D 招生。</p>
+          <p style={S.hint}>每堂課填一次「上課日」和「當時全校人數」，下面各班填報名人數（不是佔比）。班上人數系統會用上課當天的人數（開學＋之前進班－之前退班）。全校平均 = 全校報名 ÷ 全校人數。</p>
           {!locked && (
             <div style={S.actionRow}>
               <button type="button" style={S.ghostButton} onClick={() => setPasteOpen(!pasteOpen)}>從試算表貼上</button>
@@ -1183,6 +1195,41 @@ function SingleDayTable({ semKey, label, settings, teachers, sources, locked, on
                   </tr>
                 </thead>
                 <tbody>
+                  {[
+                    ["上課日", "date"],
+                    ["當時全校人數", "schoolTotal"],
+                    ["全校報名人數", "enrolled"],
+                  ].map(([labelText, field]) => (
+                    <tr key={field} style={{ background: "#faf6f0" }}>
+                      <td style={{ ...S.td, fontWeight: 700 }} colSpan={2}>{labelText}{field === "enrolled" && <span style={S.muted}>（不含美語）</span>}</td>
+                      {courses.map((c, ci) => {
+                        const missing = field !== "enrolled" && !c[field];
+                        return (
+                          <td key={c.id} style={S.tdNum}>
+                            <input
+                              style={{ ...S.smallInput, ...(field === "date" ? { width: 140 } : {}), ...(missing ? { borderColor: "#c0392b" } : {}) }}
+                              type={field === "date" ? "date" : "number"} disabled={locked}
+                              min={field === "date" ? undefined : "0"}
+                              placeholder={field === "enrolled" ? String(courseEnrolled(block, c)) : ""}
+                              value={c[field] ?? ""}
+                              onChange={(e) => {
+                                const list = [...courses];
+                                list[ci] = { ...c, [field]: field === "date" ? e.target.value : num(e.target.value) };
+                                update({ ...block, courses: list });
+                              }}
+                            />
+                          </td>
+                        );
+                      })}
+                      <td style={S.tdNum}>
+                        {field === "enrolled" && (() => {
+                          const tot = courses.reduce((a, c) => a + (Number(c.schoolTotal) || 0), 0);
+                          const en = courses.reduce((a, c) => a + (c.schoolTotal ? courseEnrolled(block, c) : 0), 0);
+                          return tot ? <span style={S.muted}>全校平均 {Math.round((en / tot) * 1000) / 10}%</span> : null;
+                        })()}
+                      </td>
+                    </tr>
+                  ))}
                   {rows.map((r) => (
                     <tr key={r.classId}>
                       <td style={S.td}>{r.className}</td>
@@ -1512,8 +1559,8 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
 
               {!manualMode && step(6, "單日課程（看上方總表，自動算）", (
                 <p style={S.muted}>
-                  班上學生報名 {sem.courseCount ?? 0} 人次／{basics.size ?? "?"} 人・全校平均 {Math.round((sem.courseAvg || 0) * 100)}%
-                  {sem.courseAvg ? "" : "（上方「單日課程」總表還沒填，先不計分）"}
+                  班上報名 {sem.courseCount ?? 0} 人次／上課當天人數合計 {sem.courseSize || "?"} 人（{sem.courseSize ? Math.round((sem.courseCount / sem.courseSize) * 1000) / 10 : 0}%）・全校平均 {Math.round((sem.courseAvg || 0) * 1000) / 10}%
+                  {sem.courseAvg ? "" : "（上方總表還沒填完：每堂課要有全校人數，先不計分）"}
                 </p>
               ), `得分 ${r1(sem.courseScore)}`)}
             </>

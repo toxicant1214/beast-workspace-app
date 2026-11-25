@@ -313,26 +313,58 @@ export function semesterBasics({ teacherId, range, sources, settings, systemData
   const leaves = moves.filter((m) => m.type === "退班");
   const size = start === null ? null : Math.max(0, start + joins - leaves.length);
   const deducted = leaves.filter((m) => m.deduct).length;
-  return { entry, taught, grade, start, startFromSystem: !has(entry.start) && Boolean(sys.startCount), moves, joins, leaves, size, deducted, studentIds: sys.studentIds };
+  // 某一天的班上人數：開學人數＋那天以前的進班－那天以前的退班
+  const sizeAt = (day) => {
+    if (start === null) return null;
+    const before = moves.filter((m) => m.date && m.date <= day);
+    return Math.max(0, start + before.filter((m) => m.type === "進班").length - before.filter((m) => m.type === "退班").length);
+  };
+  return { entry, taught, grade, start, startFromSystem: !has(entry.start) && Boolean(sys.startCount), moves, joins, leaves, size, deducted, studentIds: sys.studentIds, sizeAt };
 }
 
 /** 單日課程：老師班上學生這學期報名的人次（同一人報兩堂算 2） */
-/** 單日課程手填總表：settings.singleDay[spring|fall] = { courses:[{id,name}], counts:{ [classId]: { [courseId]: n } } } */
+/**
+ * 單日課程手填總表：settings.singleDay[spring|fall] =
+ *   { courses:[{ id, name, date, schoolTotal, enrolled }], counts:{ [classId]: { [courseId]: n } } }
+ * date＝上課日（抓當天班上人數）、schoolTotal＝當時全校安親人數、enrolled＝全校報名人數（不含美語，貼上時自動加總）
+ */
 export function singleDayBlock(settings, key) {
   return settings.singleDay?.[key] || { courses: [], counts: {} };
 }
 
-/** 一位老師這學期的單日課程人次：有手填總表就用總表（加總他帶的班），沒有才用系統報名資料 */
-function teacherCourseCount(teacherId, studentIds, range, sources, settings) {
+/** 一堂課的全校報名人數：有填用填的，沒填就加總總表上各班 */
+export function courseEnrolled(block, course) {
+  if (has(course.enrolled)) return Number(course.enrolled);
+  return Object.values(block.counts || {}).reduce((sum, row) => sum + (Number(row?.[course.id]) || 0), 0);
+}
+
+/** 單日課程：老師的人次、每堂課當天班上人數的加總、全校平均 */
+function courseStats(teacherId, b, range, sources, settings, teacherIds) {
   const block = singleDayBlock(settings, range.key);
   if (block.courses?.length) {
     const classIds = sources.classTeachers.filter((r) => r.teacher_id === teacherId).map((r) => r.class_id);
-    return classIds.reduce(
-      (sum, cid) => sum + block.courses.reduce((s2, c) => s2 + (Number(block.counts?.[cid]?.[c.id]) || 0), 0),
-      0
-    );
+    let count = 0;
+    let sizeSum = 0;
+    let enrolledSum = 0;
+    let totalSum = 0;
+    for (const c of block.courses) {
+      if (has(c.schoolTotal) && Number(c.schoolTotal) > 0) {
+        enrolledSum += courseEnrolled(block, c);
+        totalSum += Number(c.schoolTotal);
+      }
+      const size = b.sizeAt(c.date || range.to);
+      if (!size) continue;
+      count += classIds.reduce((sum, cid) => sum + (Number(block.counts?.[cid]?.[c.id]) || 0), 0);
+      sizeSum += size;
+    }
+    return { count, sizeSum, avg: totalSum ? enrolledSum / totalSum : 0, manual: true };
   }
-  return singleDayCount(studentIds, range, sources);
+  return {
+    count: singleDayCount(b.studentIds, range, sources),
+    sizeSum: b.size || 0,
+    avg: singleDayAverage({ teacherIds: teacherIds || [teacherId], range, sources, settings }),
+    manual: false,
+  };
 }
 
 function singleDayCount(studentIds, range, sources) {
@@ -351,7 +383,7 @@ export function singleDayAverage({ teacherIds, range, sources, settings }) {
   for (const tid of teacherIds) {
     const b = semesterBasics({ teacherId: tid, range, sources, settings });
     if (!b.taught || !b.size) continue;
-    count += teacherCourseCount(tid, b.studentIds, range, sources, settings);
+    count += singleDayCount(b.studentIds, range, sources);
     size += b.size;
   }
   return size ? count / size : 0;
@@ -404,12 +436,14 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const campRate = noCamp ? null : campRateOf(e, b.size);
   const campScore = campRate === null ? null : clamp((campRate / campTarget) * 100);
 
-  // ---- D 單日課程：系統自動算，跟全校平均比 ----
-  const courseCount = teacherCourseCount(teacherId, b.studentIds, range, sources, settings);
-  const courseAvg = singleDayAverage({ teacherIds: teacherIds || [teacherId], range, sources, settings });
+  // ---- D 單日課程：班上人次 ÷ 每堂課當天班上人數，跟全校平均（全校報名 ÷ 全校人數）比 ----
+  const cs = courseStats(teacherId, b, range, sources, settings, teacherIds);
+  const courseCount = cs.count;
+  const courseSize = cs.sizeSum;
+  const courseAvg = cs.avg;
   let courseScore = null;
-  if (b.size && courseAvg) {
-    const ratio = courseCount / b.size / courseAvg;
+  if (courseSize && courseAvg) {
+    const ratio = courseCount / courseSize / courseAvg;
     courseScore = ratio >= 1.25 ? 100 : ratio >= 1 ? 80 + ((ratio - 1) / 0.25) * 20 : ratio * 80;
   }
 
@@ -448,7 +482,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
     ],
     D: [
       ind("camp", campName, noCamp ? "畢業班，不計暑假營隊" : campRate !== null ? `報名率 ${Math.round(campRate * 10) / 10}%・${b.grade || "?"} 年級目標 ${campTarget}%` : "尚未填寫（學期資料）", campScore, "手動"),
-      ind("course", "單日課程報名率", b.size ? `${courseCount} 人次／${b.size} 人（${pct(courseCount, b.size)}%）・全校平均 ${Math.round(courseAvg * 100)}%` : "需要班上人數", courseAvg ? courseScore : null, "系統"),
+      ind("course", "單日課程報名率", courseSize ? `${courseCount} 人次／${courseSize} 人（${pct(courseCount, courseSize)}%）・全校平均 ${Math.round(courseAvg * 1000) / 10}%` : "需要班上人數", courseAvg ? courseScore : null, cs.manual ? "手動" : "系統"),
     ],
   };
 
@@ -466,7 +500,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
     Object.entries(categories).map(([k, list]) => [k, avg(list.filter((i) => i.score !== null).map((i) => i.score))])
   );
 
-  return { mode: "system", taught: true, categories, catScores, score: weighted(catScores, settings.w), basics: b, admin, campScore, courseScore, courseCount, courseAvg, examRate, baseline, adjusted };
+  return { mode: "system", taught: true, categories, catScores, score: weighted(catScores, settings.w), basics: b, admin, campScore, courseScore, courseCount, courseSize, courseAvg, examRate, baseline, adjusted };
 }
 
 function weighted(catScores, w) {
