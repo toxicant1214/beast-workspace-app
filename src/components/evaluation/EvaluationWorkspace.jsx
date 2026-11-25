@@ -90,12 +90,16 @@ function EventFormModal({ teachers, types, onClose, onSaved }) {
   const [teacherId, setTeacherId] = useState("");
   const [eventDate, setEventDate] = useState(todayText());
   const [typeId, setTypeId] = useState("");
+  const [custom, setCustom] = useState({ name: "", direction: "minus", points: 3 });
   const [overdueDays, setOverdueDays] = useState(1);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const type = activeTypes.find((t) => t.id === typeId);
+  const type =
+    typeId === "__custom"
+      ? { id: null, name: custom.name.trim(), direction: custom.direction, points: Math.abs(Number(custom.points) || 0), per_day: false }
+      : activeTypes.find((t) => t.id === typeId);
   const preview = type
     ? (type.direction === "plus" ? 1 : -1) *
       Number(type.points || 0) *
@@ -106,6 +110,10 @@ function EventFormModal({ teachers, types, onClose, onSaved }) {
     event.preventDefault();
     if (!teacherId || !type || !eventDate) {
       setError("請選老師、日期和項目。");
+      return;
+    }
+    if (typeId === "__custom" && (!type.name || !type.points)) {
+      setError("自訂事件請填名稱和分數。");
       return;
     }
     try {
@@ -156,7 +164,26 @@ function EventFormModal({ teachers, types, onClose, onSaved }) {
               </span>
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setTypeId("__custom")}
+            style={{ ...S.typeButton, ...(typeId === "__custom" ? S.typeSelected : {}), background: "#f3efe9", color: "#5a4d42" }}
+          >
+            ＋ 自訂
+          </button>
         </div>
+
+        {typeId === "__custom" && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input style={{ ...S.input, flex: "1 1 180px" }} placeholder="事件名稱（例如：私下收家長禮物）" value={custom.name} onChange={(e) => setCustom({ ...custom, name: e.target.value })} />
+            <select style={{ ...S.input, width: 90 }} value={custom.direction} onChange={(e) => setCustom({ ...custom, direction: e.target.value })}>
+              <option value="minus">扣分</option>
+              <option value="plus">加分</option>
+            </select>
+            <input style={{ ...S.input, width: 80 }} type="number" min="0" step="0.5" value={custom.points} onChange={(e) => setCustom({ ...custom, points: e.target.value })} />
+            <span style={S.muted}>分</span>
+          </div>
+        )}
 
         {type?.per_day && (
           <>
@@ -172,10 +199,12 @@ function EventFormModal({ teachers, types, onClose, onSaved }) {
           <div style={S.previewLine}>
             分數 <strong style={preview >= 0 ? S.plusText : S.minusText}>{pointsText(preview)}</strong>
             {type.direction === "plus"
-              ? "・只通知老師"
+              ? "・加進年度總分（上限另計），只通知老師"
               : type.per_day
                 ? "・直接記分，不通知老師"
-                : "・老師要在 LINE 確認"}
+                : (type.name === "安全問題" || !type.id)
+                  ? "・直接從年度總分扣，老師要在 LINE 確認"
+                  : "・計入該項指標次數，老師要在 LINE 確認"}
           </div>
         )}
 
@@ -620,7 +649,7 @@ export default function EvaluationWorkspace({ tab }) {
 
       <div style={S.toolbar}>
         <span style={S.muted}>
-          年度總分 = {springLabel} × {settings.springWeight}% ＋ {fallLabel} × {100 - settings.springWeight}% ＋ 額外加分（上限 {settings.bonusCap}）
+          年度總分 = {springLabel} × {settings.springWeight}% ＋ {fallLabel} × {100 - settings.springWeight}% ＋ 額外加分（上限 {settings.bonusCap}）－ 安全問題／自訂扣分
         </span>
         <span style={S.actionRow}>
           {!locked && <button type="button" style={S.primaryButton} disabled={saving} onClick={lockYear}>年度結算封存</button>}
@@ -661,6 +690,7 @@ export default function EvaluationWorkspace({ tab }) {
                     <th style={S.thNum}>D 招生<br /><span style={S.muted}>{settings.w.D}%</span></th>
                     <th style={S.thNum}>{fallLabel}</th>
                     <th style={S.thNum}>加分</th>
+                    <th style={S.thNum}>扣分</th>
                     <th style={S.thNum}>年度總分</th>
                     <th style={S.thNum}>係數</th>
                   </tr>
@@ -697,6 +727,7 @@ export default function EvaluationWorkspace({ tab }) {
                         <td style={S.tdNum}>{r1(cats.D)}</td>
                         <td style={{ ...S.tdNum, fontWeight: 700 }}>{r1(fallScore)}</td>
                         <td style={{ ...S.tdNum, ...S.plusText }}>{row.bonus ? `+${row.bonus}` : "—"}</td>
+                        <td style={{ ...S.tdNum, ...S.minusText }}>{row.deduct ? `−${row.deduct}` : "—"}</td>
                         <td style={{ ...S.tdNum, fontWeight: 800 }}>{r1(row.total)}</td>
                         <td style={S.tdNum}>{row.factor ?? "—"}</td>
                       </tr>
@@ -959,7 +990,7 @@ function TeacherDetail({ row, results, settings, info, events, teacherMap, locke
             {results.map((r) => <option key={r.teacher.id} value={r.teacher.id}>{teacherName(r.teacher)}</option>)}
           </select>
           <span style={S.muted}>
-            年度總分 <strong style={{ fontSize: 18, color: "#413832" }}>{r1(row.total)}</strong>・係數 {row.factor ?? "—"}・加分 {row.bonus}
+            年度總分 <strong style={{ fontSize: 18, color: "#413832" }}>{r1(row.total)}</strong>・係數 {row.factor ?? "—"}・加分 {row.bonus}・扣分 {row.deduct || 0}
             {row.bonusRaw > row.bonus && `（原 ${row.bonusRaw}，超過上限）`}
           </span>
         </div>
@@ -1187,6 +1218,7 @@ function InspectionEditor({ draft: initial, settings, teachers, info, onClose, o
     return d;
   });
   const [saving, setSaving] = useState(false);
+  const [otherDraft, setOtherDraft] = useState({});
   const items = settings.inspectionItems?.[draft.type] || [];
   const inYear = draft.date >= info.range.from && draft.date <= info.range.to;
 
@@ -1198,7 +1230,7 @@ function InspectionEditor({ draft: initial, settings, teachers, info, onClose, o
       <div style={{ ...S.modal, width: "min(900px, 100%)" }}>
         <h3 style={S.modalTitle}>{INSPECTION_TYPES[draft.type]}</h3>
         <div style={S.actionRow}>
-          <label style={S.muted}>抽查日期 <input style={S.smallInput} type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></label>
+          <label style={S.muted}>抽查日期 <input style={{ ...S.smallInput, width: 160 }} type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></label>
           {!inYear && <span style={S.minusText}>日期不在 {info.label} 範圍內</span>}
         </div>
         <p style={S.hint}>每位老師勾發現的問題，100 分往下扣；也可以直接填調整後分數（要寫原因）。老師那天不在就勾「本次不計」。</p>
@@ -1234,18 +1266,24 @@ function InspectionEditor({ draft: initial, settings, teachers, info, onClose, o
                         {it.name} −{it.points}
                       </button>
                     ))}
+                  </div>
+                  <div style={{ ...S.actionRow, marginTop: 6 }}>
+                    <span style={S.muted}>其他問題</span>
+                    <input style={{ ...S.smallInput, width: 220 }} placeholder="例如：作業本遺失" value={otherDraft[t.id]?.name ?? ""} onChange={(e) => setOtherDraft({ ...otherDraft, [t.id]: { points: 5, ...otherDraft[t.id], name: e.target.value } })} />
+                    <span style={S.muted}>扣</span>
+                    <input style={S.smallInput} type="number" min="0" value={otherDraft[t.id]?.points ?? 5} onChange={(e) => setOtherDraft({ ...otherDraft, [t.id]: { name: "", ...otherDraft[t.id], points: e.target.value } })} />
+                    <span style={S.muted}>分</span>
                     <button
                       type="button"
-                      style={{ ...S.chip, cursor: "pointer", padding: "6px 10px", fontSize: 13, ...S.chipMuted }}
+                      style={S.ghostButton}
                       onClick={() => {
-                        const name = window.prompt("其他問題（例如：作業本遺失）", "");
-                        if (!name || !name.trim()) return;
-                        const pts = Number(window.prompt("扣幾分？", "5"));
-                        if (Number.isNaN(pts)) return;
-                        putRes(t.id, { custom: [...(res.custom || []), { name: name.trim(), points: pts }] });
+                        const o = otherDraft[t.id] || {};
+                        if (!String(o.name || "").trim()) return;
+                        putRes(t.id, { custom: [...(res.custom || []), { name: o.name.trim(), points: Number(o.points ?? 5) || 0 }] });
+                        setOtherDraft({ ...otherDraft, [t.id]: { name: "", points: 5 } });
                       }}
                     >
-                      ＋ 其他
+                      加入
                     </button>
                   </div>
                   {(res.custom || []).length > 0 && (

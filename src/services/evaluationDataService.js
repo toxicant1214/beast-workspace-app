@@ -529,7 +529,6 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
     ],
     B: [
       ind("retention", "留班率", `開學 ${b.start ?? "?"} 人＋進班 ${b.joins}・退班 ${b.leaves.length} 人（列入扣分 ${b.deducted}）`, retention, "系統"),
-      ind("safety", "安全事件", `${safety} 次`, countScore(safety, settings), "事件"),
       ind("complaint", "家長客訴", `${complaint} 次`, countScore(complaint, settings), "事件"),
     ],
     C: [
@@ -594,6 +593,15 @@ export function computeManualSemester({ teacherId, range, sources, settings }) {
 }
 
 /** 一位老師的年度結果 */
+/** 直接從年度總分扣的事件：安全問題、自訂事件（沒有對應類型） */
+export const DIRECT_DEDUCT_TYPES = ["安全問題"];
+export function isDirectDeduct(ev, typeMap = {}) {
+  if (ev.direction !== "minus") return false;
+  if (DIRECT_DEDUCT_TYPES.includes(ev.type_name)) return true;
+  // 自訂事件：沒有對應的事件類型
+  return !ev.type_id && ev.source !== "overdue" && !typeMap[ev.type_name];
+}
+
 export function computeTeacherYear({ teacher, info, sources, events, assignments, exclusions, settings, typeMap, teacherIds }) {
   const common = { sources, events, assignments, exclusions, settings, typeMap, teacherId: teacher.id, teacherIds };
   const spring =
@@ -617,13 +625,24 @@ export function computeTeacherYear({ teacher, info, sources, events, assignments
   );
   const bonusRaw = bonusList.reduce((a, e) => a + Number(e.points || 0), 0);
   const bonus = Math.min(Number(settings.bonusCap ?? 10), bonusRaw);
-  const total = base === null ? null : Math.round((base + bonus) * 10) / 10;
+
+  // 直接扣總分：安全問題、自訂扣分事件（不設上限）
+  const deductList = events.filter(
+    (e) =>
+      e.teacher_id === teacher.id &&
+      inRange(e.event_date, info.range) &&
+      Number(e.points) < 0 &&
+      isDirectDeduct(e, typeMap) &&
+      !["void", "disputed", "disputing"].includes(e.status)
+  );
+  const deduct = deductList.reduce((a, e) => a + Math.abs(Number(e.points || 0)), 0);
+  const total = base === null ? null : Math.round((base + bonus - deduct) * 10) / 10;
   const factor = total === null ? null : factorFor(total, settings.bands);
   const salary = Number(settings.salaries?.[teacher.id]) || 0;
   const isLeader = (settings.leaders || []).includes(teacher.id);
   const pay = factor === null ? 0 : salary * Number(settings.base_months || 0) * factor + (isLeader ? Number(settings.leader_bonus || 0) : 0);
 
-  return { teacher, spring, fall, bonus, bonusRaw, bonusList, base, total, factor, salary, isLeader, pay };
+  return { teacher, spring, fall, bonus, bonusRaw, bonusList, deduct, deductList, base, total, factor, salary, isLeader, pay };
 }
 
 /** 可以在年度設定關掉的系統指標 */
@@ -631,7 +650,6 @@ export const TOGGLEABLE_INDICATORS = [
   { key: "exam", name: "A 班級平均成績" },
   { key: "inspect_hw", name: "A 作業／評量／訂正抽查" },
   { key: "retention", name: "B 留班率" },
-  { key: "safety", name: "B 安全事件" },
   { key: "complaint", name: "B 家長客訴" },
   { key: "tasks", name: "C 任務準時率" },
   { key: "attendance", name: "C 出勤" },

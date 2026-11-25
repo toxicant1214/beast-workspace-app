@@ -156,14 +156,7 @@ def _build_event_card(event):
     if event.get("overdue_days"):
         rows.append(_text_row(f"逾期：{event['overdue_days']} 天"))
 
-    rows.append(
-        _text_row(
-            f"分數：{points_text}",
-            color="#C53030" if is_minus else "#2F855A",
-            weight="bold",
-        )
-    )
-
+    # 給老師的通知只寫事件，不顯示分數
     if event.get("note"):
         rows.append(_text_row(f"說明：{event['note']}"))
 
@@ -220,7 +213,7 @@ def _build_event_card(event):
 
     return {
         "type": "flex",
-        "altText": f"{title}：{event.get('type_name')} {points_text}",
+        "altText": f"{title}：{event.get('type_name')}",
         "contents": bubble,
     }
 
@@ -265,7 +258,7 @@ def notify_decision(event_id):
     if event.get("status") == "void":
         result = "已撤銷，不列入計分"
     else:
-        result = f"維持紀錄，分數 {_points_label(event.get('points'))}"
+        result = "維持紀錄"
 
     lines = [
         "📋 考核異議處理結果",
@@ -372,7 +365,7 @@ def handle_teacher_confirm(event_id, line_user_id):
             "confirmed_by": "teacher",
             "confirmed_at": _now().isoformat(),
         })
-        return f"✅ 已確認：{event.get('type_name')} {_points_label(event.get('points'))}"
+        return f"✅ 已確認：{event.get('type_name')}"
     except Exception as error:
         print("考核確認失敗：", error)
         return "系統忙碌中，請稍後再按一次。"
