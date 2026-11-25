@@ -43,6 +43,20 @@ export function availableEvaluationYears(now = new Date()) {
 // 年度設定
 // ---------------------------------------------------------
 
+// ---------------------------------------------------------
+// 請假（手動登記）：settings.leaveLog = [{ id, teacherId, from, to, type, hours, lastMinute, note }]
+// 出勤 = 100 －（請假天數 × 假別比重）－ 臨時請假／遲到次數 × attendancePenalty
+// ---------------------------------------------------------
+export const LEAVE_TYPES = ["事假", "病假", "特休", "婚假", "喪假", "公假", "其他"];
+/** 跟性別、懷孕、育兒有關的假：只記錄，一律不扣分 */
+export const PROTECTED_LEAVE_TYPES = ["生理假", "產假", "安胎假", "陪產檢及陪產假", "育嬰留停", "家庭照顧假"];
+export const DEFAULT_LEAVE_WEIGHTS = { 事假: 3, 病假: 1, 特休: 1, 婚假: 0, 喪假: 0, 公假: 0, 其他: 1 };
+
+export function leaveWeight(settings, type) {
+  if (PROTECTED_LEAVE_TYPES.includes(type)) return 0;
+  return Number(settings.leaveWeights?.[type] ?? DEFAULT_LEAVE_WEIGHTS[type] ?? 0);
+}
+
 export const DEFAULT_INSPECTION_ITEMS = {
   hw: [
     { id: "hw1", name: "進度未達標", points: 10 },
@@ -85,6 +99,8 @@ export function defaultYearSettings(year) {
     disabledBySem: { spring: [], fall: [] },
     inspectionItems: JSON.parse(JSON.stringify(DEFAULT_INSPECTION_ITEMS)),
     inspections: [],
+    leaveLog: [],
+    leaveWeights: { ...DEFAULT_LEAVE_WEIGHTS },
     // 成績記在教室系統：預設由主管每學期手動填「達標人數／應考人數」
     examMode: "manual",
     manualExam: {},
@@ -514,7 +530,10 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const complaint = countOf("家長客訴");
   const mistakes = countOf("工作疏失", "沒交接");
   const lateEvents = countOf("遲到", "臨時請假");
-  const lastMinuteLeaves = sources.leaves.filter((l) => l.teacher_id === teacherId && l.is_last_minute && inRange(l.start_date, range)).length;
+  const myLeaves = (settings.leaveLog || []).filter((l) => l.teacherId === teacherId && inRange(l.from, range));
+  const lastMinuteLeaves = myLeaves.filter((l) => l.lastMinute).length;
+  const leaveLost = myLeaves.reduce((sum, l) => sum + ((Number(l.hours) || 0) / 8) * leaveWeight(settings, l.type), 0);
+  const leaveDays = myLeaves.reduce((sum, l) => sum + (Number(l.hours) || 0) / 8, 0);
 
   // ---- C 任務 ----
   const admin = computeAdminCooperation(assignments, teacherId, { from: range.from, to: range.to, perDay: settings.perDay, exclusions });
@@ -533,7 +552,13 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
     ],
     C: [
       ind("tasks", "任務準時率", `準時 ${admin.onTime}/${admin.total}・逾期 ${admin.overdueDays} 天`, admin.total ? clamp(100 - admin.overdueDays * Number(settings.perDay || 0)) : null, "系統"),
-      ind("attendance", "出勤", `臨時請假 ${lastMinuteLeaves + countOf("臨時請假")}・遲到 ${countOf("遲到")}`, clamp(100 - (lastMinuteLeaves + lateEvents) * Number(settings.attendancePenalty || 0)), "系統"),
+      ind(
+        "attendance",
+        "出勤",
+        `請假 ${Math.round(leaveDays * 10) / 10} 天（扣 ${Math.round(leaveLost * 10) / 10}）・臨時請假 ${lastMinuteLeaves + countOf("臨時請假")}・遲到 ${countOf("遲到")}`,
+        clamp(100 - leaveLost - (lastMinuteLeaves + lateEvents) * Number(settings.attendancePenalty || 0)),
+        "手動"
+      ),
       ind("mistakes", "工作疏失／沒交接", `${mistakes} 次`, countScore(mistakes, settings), "事件"),
       ind("inspect_env", "教室環境抽查", envInsp.detail, envInsp.score, "抽查"),
     ],

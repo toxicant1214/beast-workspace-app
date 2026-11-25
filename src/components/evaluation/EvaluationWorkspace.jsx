@@ -28,6 +28,9 @@ import {
   singleDayBlock,
   INSPECTION_TYPES,
   inspectionScore,
+  LEAVE_TYPES,
+  PROTECTED_LEAVE_TYPES,
+  leaveWeight,
   SUBJECTS,
   getYearSettings,
   loadEvaluationSources,
@@ -530,6 +533,24 @@ export default function EvaluationWorkspace({ tab }) {
     setSettings(next);
   }
 
+  async function saveLeave(leave) {
+    const latest = await getYearSettings(year);
+    if (latest.locked) throw new Error("locked");
+    const list = (latest.leaveLog || []).filter((l) => l.id !== leave.id);
+    list.push(leave);
+    list.sort((a, b) => b.from.localeCompare(a.from));
+    const next = { ...latest, leaveLog: list };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
+  async function deleteLeave(id) {
+    const latest = await getYearSettings(year);
+    const next = { ...latest, leaveLog: (latest.leaveLog || []).filter((l) => l.id !== id) };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
   async function deleteInspection(id) {
     const latest = await getYearSettings(year);
     const next = { ...latest, inspections: (latest.inspections || []).filter((i) => i.id !== id) };
@@ -785,6 +806,21 @@ export default function EvaluationWorkspace({ tab }) {
           onDeleteInspection={async (id) => {
             await deleteInspection(id);
             showMessage("已刪除這次抽查。");
+          }}
+          onSaveLeave={async (leave) => {
+            try {
+              await saveLeave(leave);
+              showMessage(`${teacherName(teacherMap[leave.teacherId])} ${leave.from} ${leave.type} 已登記。`);
+              return true;
+            } catch (error) {
+              console.error(error);
+              showMessage("請假儲存失敗，請再試一次。", true);
+              return false;
+            }
+          }}
+          onDeleteLeave={async (id) => {
+            await deleteLeave(id);
+            showMessage("已刪除這筆請假。");
           }}
           onChanged={afterChange}
         />
@@ -1122,8 +1158,11 @@ function semProgress(entry, basics, manualMode, semKey) {
 // 日常登記：事件＋抽查
 // ---------------------------------------------------------
 
-function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, onNewEvent, onSaveInspection, onDeleteInspection, onChanged }) {
+function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, onNewEvent, onSaveInspection, onDeleteInspection, onSaveLeave, onDeleteLeave, onChanged }) {
   const [editing, setEditing] = useState(null);
+  const [leaveEditing, setLeaveEditing] = useState(null);
+  const [leaveFilter, setLeaveFilter] = useState("");
+  const leaves = (settings.leaveLog || []).filter((l) => !leaveFilter || l.teacherId === leaveFilter).slice().sort((a, b) => b.from.localeCompare(a.from));
   const [filter, setFilter] = useState("");
   const inspections = (settings.inspections || []).slice().sort((a, b) => b.date.localeCompare(a.date));
   const shownEvents = filter ? events.filter((e) => e.teacher_id === filter) : events;
@@ -1136,12 +1175,13 @@ function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, o
     <>
       <section style={S.section}>
         <h2 style={S.sectionTitle}>日常登記</h2>
-        <p style={S.hint}>事件可以回溯登記，日期填發生當天。扣分事件會推 LINE 給老師確認；抽查不通知老師。</p>
+        <p style={S.hint}>事件可以回溯登記，日期填發生當天。扣分事件會推 LINE 給老師確認；抽查和請假不通知老師。</p>
         {!locked && (
           <div style={{ ...S.actionRow, gap: 10 }}>
             <button type="button" style={S.primaryButton} onClick={onNewEvent}>＋ 登記事件</button>
             <button type="button" style={S.primaryButton} onClick={() => newInspection("hw")}>＋ 作業抽查</button>
             <button type="button" style={S.primaryButton} onClick={() => newInspection("env")}>＋ 環境抽查</button>
+            <button type="button" style={S.primaryButton} onClick={() => setLeaveEditing({ id: `l${Date.now()}`, teacherId: "", from: todayText(), to: todayText(), type: "事假", hours: 8, lastMinute: false, note: "" })}>＋ 登記請假</button>
           </div>
         )}
       </section>
@@ -1180,6 +1220,48 @@ function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, o
 
       <section style={S.section}>
         <div style={S.rowBetween}>
+          <h2 style={S.sectionTitle}>請假紀錄</h2>
+          <select style={S.rangeSelect} value={leaveFilter} onChange={(e) => setLeaveFilter(e.target.value)}>
+            <option value="">全部老師</option>
+            {teachers.map((t) => <option key={t.id} value={t.id}>{teacherName(t)}</option>)}
+          </select>
+        </div>
+        {leaves.length ? (
+          <div style={S.list}>
+            {leaves.map((l) => {
+              const w = leaveWeight(settings, l.type);
+              const lost = ((Number(l.hours) || 0) / 8) * w;
+              return (
+                <div key={l.id} style={S.listRow}>
+                  <div style={S.listDate}>{l.from.slice(5).replace("-", "/")}{l.to && l.to !== l.from ? `～${l.to.slice(5).replace("-", "/")}` : ""}</div>
+                  <div style={S.listMain}>
+                    <div>
+                      <strong>{teacherName(teacherMap[l.teacherId])}</strong>・{l.type}・{l.hours} 小時
+                      {l.lastMinute && <span style={{ ...S.chip, ...S.chipAlert, marginLeft: 6 }}>臨時</span>}
+                    </div>
+                    <div style={S.muted}>
+                      {PROTECTED_LEAVE_TYPES.includes(l.type) ? "不扣分" : `出勤扣 ${Math.round(lost * 10) / 10}`}
+                      {l.lastMinute ? `＋臨時 ${settings.attendancePenalty}` : ""}
+                      {l.note ? `・${l.note}` : ""}
+                    </div>
+                  </div>
+                  {!locked && (
+                    <span style={S.actionRow}>
+                      <button type="button" style={S.linkButton} onClick={() => setLeaveEditing({ ...l })}>編輯</button>
+                      <button type="button" style={S.linkButton} onClick={() => window.confirm("刪除這筆請假？") && onDeleteLeave(l.id)}>刪除</button>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={S.empty}>還沒有請假紀錄。</div>
+        )}
+      </section>
+
+      <section style={S.section}>
+        <div style={S.rowBetween}>
           <h2 style={S.sectionTitle}>事件紀錄</h2>
           <select style={S.rangeSelect} value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="">全部老師</option>
@@ -1188,6 +1270,19 @@ function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, o
         </div>
         <EventList events={shownEvents} teacherMap={teacherMap} showTeacher onChanged={onChanged} />
       </section>
+
+      {leaveEditing && (
+        <LeaveEditor
+          draft={leaveEditing}
+          settings={settings}
+          teachers={teachers}
+          onClose={() => setLeaveEditing(null)}
+          onSave={async (leave) => {
+            const ok = await onSaveLeave(leave);
+            if (ok) setLeaveEditing(null);
+          }}
+        />
+      )}
 
       {editing && (
         <InspectionEditor
@@ -1208,6 +1303,80 @@ function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, o
 
 function avg(list) {
   return list.length ? list.reduce((a, b) => a + b, 0) / list.length : null;
+}
+
+function LeaveEditor({ draft: initial, settings, teachers, onClose, onSave }) {
+  const [d, setD] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const days = d.from && d.to ? Math.max(1, Math.round((new Date(d.to) - new Date(d.from)) / 86400000) + 1) : 1;
+  const w = leaveWeight(settings, d.type);
+  const lost = ((Number(d.hours) || 0) / 8) * w;
+  const isProtected = PROTECTED_LEAVE_TYPES.includes(d.type);
+
+  return (
+    <div style={S.overlay}>
+      <button type="button" aria-label="關閉" style={S.backdrop} onClick={onClose} />
+      <div style={S.modal}>
+        <h3 style={S.modalTitle}>登記請假</h3>
+        <label style={S.label}>老師</label>
+        <select style={S.input} value={d.teacherId} onChange={(e) => setD({ ...d, teacherId: e.target.value })}>
+          <option value="">請選擇</option>
+          {teachers.map((t) => <option key={t.id} value={t.id}>{teacherName(t)}</option>)}
+        </select>
+        <label style={S.label}>日期</label>
+        <div style={S.actionRow}>
+          <input style={{ ...S.input, width: 160 }} type="date" value={d.from} onChange={(e) => {
+            const from = e.target.value;
+            const to = !d.to || d.to < from ? from : d.to;
+            setD({ ...d, from, to });
+          }} />
+          <span>到</span>
+          <input style={{ ...S.input, width: 160 }} type="date" value={d.to} min={d.from} onChange={(e) => {
+            const to = e.target.value;
+            const n = Math.max(1, Math.round((new Date(to) - new Date(d.from)) / 86400000) + 1);
+            setD({ ...d, to, hours: n * 8 });
+          }} />
+        </div>
+        <label style={S.label}>假別</label>
+        <select style={S.input} value={d.type} onChange={(e) => setD({ ...d, type: e.target.value })}>
+          {LEAVE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          <optgroup label="只記錄、不扣分">
+            {PROTECTED_LEAVE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </optgroup>
+        </select>
+        <label style={S.label}>時數（{days} 天，1 天 8 小時；半天填 4）</label>
+        <input style={{ ...S.input, width: 120 }} type="number" min="0" step="0.5" value={d.hours} onChange={(e) => setD({ ...d, hours: e.target.value === "" ? "" : Number(e.target.value) })} />
+        <label style={{ ...S.label, display: "flex", flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "flex-start", textAlign: "left" }}>
+          <input type="checkbox" checked={Boolean(d.lastMinute)} onChange={(e) => setD({ ...d, lastMinute: e.target.checked })} />
+          臨時請假（沒有提前申請）
+        </label>
+        <label style={S.label}>備註（可留白）</label>
+        <input style={S.input} value={d.note || ""} onChange={(e) => setD({ ...d, note: e.target.value })} />
+        <div style={S.previewLine}>
+          {isProtected ? "不扣分" : `出勤扣 ${Math.round(lost * 10) / 10} 分（${d.type} 每天 ${w}）`}
+          {d.lastMinute ? `＋臨時請假 ${settings.attendancePenalty}` : ""}・不通知老師
+        </div>
+        {error && <div style={S.errorText}>{error}</div>}
+        <div style={S.modalActions}>
+          <button type="button" style={S.ghostButton} onClick={onClose}>取消</button>
+          <button
+            type="button"
+            style={S.primaryButton}
+            disabled={saving}
+            onClick={async () => {
+              if (!d.teacherId || !d.from || !d.hours) return setError("請選老師、日期，並填時數。");
+              setSaving(true);
+              await onSave({ ...d, to: d.to || d.from });
+              setSaving(false);
+            }}
+          >
+            {saving ? "儲存中…" : "登記"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function InspectionEditor({ draft: initial, settings, teachers, info, onClose, onSave }) {
@@ -1989,6 +2158,12 @@ function YearSettingsPanel({ info, settings, types, locked, saving, onSave }) {
         {field("事件 2 次以上得分", ["countScore", 2], draft.countScore[2])}
         {field("額外加分上限", ["bonusCap"], draft.bonusCap)}
       </div>
+
+      <h3 style={S.subTitle}>請假扣分（出勤，每天扣幾分；8 小時算 1 天）</h3>
+      <div style={S.settingsGrid}>
+        {LEAVE_TYPES.map((t) => <div key={t} style={{ display: "contents" }}>{field(t, ["leaveWeights", t], draft.leaveWeights?.[t])}</div>)}
+      </div>
+      <p style={S.hint}>{PROTECTED_LEAVE_TYPES.join("、")}只記錄，不扣分。</p>
 
       <h3 style={S.subTitle}>抽查項目與扣分</h3>
       <p style={S.hint}>抽查時可勾選的問題；改名或扣分會影響這年度所有抽查的計算。</p>
