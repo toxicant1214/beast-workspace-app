@@ -52,6 +52,7 @@ export function defaultYearSettings(year) {
     perDay: 1,
     attendancePenalty: 10,
     baseline: { 1: 90, 2: 90, 3: 90, 4: 85, 5: 80, 6: 80 },
+    examPenalty: 5,
     campTarget: 70,
     // 營隊（寒假算上學期、暑假算下學期）依年級設報名率目標，達標 100 分
     campTargets: { 1: 70, 2: 70, 3: 70, 4: 70, 5: 65, 6: 65 },
@@ -336,15 +337,24 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   if (!b.taught) return { mode: "system", taught: false, score: null, categories: {}, catScores: {}, basics: b, admin: { items: [] } };
   const e = b.entry;
 
-  // ---- A 成績：期中、期末各一次（達標人數／應考人數），兩次平均 ----
-  const rates = [];
-  if (has(e.midT) && Number(e.midT) > 0) rates.push(Math.min(Number(e.midP) || 0, Number(e.midT)) / Number(e.midT));
-  if (has(e.finT) && Number(e.finT) > 0) rates.push(Math.min(Number(e.finP) || 0, Number(e.finT)) / Number(e.finT));
-  const examRate = rates.length ? clamp(avg(rates) * 100) : null;
-  const examDetail = [
-    has(e.midT) ? `期中 ${e.midP || 0}/${e.midT}` : "期中未填",
-    has(e.finT) ? `期末 ${e.finP || 0}/${e.finT}` : "期末未填",
-  ].join("・");
+  // ---- A 成績：期中、期末各填班平均；達年級基準線 100 分，每低 1 分扣 examPenalty（舊資料：達標人數／應考人數）----
+  const baseline = Number(settings.baseline?.[b.grade] ?? 80);
+  const penalty = Number(settings.examPenalty ?? 5);
+  const examPart = (avgKey, pKey, tKey, label) => {
+    if (has(e[avgKey])) {
+      const v = Number(e[avgKey]);
+      return { score: clamp(100 - Math.max(0, baseline - v) * penalty), text: `${label} ${v}` };
+    }
+    if (has(e[tKey]) && Number(e[tKey]) > 0) {
+      return { score: clamp((Math.min(Number(e[pKey]) || 0, Number(e[tKey])) / Number(e[tKey])) * 100), text: `${label} ${e[pKey] || 0}/${e[tKey]}` };
+    }
+    return { score: null, text: `${label}未填` };
+  };
+  const mid = examPart("midAvg", "midP", "midT", "期中");
+  const fin = examPart("finAvg", "finP", "finT", "期末");
+  const examScores = [mid.score, fin.score].filter((x) => x !== null);
+  const examRate = examScores.length ? avg(examScores) : null;
+  const examDetail = `${mid.text}・${fin.text}・${b.grade || "?"} 年級基準 ${baseline}`;
 
   // ---- B 留班率：開學人數＋進班 為分母，列入扣分的退班為分子 ----
   const base = (b.start || 0) + b.joins;
@@ -383,7 +393,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
 
   const categories = {
     A: [
-      ind("exam", "成績達標率", examDetail, examRate, "手動"),
+      ind("exam", "班級平均成績", examDetail, examRate, "手動"),
       ind("inspect_hw", "作業／訂正／評量抽查", "2027 起實施", null, "抽查"),
     ],
     B: [

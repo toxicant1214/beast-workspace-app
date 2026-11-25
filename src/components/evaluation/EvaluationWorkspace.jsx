@@ -1007,8 +1007,8 @@ function semProgress(entry, basics, manualMode) {
   if (manualMode) {
     if (!(entry.monthly || []).some(hasVal)) missing.push("每月考核");
   } else {
-    if (!hasVal(entry.midT)) missing.push("期中");
-    if (!hasVal(entry.finT)) missing.push("期末");
+    if (!hasVal(entry.midAvg) && !hasVal(entry.midT)) missing.push("期中");
+    if (!hasVal(entry.finAvg) && !hasVal(entry.finT)) missing.push("期末");
   }
   if (!hasVal(entry.campRate) && !hasVal(entry.camp)) missing.push("營隊");
   return { done: missing.length === 0, missing };
@@ -1242,17 +1242,15 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
                     ))}
                   </div>
                 ), `平均 ${r1(sem.monthlyAvg)}`)
-                : step(4, "成績達標（期中、期末）", (
+                : step(4, "班級平均成績（期中、期末）", (
                   <>
                     <div style={S.actionRow}>
-                      <span style={{ width: 40 }}>期中</span>{numInput("midP", { placeholder: "達標" })}<span>/</span>{numInput("midT", { placeholder: "應考" })}
+                      <span>期中平均</span>{numInput("midAvg", { step: "0.1", max: "100" })}
+                      <span style={{ marginLeft: 12 }}>期末平均</span>{numInput("finAvg", { step: "0.1", max: "100" })}
                     </div>
-                    <div style={{ ...S.actionRow, marginTop: 6 }}>
-                      <span style={{ width: 40 }}>期末</span>{numInput("finP", { placeholder: "達標" })}<span>/</span>{numInput("finT", { placeholder: "應考" })}
-                    </div>
-                    <p style={S.hint}>從教室系統抄：平均達 {basics.grade || "?"} 年級基準線（{settings.baseline?.[basics.grade] ?? "—"} 分）的人數／應考人數。兩次平均。</p>
+                    <p style={S.hint}>照教室系統的班級平均分數填。{basics.grade || "?"} 年級基準線 {settings.baseline?.[basics.grade] ?? "—"} 分：達標 100 分，每低 1 分扣 {settings.examPenalty ?? 5} 分，兩次平均。</p>
                   </>
-                ), `達標率 ${r1(sem.examRate)}`)}
+                ), `得分 ${r1(sem.examRate)}`)}
 
               {step(5, campLabel, (
                 <>
@@ -1356,6 +1354,7 @@ function YearSettingsPanel({ info, settings, types, locked, saving, onSave }) {
         {field("四年級", ["baseline", "4"], draft.baseline[4])}
         {field("五年級", ["baseline", "5"], draft.baseline[5])}
         {field("六年級", ["baseline", "6"], draft.baseline[6])}
+        {field("成績低於基準每 1 分扣", ["examPenalty"], draft.examPenalty, 0.5)}
         {field("任務逾期每天扣", ["perDay"], draft.perDay, 0.5)}
         {field("臨時請假／遲到每次扣", ["attendancePenalty"], draft.attendancePenalty)}
         {field("營隊報名率目標：三年級 %", ["campTargets", "3"], draft.campTargets?.[3])}
