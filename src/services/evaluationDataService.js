@@ -604,7 +604,10 @@ export function computeManualSemester({ teacherId, range, sources, settings }) {
   if (!b.taught) return { mode: "manual", taught: false, score: null, basics: b };
   const e = b.entry;
   const monthly = (e.monthly || []).map(Number).filter((x) => !Number.isNaN(x) && x > 0);
-  const monthlyAvg = avg(monthly);
+  // 每月考核是 1～5 分，換算成百分制：平均 ÷ 滿分 × 100（4 分 = 80）
+  const monthlyMax = Number(settings.monthlyMax ?? 5) || 5;
+  const monthlyRaw = avg(monthly);
+  const monthlyAvg = monthlyRaw === null ? null : clamp((monthlyRaw / monthlyMax) * 100);
   const target = Number(settings.campTargets?.[b.grade] ?? settings.campTarget ?? 70);
   const noCamp = campExcluded(e, range.key, b.grade);
   const campRate = noCamp ? null : campRateOf(e, b.size);
@@ -614,7 +617,7 @@ export function computeManualSemester({ teacherId, range, sources, settings }) {
   let score = null;
   if (monthlyAvg !== null && campScore !== null) score = (monthlyAvg * wABC + campScore * wD) / (wABC + wD);
   else if (monthlyAvg !== null) score = monthlyAvg;
-  return { mode: "manual", taught: true, noCamp, monthly: e.monthly || [], monthlyAvg, campSigned: e.camp, campTotal: b.size, campRate, campScore, campTarget: target, campGrade: b.grade, score, basics: b };
+  return { mode: "manual", taught: true, noCamp, monthly: e.monthly || [], monthlyAvg, monthlyRaw, monthlyMax, campSigned: e.camp, campTotal: b.size, campRate, campScore, campTarget: target, campGrade: b.grade, score, basics: b };
 }
 
 /** 一位老師的年度結果 */

@@ -989,7 +989,7 @@ function SemesterCard({ title, sem, settings, perDay, onToggleExclusion, onWithd
         <h2 style={S.sectionTitle}>{title}<span style={{ ...S.chip, ...S.chipMuted }}>手動輸入</span></h2>
         <p style={S.hint}>系統尚未上線，用每月考核與營隊報名數；在「學期資料」輸入。學期分數 <strong>{r1(sem.score)}</strong></p>
         <div style={S.catCard}>
-          <div style={S.rowBetween}><strong>每月考核（代替 A＋B＋C）</strong><span style={S.muted}>平均 <strong>{r1(sem.monthlyAvg)}</strong></span></div>
+          <div style={S.rowBetween}><strong>每月考核（代替 A＋B＋C）</strong><span style={S.muted}>平均 {r1(sem.monthlyRaw)}／{sem.monthlyMax} → <strong>{r1(sem.monthlyAvg)}</strong> 分</span></div>
           <div style={S.muted}>{(sem.monthly || []).length ? sem.monthly.map((m, i) => `${i + 2}月 ${m === "" || m === undefined ? "—" : m}`).join("・") : "尚未輸入"}</div>
         </div>
         <div style={S.catCard}>
@@ -1991,7 +1991,7 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
                     {["2月", "3月", "4月", "5月", "6月"].map((m, i) => (
                       <label key={m} style={S.muted}>
                         {m}{" "}
-                        <input style={S.smallInput} type="number" min="0" max="100" disabled={locked} value={(draft.monthly || [])[i] ?? ""} onChange={(e) => {
+                        <input style={S.smallInput} type="number" min="1" max={settings.monthlyMax ?? 5} step="0.5" disabled={locked} value={(draft.monthly || [])[i] ?? ""} onChange={(e) => {
                           const next = [...(draft.monthly || [])];
                           next[i] = num(e.target.value);
                           put("monthly", next);
@@ -1999,7 +1999,7 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
                       </label>
                     ))}
                   </div>
-                ), `平均 ${r1(sem.monthlyAvg)}`)
+                ), `平均 ${r1(sem.monthlyRaw)}／${sem.monthlyMax ?? 5} → ${r1(sem.monthlyAvg)} 分`)
                 : step(4, "班級平均成績（期中、期末，各四科）", (
                   <>
                     {[["mid", "期中"], ["fin", "期末"]].map(([key, label]) => (
