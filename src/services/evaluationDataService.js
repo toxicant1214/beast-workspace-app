@@ -83,7 +83,8 @@ export const DEFAULT_INSPECTION_ITEMS = {
 export function defaultYearSettings(year) {
   return {
     w: { A: 25, B: 30, C: 30, D: 15 },
-    springWeight: 50,
+    // 2026 年度 114 下只有每月考核＋營隊，資料少 → 佔 30%
+    springWeight: year <= FIRST_EVALUATION_YEAR ? 30 : 50,
     // 2026 年度的 114 下系統還沒上線 → 手動輸入每月考核與暑假營隊
     springMode: year <= FIRST_EVALUATION_YEAR ? "manual" : "system",
     perDay: 1,
@@ -604,10 +605,10 @@ export function computeManualSemester({ teacherId, range, sources, settings }) {
   if (!b.taught) return { mode: "manual", taught: false, score: null, basics: b };
   const e = b.entry;
   const monthly = (e.monthly || []).map(Number).filter((x) => !Number.isNaN(x) && x > 0);
-  // 每月考核是 1～5 分，換算成百分制：平均 ÷ 滿分 × 100（4 分 = 80）
+  // 每月考核是 1～5 分，換算成百分制：滿分 100，每少 1 分扣 10（5=100、4=90、3=80）
   const monthlyMax = Number(settings.monthlyMax ?? 5) || 5;
   const monthlyRaw = avg(monthly);
-  const monthlyAvg = monthlyRaw === null ? null : clamp((monthlyRaw / monthlyMax) * 100);
+  const monthlyAvg = monthlyRaw === null ? null : clamp(100 - (monthlyMax - monthlyRaw) * 10);
   const target = Number(settings.campTargets?.[b.grade] ?? settings.campTarget ?? 70);
   const noCamp = campExcluded(e, range.key, b.grade);
   const campRate = noCamp ? null : campRateOf(e, b.size);
