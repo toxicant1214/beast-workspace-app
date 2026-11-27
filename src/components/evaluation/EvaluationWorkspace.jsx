@@ -35,6 +35,7 @@ import {
   lateList,
   firstPunch,
   DEFAULT_LATE_TIERS,
+  noLateRanges,
   SUBJECTS,
   getYearSettings,
   loadEvaluationSources,
@@ -812,6 +813,7 @@ export default function EvaluationWorkspace({ tab }) {
       {tab === "log" && (
         <DailyLogPanel
           info={info}
+          sources={sources}
           settings={settings}
           teachers={teachers}
           events={events}
@@ -1194,7 +1196,7 @@ function semProgress(entry, basics, manualMode, semKey) {
 // 日常登記：事件＋抽查
 // ---------------------------------------------------------
 
-function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, onNewEvent, onSaveInspection, onDeleteInspection, onSaveLeave, onDeleteLeave, onSavePunches, onToggleLateExempt, onChanged }) {
+function DailyLogPanel({ info, sources, settings, teachers, events, teacherMap, locked, onNewEvent, onSaveInspection, onDeleteInspection, onSaveLeave, onDeleteLeave, onSavePunches, onToggleLateExempt, onChanged }) {
   const [editing, setEditing] = useState(null);
   const [leaveEditing, setLeaveEditing] = useState(null);
   const [leaveFilter, setLeaveFilter] = useState("");
@@ -1254,7 +1256,7 @@ function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, o
         )}
       </section>
 
-      <PunchSection info={info} settings={settings} teachers={teachers} locked={locked} onSave={onSavePunches} onToggle={onToggleLateExempt} />
+      <PunchSection info={info} sources={sources} settings={settings} teachers={teachers} locked={locked} onSave={onSavePunches} onToggle={onToggleLateExempt} />
 
       <section style={S.section}>
         <div style={S.rowBetween}>
@@ -1344,7 +1346,7 @@ function avg(list) {
 }
 
 /** 打卡紀錄：上傳打卡 Excel，只讀「倍思學院」分頁、只認系統裡的老師 */
-function PunchSection({ info, settings, teachers, locked, onSave, onToggle }) {
+function PunchSection({ info, sources, settings, teachers, locked, onSave, onToggle }) {
   const [busy, setBusy] = useState(false);
   const [openTid, setOpenTid] = useState("");
   const fileRef = useRef(null);
@@ -1396,7 +1398,7 @@ function PunchSection({ info, settings, teachers, locked, onSave, onToggle }) {
 
   const summary = teachers.map((t) => {
     const days = Object.keys(settings.punches?.[t.id] || {}).filter((d) => d >= info.range.from && d <= info.range.to).length;
-    const list = lateList(t.id, info.range, settings);
+    const list = lateList(t.id, info.range, settings, sources);
     const hasSched = Object.values(settings.workSchedule?.[t.id] || {}).some(Boolean);
     return { t, days, list, counted: list.filter((x) => !x.exempt).length, hasSched };
   });
@@ -1406,7 +1408,9 @@ function PunchSection({ info, settings, teachers, locked, onSave, onToggle }) {
       <h2 style={S.sectionTitle}>打卡紀錄（遲到）</h2>
       <p style={S.hint}>
         每月把打卡 Excel 檔上傳一次（可以一次選好幾個月）。系統只讀「倍思學院」分頁、只認考核名單裡的老師；
-        每天第一次上班打卡比上班時間晚就算遲到，依晚到分鐘數分級扣分。上班時間和扣分級距在「年度設定」修改。
+        每天第一次上班打卡比上班時間晚就算遲到，依晚到分鐘數分級扣分；週六日和寒暑假（
+        {noLateRanges(settings, sources).map((x) => `${x.name} ${x.from.slice(5).replace("-", "/")}～${x.to.slice(5).replace("-", "/")}`).join("、") || "未設定"}
+        ）不算。上班時間、扣分級距、寒暑假期間在「年度設定」修改。
       </p>
       {!locked && (
         <div style={S.actionRow}>
@@ -2365,6 +2369,27 @@ function YearSettingsPanel({ info, settings, types, teachers, locked, saving, on
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <strong style={{ fontSize: 14 }}>不算遲到的期間（寒暑假）</strong>
+        <p style={S.hint}>營隊管理裡的冬令營、夏令營日期會自動排除；營隊以外的假期在這裡加。</p>
+        {(draft.noLateRanges || []).map((x, i) => {
+          const list = draft.noLateRanges || [];
+          const put = (k, v) => set(["noLateRanges"], list.map((y, j) => (j === i ? { ...y, [k]: v } : y)));
+          return (
+            <div key={i} style={{ ...S.actionRow, marginTop: 4 }}>
+              <input style={{ ...S.smallInput, width: 100 }} disabled={locked} value={x.name || ""} placeholder="名稱" onChange={(e) => put("name", e.target.value)} />
+              <input style={{ ...S.smallInput, width: 150 }} type="date" disabled={locked} value={x.from || ""} onChange={(e) => put("from", e.target.value)} />
+              <span style={S.muted}>～</span>
+              <input style={{ ...S.smallInput, width: 150 }} type="date" disabled={locked} value={x.to || ""} onChange={(e) => put("to", e.target.value)} />
+              {!locked && <button type="button" style={S.linkButton} onClick={() => set(["noLateRanges"], list.filter((_, j) => j !== i))}>刪除</button>}
+            </div>
+          );
+        })}
+        {!locked && (
+          <button type="button" style={{ ...S.ghostButton, marginTop: 6 }} onClick={() => set(["noLateRanges"], [...(draft.noLateRanges || []), { name: "", from: "", to: "" }])}>＋ 新增期間</button>
+        )}
       </div>
 
       <h3 style={S.subTitle}>請假扣分（出勤，每天扣幾分；8 小時算 1 天）</h3>

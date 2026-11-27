@@ -83,7 +83,17 @@ const toMin = (t) => {
   return Number.isNaN(h) ? null : h * 60 + (m || 0);
 };
 
-export function lateList(teacherId, range, settings) {
+/** 寒暑假：營隊期間＋自訂期間，不算遲到 */
+export function noLateRanges(settings, sources) {
+  const list = (settings.noLateRanges || []).filter((x) => x.from && x.to);
+  for (const c of sources?.camps || []) {
+    if (c.start_date && c.end_date) list.push({ name: c.name, from: c.start_date, to: c.end_date, camp: true });
+  }
+  return list;
+}
+
+export function lateList(teacherId, range, settings, sources) {
+  const skip = noLateRanges(settings, sources);
   const sched = settings.workSchedule?.[teacherId] || {};
   const punches = settings.punches?.[teacherId] || {};
   const exempt = settings.lateExempt?.[teacherId] || {};
@@ -93,6 +103,7 @@ export function lateList(teacherId, range, settings) {
     if (!inRange(date, range)) continue;
     const wd = new Date(`${date}T00:00:00`).getDay() || 7;
     if (wd > 5) continue; // 週六、週日不算遲到
+    if (skip.some((x) => date >= x.from && date <= x.to)) continue; // 寒暑假不算
     const start = toMin(sched[wd]);
     const arrive = toMin(time);
     if (start === null || arrive === null) continue;
@@ -161,6 +172,8 @@ export function defaultYearSettings(year) {
     punches: {},
     lateExempt: {},
     lateGrace: 0,
+    // 不算遲到的期間（營隊管理裡的冬令營／夏令營會自動加進來）
+    noLateRanges: [{ name: "暑假", from: `${year}-07-01`, to: `${year}-08-31` }],
     lateTiers: DEFAULT_LATE_TIERS.map((t) => ({ ...t })),
     leaveWeights: { ...DEFAULT_LEAVE_WEIGHTS },
     // 成績記在教室系統：預設由主管每學期手動填「達標人數／應考人數」
@@ -592,7 +605,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const complaint = countOf("家長客訴");
   const mistakes = countOf("工作疏失", "沒交接");
   const lateEvents = countOf("臨時請假");
-  const punchLate = lateList(teacherId, range, settings).filter((x) => !x.exempt);
+  const punchLate = lateList(teacherId, range, settings, sources).filter((x) => !x.exempt);
   const hasPunch = Object.keys(settings.punches?.[teacherId] || {}).some((d) => inRange(d, range));
   const lateCount = punchLate.length + countOf("遲到");
   const latePts = punchLate.reduce((a, x) => a + x.points, 0) + countOf("遲到") * latePoints(15, settings);
