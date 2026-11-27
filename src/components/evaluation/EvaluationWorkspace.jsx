@@ -54,6 +54,11 @@ function todayText() {
   return new Date(now - offset).toISOString().slice(0, 10);
 }
 
+/** 事件分數有沒有實際用到：加分、安全問題、自訂事件才照分數算；其他扣分事件算次數 */
+function usesPoints(type) {
+  return type.direction === "plus" || type.name === "安全問題" || !type.id;
+}
+
 function teacherName(teacher) {
   return teacher?.chinese_name || teacher?.english_name || "老師";
 }
@@ -167,9 +172,11 @@ function EventFormModal({ teachers, types, onClose, onSaved }) {
               }}
             >
               {t.name}
-              <span style={S.typePoints}>
-                {t.direction === "plus" ? "+" : "−"}{Number(t.points)}{t.per_day ? "/天" : ""}
-              </span>
+              {usesPoints(t) && (
+                <span style={S.typePoints}>
+                  {t.direction === "plus" ? "+" : "−"}{Number(t.points)}
+                </span>
+              )}
             </button>
           ))}
           <button
@@ -205,14 +212,16 @@ function EventFormModal({ teachers, types, onClose, onSaved }) {
 
         {type && (
           <div style={S.previewLine}>
-            分數 <strong style={preview >= 0 ? S.plusText : S.minusText}>{pointsText(preview)}</strong>
+            {usesPoints(type) ? <>分數 <strong style={preview >= 0 ? S.plusText : S.minusText}>{pointsText(preview)}</strong></> : <>依次數計分</>}
             {type.direction === "plus"
               ? "・加進年度總分（上限另計），只通知老師"
               : type.per_day
                 ? "・直接記分，不通知老師"
                 : (type.name === "安全問題" || !type.id)
                   ? "・直接從年度總分扣，老師要在 LINE 確認"
-                  : "・計入該項指標次數，老師要在 LINE 確認"}
+                  : type.name === "臨時請假"
+                    ? "・每次扣出勤分數，老師要在 LINE 確認"
+                    : "・算進該項指標的次數，老師要在 LINE 確認"}
           </div>
         )}
 
@@ -2556,8 +2565,9 @@ function YearSettingsPanel({ info, settings, types, teachers, locked, saving, on
         </div>
       ))}
 
-      <h3 style={S.subTitle}>事件分數（加分項目與扣分事件）</h3>
-      {typeDraft.filter((t) => !t.per_day).map((type) => (
+      <h3 style={S.subTitle}>事件分數</h3>
+      <p style={S.hint}>加分項目加在年度總分（合計上限 {draft.bonusCap ?? 10}）；安全問題直接扣年度總分。家長客訴、工作疏失、沒交接、臨時請假是算次數，在上面「指標規則」設定。</p>
+      {typeDraft.filter((t) => !t.per_day && t.is_active && usesPoints(t)).map((type) => (
         <div key={type.id} style={S.inlineGroup}>
           <span style={{ minWidth: "80px" }}>{type.name}</span>
           {type.direction === "plus" ? "+" : "−"}
