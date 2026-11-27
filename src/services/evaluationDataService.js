@@ -57,6 +57,44 @@ export function leaveWeight(settings, type) {
   return Number(settings.leaveWeights?.[type] ?? DEFAULT_LEAVE_WEIGHTS[type] ?? 0);
 }
 
+// ---------------------------------------------------------
+// 遲到：上傳打卡檔 → 每天第一次上班打卡 vs 該老師星期幾的上班時間
+// settings.workSchedule = { [tid]: { 1:"12:00", …, 5:"11:00" } }
+// settings.punches = { [tid]: { "2026-09-01": "11:48" } }、lateExempt = { [tid]: { date: true } }
+// ---------------------------------------------------------
+const toMin = (t) => {
+  const [h, m] = String(t || "").split(":").map(Number);
+  return Number.isNaN(h) ? null : h * 60 + (m || 0);
+};
+
+export function lateList(teacherId, range, settings) {
+  const sched = settings.workSchedule?.[teacherId] || {};
+  const punches = settings.punches?.[teacherId] || {};
+  const exempt = settings.lateExempt?.[teacherId] || {};
+  const grace = Number(settings.lateGrace ?? 5);
+  const out = [];
+  for (const [date, time] of Object.entries(punches)) {
+    if (!inRange(date, range)) continue;
+    const wd = new Date(`${date}T00:00:00`).getDay() || 7;
+    const start = toMin(sched[wd]);
+    const arrive = toMin(time);
+    if (start === null || arrive === null) continue;
+    const minutes = arrive - start;
+    if (minutes > grace) out.push({ date, time, start: sched[wd], minutes, exempt: Boolean(exempt[date]) });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** 解析打卡檔的一列：上班打卡可能有好幾個時間，取最早的 */
+export function firstPunch(cell) {
+  const times = String(cell || "")
+    .split(/[,，\s]+/)
+    .map((x) => x.trim())
+    .filter((x) => /^\d{1,2}:\d{2}/.test(x))
+    .map((x) => x.slice(0, 5).padStart(5, "0"));
+  return times.length ? times.sort()[0] : null;
+}
+
 export const DEFAULT_INSPECTION_ITEMS = {
   hw: [
     { id: "hw1", name: "進度未達標", points: 10 },
@@ -101,6 +139,12 @@ export function defaultYearSettings(year) {
     inspectionItems: JSON.parse(JSON.stringify(DEFAULT_INSPECTION_ITEMS)),
     inspections: [],
     leaveLog: [],
+    workSchedule: {},
+    punchNames: {},
+    punches: {},
+    lateExempt: {},
+    lateGrace: 5,
+    latePenalty: 2,
     leaveWeights: { ...DEFAULT_LEAVE_WEIGHTS },
     // 成績記在教室系統：預設由主管每學期手動填「達標人數／應考人數」
     examMode: "manual",
@@ -530,7 +574,10 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const safety = countOf("安全問題");
   const complaint = countOf("家長客訴");
   const mistakes = countOf("工作疏失", "沒交接");
-  const lateEvents = countOf("遲到", "臨時請假");
+  const lateEvents = countOf("臨時請假");
+  const punchLate = lateList(teacherId, range, settings).filter((x) => !x.exempt);
+  const hasPunch = Object.keys(settings.punches?.[teacherId] || {}).some((d) => inRange(d, range));
+  const lateCount = punchLate.length + countOf("遲到");
   const myLeaves = (settings.leaveLog || []).filter((l) => l.teacherId === teacherId && inRange(l.from, range));
   const lastMinuteLeaves = myLeaves.filter((l) => l.lastMinute).length;
   const leaveLost = myLeaves.reduce((sum, l) => sum + ((Number(l.hours) || 0) / 8) * leaveWeight(settings, l.type), 0);
@@ -556,9 +603,18 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
       ind(
         "attendance",
         "出勤",
-        `請假 ${Math.round(leaveDays * 10) / 10} 天（扣 ${Math.round(leaveLost * 10) / 10}）・臨時請假 ${lastMinuteLeaves + countOf("臨時請假")}・遲到 ${countOf("遲到")}`,
+        `請假 ${Math.round(leaveDays * 10) / 10} 天（扣 ${Math.round(leaveLost * 10) / 10}）・臨時請假 ${lastMinuteLeaves + countOf("臨時請假")}`,
         clamp(100 - leaveLost - (lastMinuteLeaves + lateEvents) * Number(settings.attendancePenalty || 0)),
         "手動"
+      ),
+      ind(
+        "late",
+        "遲到",
+        hasPunch || lateCount
+          ? `${lateCount} 次${punchLate.length ? `：${punchLate.map((x) => `${x.date.slice(5).replace("-", "/")} 晚 ${x.minutes} 分`).join("、")}` : ""}`
+          : "還沒有打卡資料",
+        hasPunch || lateCount ? clamp(100 - lateCount * Number(settings.latePenalty ?? 2)) : null,
+        "打卡"
       ),
       ind("mistakes", "工作疏失／沒交接", `${mistakes} 次`, countScore(mistakes, settings), "事件"),
       ind("inspect_env", "教室環境抽查", envInsp.detail, envInsp.score, "抽查"),
@@ -681,7 +737,8 @@ export const TOGGLEABLE_INDICATORS = [
   { key: "retention", name: "B 留班率" },
   { key: "complaint", name: "B 家長客訴" },
   { key: "tasks", name: "C 任務準時率" },
-  { key: "attendance", name: "C 出勤" },
+  { key: "attendance", name: "C 出勤（請假）" },
+  { key: "late", name: "C 遲到" },
   { key: "mistakes", name: "C 工作疏失／沒交接" },
   { key: "inspect_env", name: "C 教室環境抽查" },
   { key: "camp", name: "D 營隊報名率" },

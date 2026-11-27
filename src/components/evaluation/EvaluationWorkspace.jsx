@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 
 import { getActiveTeachers } from "../../services/teacherService";
 import { getTeacherAssignments } from "../../services/teacherAssignmentService";
@@ -31,6 +32,8 @@ import {
   LEAVE_TYPES,
   PROTECTED_LEAVE_TYPES,
   leaveWeight,
+  lateList,
+  firstPunch,
   SUBJECTS,
   getYearSettings,
   loadEvaluationSources,
@@ -544,6 +547,28 @@ export default function EvaluationWorkspace({ tab }) {
     setSettings(next);
   }
 
+  /** 合併打卡資料：{ [tid]: { date: "HH:MM" } } */
+  async function savePunches(incoming) {
+    const latest = await getYearSettings(year);
+    if (latest.locked) throw new Error("locked");
+    const punches = { ...(latest.punches || {}) };
+    for (const [tid, days] of Object.entries(incoming)) punches[tid] = { ...(punches[tid] || {}), ...days };
+    const next = { ...latest, punches };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
+  async function toggleLateExempt(tid, date, value) {
+    const latest = await getYearSettings(year);
+    const ex = { ...(latest.lateExempt || {}) };
+    ex[tid] = { ...(ex[tid] || {}) };
+    if (value) ex[tid][date] = true;
+    else delete ex[tid][date];
+    const next = { ...latest, lateExempt: ex };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
   async function deleteLeave(id) {
     const latest = await getYearSettings(year);
     const next = { ...latest, leaveLog: (latest.leaveLog || []).filter((l) => l.id !== id) };
@@ -822,6 +847,16 @@ export default function EvaluationWorkspace({ tab }) {
             await deleteLeave(id);
             showMessage("已刪除這筆請假。");
           }}
+          onSavePunches={async (map, text) => {
+            try {
+              await savePunches(map);
+              showMessage(text);
+            } catch (error) {
+              console.error(error);
+              showMessage("打卡資料儲存失敗，請再試一次。", true);
+            }
+          }}
+          onToggleLateExempt={toggleLateExempt}
           onChanged={afterChange}
         />
       )}
@@ -1158,7 +1193,7 @@ function semProgress(entry, basics, manualMode, semKey) {
 // 日常登記：事件＋抽查
 // ---------------------------------------------------------
 
-function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, onNewEvent, onSaveInspection, onDeleteInspection, onSaveLeave, onDeleteLeave, onChanged }) {
+function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, onNewEvent, onSaveInspection, onDeleteInspection, onSaveLeave, onDeleteLeave, onSavePunches, onToggleLateExempt, onChanged }) {
   const [editing, setEditing] = useState(null);
   const [leaveEditing, setLeaveEditing] = useState(null);
   const [leaveFilter, setLeaveFilter] = useState("");
@@ -1217,6 +1252,8 @@ function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, o
           <div style={S.empty}>還沒有抽查紀錄。</div>
         )}
       </section>
+
+      <PunchSection info={info} settings={settings} teachers={teachers} locked={locked} onSave={onSavePunches} onToggle={onToggleLateExempt} />
 
       <section style={S.section}>
         <div style={S.rowBetween}>
@@ -1303,6 +1340,110 @@ function DailyLogPanel({ info, settings, teachers, events, teacherMap, locked, o
 
 function avg(list) {
   return list.length ? list.reduce((a, b) => a + b, 0) / list.length : null;
+}
+
+/** 打卡紀錄：上傳打卡 Excel，只讀「倍思學院」分頁、只認系統裡的老師 */
+function PunchSection({ info, settings, teachers, locked, onSave, onToggle }) {
+  const [busy, setBusy] = useState(false);
+  const [openTid, setOpenTid] = useState("");
+  const fileRef = useRef(null);
+
+  const nameMap = new Map();
+  for (const t of teachers) {
+    for (const n of [t.chinese_name, t.english_name, settings.punchNames?.[t.id]]) {
+      if (n && String(n).trim()) nameMap.set(String(n).trim(), t.id);
+    }
+  }
+
+  async function handleFiles(files) {
+    setBusy(true);
+    const map = {};
+    let rows = 0;
+    const unknown = new Set();
+    try {
+      for (const file of files) {
+        const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+        const sheetName = wb.SheetNames.find((n) => n.includes("倍思")) || wb.SheetNames[0];
+        const data = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, raw: false, defval: "" });
+        const head = data[0] || [];
+        const iName = head.findIndex((h) => String(h).includes("姓名"));
+        const iDate = head.findIndex((h) => String(h).includes("日期"));
+        const iIn = head.findIndex((h) => String(h).includes("上班"));
+        if (iName < 0 || iDate < 0 || iIn < 0) continue;
+        for (const row of data.slice(1)) {
+          const name = String(row[iName] || "").trim();
+          const tid = nameMap.get(name);
+          if (!tid) {
+            if (name) unknown.add(name);
+            continue;
+          }
+          const date = String(row[iDate] || "").slice(0, 10).replace(/\//g, "-");
+          const t = firstPunch(row[iIn]);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !t) continue;
+          map[tid] = map[tid] || {};
+          if (!map[tid][date] || t < map[tid][date]) map[tid][date] = t;
+          rows += 1;
+        }
+      }
+      const matched = Object.keys(map).length;
+      await onSave(map, `已匯入 ${rows} 筆打卡（${matched} 位老師）。其他 ${unknown.size} 人不是考核名單，已略過。`);
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  const summary = teachers.map((t) => {
+    const days = Object.keys(settings.punches?.[t.id] || {}).filter((d) => d >= info.range.from && d <= info.range.to).length;
+    const list = lateList(t.id, info.range, settings);
+    const hasSched = Object.values(settings.workSchedule?.[t.id] || {}).some(Boolean);
+    return { t, days, list, counted: list.filter((x) => !x.exempt).length, hasSched };
+  });
+
+  return (
+    <section style={S.section}>
+      <h2 style={S.sectionTitle}>打卡紀錄（遲到）</h2>
+      <p style={S.hint}>
+        每月把打卡 Excel 檔上傳一次（可以一次選好幾個月）。系統只讀「倍思學院」分頁、只認考核名單裡的老師；
+        每天第一次上班打卡比上班時間晚超過 {settings.lateGrace ?? 5} 分鐘算遲到一次，每次扣 {settings.latePenalty ?? 2} 分。上班時間在「年度設定」修改。
+      </p>
+      {!locked && (
+        <div style={S.actionRow}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple style={{ display: "none" }} onChange={(e) => e.target.files?.length && handleFiles([...e.target.files])} />
+          <button type="button" style={S.primaryButton} disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? "匯入中…" : "＋ 上傳打卡檔"}</button>
+        </div>
+      )}
+      <div style={{ ...S.list, marginTop: 8 }}>
+        {summary.map(({ t, days, list, counted, hasSched }) => (
+          <div key={t.id}>
+            <div style={{ ...S.listRow, cursor: list.length ? "pointer" : "default" }} onClick={() => list.length && setOpenTid(openTid === t.id ? "" : t.id)}>
+              <div style={S.listMain}>
+                <strong>{teacherName(t)}</strong>
+                <span style={S.muted}>・打卡 {days} 天</span>
+                {!hasSched && <span style={{ ...S.chip, ...S.chipWarn, marginLeft: 6 }}>未設上班時間</span>}
+              </div>
+              <span style={counted ? S.minusText : S.muted}>遲到 {counted} 次{list.length ? (openTid === t.id ? " ▾" : " ▸") : ""}</span>
+            </div>
+            {openTid === t.id && (
+              <div style={{ padding: "4px 0 10px 16px" }}>
+                {list.map((x) => (
+                  <div key={x.date} style={{ ...S.actionRow, padding: "3px 0", opacity: x.exempt ? 0.5 : 1 }}>
+                    <span style={{ width: 90 }}>{x.date.slice(5).replace("-", "/")}（{"日一二三四五六"[new Date(`${x.date}T00:00:00`).getDay()]}）</span>
+                    <span style={S.muted}>上班 {x.start}・打卡 {x.time}・晚 {x.minutes} 分</span>
+                    {!locked && (
+                      <label style={S.muted}>
+                        <input type="checkbox" checked={x.exempt} onChange={(e) => onToggle(t.id, x.date, e.target.checked)} /> 不算
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function LeaveEditor({ draft: initial, settings, teachers, onClose, onSave }) {
@@ -2089,7 +2230,7 @@ function SemesterDataPanel({ info, settings, teachers, sources, events, assignme
 // ---------------------------------------------------------
 
 
-function YearSettingsPanel({ info, settings, types, locked, saving, onSave }) {
+function YearSettingsPanel({ info, settings, types, teachers, locked, saving, onSave }) {
   const [draft, setDraft] = useState(settings);
   const [typeDraft, setTypeDraft] = useState(types);
   useEffect(() => setDraft(settings), [settings]);
@@ -2157,6 +2298,51 @@ function YearSettingsPanel({ info, settings, types, locked, saving, onSave }) {
         {field("事件 1 次得分", ["countScore", 1], draft.countScore[1])}
         {field("事件 2 次以上得分", ["countScore", 2], draft.countScore[2])}
         {field("額外加分上限", ["bonusCap"], draft.bonusCap)}
+      </div>
+
+      <h3 style={S.subTitle}>上班時間（算遲到用）</h3>
+      <p style={S.hint}>每位老師星期幾的上班時間；空白的那天不算遲到。打卡名字跟系統不同時，在「打卡名字」填打卡檔上的名字。</p>
+      <div style={S.settingsGrid}>
+        {field("遲到寬限（分鐘）", ["lateGrace"], draft.lateGrace)}
+        {field("每次遲到扣", ["latePenalty"], draft.latePenalty, 0.5)}
+      </div>
+      <div style={{ ...S.tableWrap, marginTop: 8 }}>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              <th style={S.th}>老師</th>
+              {["一", "二", "三", "四", "五", "六"].map((d) => <th key={d} style={S.thNum}>{d}</th>)}
+              <th style={S.th}>打卡名字</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(teachers || []).map((t) => (
+              <tr key={t.id}>
+                <td style={S.td}>{teacherName(t)}</td>
+                {[1, 2, 3, 4, 5, 6].map((wd) => (
+                  <td key={wd} style={S.tdNum}>
+                    <input
+                      style={{ ...S.smallInput, width: 96 }}
+                      type="time"
+                      disabled={locked}
+                      value={draft.workSchedule?.[t.id]?.[wd] || ""}
+                      onChange={(e) => set(["workSchedule"], { ...(draft.workSchedule || {}), [t.id]: { ...(draft.workSchedule?.[t.id] || {}), [wd]: e.target.value } })}
+                    />
+                  </td>
+                ))}
+                <td style={S.td}>
+                  <input
+                    style={{ ...S.smallInput, width: 110 }}
+                    disabled={locked}
+                    placeholder={teacherName(t)}
+                    value={draft.punchNames?.[t.id] || ""}
+                    onChange={(e) => set(["punchNames"], { ...(draft.punchNames || {}), [t.id]: e.target.value })}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <h3 style={S.subTitle}>請假扣分（出勤，每天扣幾分；8 小時算 1 天）</h3>
