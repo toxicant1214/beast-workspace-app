@@ -21,6 +21,10 @@ import {
   computeManualSemester,
   computeSystemSemester,
   computeTeacherYear,
+  seniorityYears,
+  seniorityBase,
+  bonusMonths,
+  DEFAULT_SENIORITY_TABLE,
   evaluationYearInfo,
   campExcluded,
   semEntry,
@@ -633,6 +637,10 @@ export default function EvaluationWorkspace({ tab }) {
       salary: r.salary,
       isLeader: r.isLeader,
       pay: r.pay,
+      years: r.years,
+      seniorityBase: r.seniorityBase,
+      months: r.months,
+      deduct: r.deduct,
     }));
     const now = new Date();
     await persist({ ...settings, locked: true, lockedAt: now.toISOString(), snapshot: { rows } }, `${info.label} 已封存。`);
@@ -915,6 +923,7 @@ export default function EvaluationWorkspace({ tab }) {
         <YearEndPanel
           rows={locked ? snapshotRows : results}
           locked={locked}
+          info={info}
           settings={settings}
           saving={saving}
           onSave={(next) => persist(next, "已儲存。")}
@@ -1114,38 +1123,48 @@ function TeacherDetail({ row, results, settings, info, events, teacherMap, locke
 // 正式考核（年終）
 // ---------------------------------------------------------
 
-function YearEndPanel({ rows, locked, settings, saving, onSave }) {
+function YearEndPanel({ rows, locked, settings, saving, onSave, info }) {
   const [salaries, setSalaries] = useState(settings.salaries || {});
   const [leaders, setLeaders] = useState(new Set(settings.leaders || []));
+  const [years, setYears] = useState(settings.seniorityYears || {});
   useEffect(() => {
     setSalaries(settings.salaries || {});
     setLeaders(new Set(settings.leaders || []));
+    setYears(settings.seniorityYears || {});
   }, [settings]);
 
   const live = rows.map((r) => {
     const id = locked ? r.teacherId : r.teacher.id;
-    if (locked) return { id, name: r.name, total: r.total, factor: r.factor, salary: r.salary, isLeader: r.isLeader, pay: r.pay };
+    if (locked) return { id, name: r.name, total: r.total, factor: r.factor, salary: r.salary, isLeader: r.isLeader, pay: r.pay, years: r.years, base: r.seniorityBase, months: r.months };
+    const tmp = { ...settings, seniorityYears: years };
+    const y = seniorityYears(r.teacher, tmp, info.range.to);
+    const months = bonusMonths(y, r.factor, tmp);
     const salary = Number(salaries[id]) || 0;
     const isLeader = leaders.has(id);
-    const pay = r.factor === null ? 0 : salary * Number(settings.base_months || 0) * r.factor + (isLeader ? Number(settings.leader_bonus || 0) : 0);
-    return { id, name: teacherName(r.teacher), total: r.total, factor: r.factor, salary, isLeader, pay };
+    const pay = months === null ? 0 : salary * months + (isLeader ? Number(settings.leader_bonus || 0) : 0);
+    return { id, name: teacherName(r.teacher), hire: r.teacher.hire_date, total: r.total, factor: r.factor, salary, isLeader, pay, years: y, base: seniorityBase(y, tmp), months };
   });
   const sum = live.reduce((a, r) => a + r.pay, 0);
+  const missingYears = live.filter((r) => r.years === null).length;
 
   return (
     <section style={S.section}>
       <h2 style={S.sectionTitle}>年終試算</h2>
       <p style={S.hint}>
-        年終 = 月薪 × 基本月數（{settings.base_months}）× 係數 ＋ 組長加給（{money(settings.leader_bonus)}）。
-        {locked ? "已封存，金額鎖定。" : "月數、加給、級距在「年度設定」改。"}
+        年終 = 月薪 × 年資基數 × 考評基數 ＋ 組長加給（{money(settings.leader_bonus)}）。未滿 1 年：考評基數再乘年資（例如 9 個月 × 0.75）。
+        年資算到 {info.range.to}；沒有到職日的老師請直接填年資。{locked ? "已封存，金額鎖定。" : "年資基數表、考評級距在「年度設定」改。"}
       </p>
+      {missingYears > 0 && !locked && <p style={{ ...S.hint, color: "#b26a00" }}>⚠ 還有 {missingYears} 位老師沒有年資，年終算不出來。</p>}
       <div style={S.tableWrap}>
         <table style={S.table}>
           <thead>
             <tr>
               <th style={S.th}>老師</th>
               <th style={S.thNum}>年度總分</th>
-              <th style={S.thNum}>係數</th>
+              <th style={S.thNum}>考評基數</th>
+              <th style={S.thNum}>年資（年）</th>
+              <th style={S.thNum}>年資基數</th>
+              <th style={S.thNum}>年終月數</th>
               <th style={S.thNum}>月薪</th>
               <th style={S.th}>組長</th>
               <th style={S.thNum}>年終</th>
@@ -1157,6 +1176,19 @@ function YearEndPanel({ rows, locked, settings, saving, onSave }) {
                 <td style={S.td}>{r.name}</td>
                 <td style={S.tdNum}>{r1(r.total)}</td>
                 <td style={S.tdNum}>{r.factor ?? "—"}</td>
+                <td style={S.tdNum}>
+                  {locked ? (r.years ?? "—") : (
+                    <input
+                      style={{ ...S.smallInput, width: 70, ...(r.years === null ? { borderColor: "#c0392b" } : {}) }}
+                      type="number" min="0" step="0.01"
+                      placeholder={r.hire ? String(seniorityYears({ ...r, id: "_", hire_date: r.hire }, {}, info.range.to)) : "必填"}
+                      value={years[r.id] ?? ""}
+                      onChange={(e) => setYears({ ...years, [r.id]: e.target.value })}
+                    />
+                  )}
+                </td>
+                <td style={S.tdNum}>{r.base ?? "—"}</td>
+                <td style={S.tdNum}>{r.months === null || r.months === undefined ? "—" : Math.round(r.months * 1000) / 1000}</td>
                 <td style={S.tdNum}>
                   {locked ? money(r.salary) : (
                     <input style={S.salaryInput} type="number" min="0" value={salaries[r.id] ?? ""} onChange={(e) => setSalaries({ ...salaries, [r.id]: e.target.value })} />
@@ -1175,11 +1207,11 @@ function YearEndPanel({ rows, locked, settings, saving, onSave }) {
                     }}
                   />
                 </td>
-                <td style={{ ...S.tdNum, fontWeight: 800 }}>{r.salary ? money(r.pay) : "—"}</td>
+                <td style={{ ...S.tdNum, fontWeight: 800 }}>{r.salary && r.months !== null ? money(r.pay) : "—"}</td>
               </tr>
             ))}
             <tr>
-              <td style={{ ...S.td, fontWeight: 800 }} colSpan={5}>合計</td>
+              <td style={{ ...S.td, fontWeight: 800 }} colSpan={8}>合計</td>
               <td style={{ ...S.tdNum, fontWeight: 800 }}>{money(sum)}</td>
             </tr>
           </tbody>
@@ -1187,8 +1219,8 @@ function YearEndPanel({ rows, locked, settings, saving, onSave }) {
       </div>
       {!locked && (
         <div style={S.modalActions}>
-          <button type="button" style={S.primaryButton} disabled={saving} onClick={() => onSave({ ...settings, salaries, leaders: [...leaders] })}>
-            {saving ? "儲存中…" : "儲存月薪與組長"}
+          <button type="button" style={S.primaryButton} disabled={saving} onClick={() => onSave({ ...settings, salaries, leaders: [...leaders], seniorityYears: years })}>
+            {saving ? "儲存中…" : "儲存年資、月薪與組長"}
           </button>
         </div>
       )}
@@ -2547,7 +2579,7 @@ function YearSettingsPanel({ info, settings, types, teachers, locked, saving, on
 
       <h3 style={S.subTitle}>年終</h3>
       <div style={S.settingsGrid}>
-        {field("基本月數", ["base_months"], draft.base_months, 0.1)}
+
         {field("組長加給（元）", ["leader_bonus"], draft.leader_bonus, 500)}
       </div>
 
@@ -2564,6 +2596,21 @@ function YearSettingsPanel({ info, settings, types, teachers, locked, saving, on
           <input style={S.smallInput} type="number" step="0.1" disabled={locked} value={band.factor} onChange={(e) => set(["bands", i, "factor"], num(e.target.value))} />
         </div>
       ))}
+
+      <h3 style={S.subTitle}>年資基數</h3>
+      <p style={S.hint}>年終 = 月薪 × 年資基數 × 考評基數。年資滿幾年用哪個基數；未滿 1 年用第一列，考評基數再乘年資。</p>
+      {(draft.seniorityTable?.length ? draft.seniorityTable : DEFAULT_SENIORITY_TABLE).map((row, i, arr) => {
+        const table = draft.seniorityTable?.length ? draft.seniorityTable : DEFAULT_SENIORITY_TABLE.map((x) => ({ ...x }));
+        const next = arr[i + 1];
+        return (
+          <div key={i} style={S.inlineGroup}>
+            <span style={{ minWidth: "110px" }}>{i === 0 ? `未滿 ${next ? next.min : "—"} 年` : next ? `${row.min}～${next.min} 年` : `${row.min} 年以上`}</span>
+            基數
+            <input style={S.smallInput} type="number" step="0.1" min="0" disabled={locked} value={row.base}
+              onChange={(e) => set(["seniorityTable"], table.map((x, j) => (j === i ? { ...x, base: num(e.target.value) } : x)))} />
+          </div>
+        );
+      })}
 
       <h3 style={S.subTitle}>事件分數</h3>
       <p style={S.hint}>加分項目加在年度總分（合計上限 {draft.bonusCap ?? 10}）；安全問題直接扣年度總分。家長客訴、工作疏失、沒交接、臨時請假是算次數，在上面「指標規則」設定。</p>

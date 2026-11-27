@@ -168,6 +168,47 @@ export const DEFAULT_INSPECTION_ITEMS = {
   ],
 };
 
+// ---------------------------------------------------------
+// 年資基數（照往年）：年終 = 月薪 × 年資基數 × 考評基數；未滿 1 年考評基數再乘年資
+// ---------------------------------------------------------
+export const DEFAULT_SENIORITY_TABLE = [
+  { min: 0, base: 0.5 },
+  { min: 1, base: 1 },
+  { min: 2, base: 1.2 },
+  { min: 3, base: 1.5 },
+  { min: 4, base: 1.7 },
+  { min: 5, base: 2 },
+  { min: 6, base: 2.2 },
+  { min: 7, base: 2.4 },
+  { min: 8, base: 2.6 },
+  { min: 9, base: 3 },
+];
+
+/** 年資（年）：手動填的優先，否則用到職日算到考核年度最後一天 */
+export function seniorityYears(teacher, settings, yearEnd) {
+  const manual = settings.seniorityYears?.[teacher.id];
+  if (manual !== undefined && manual !== null && manual !== "") return Number(manual);
+  if (!teacher.hire_date) return null;
+  const days = (new Date(`${yearEnd}T00:00:00`) - new Date(`${teacher.hire_date}T00:00:00`)) / 86400000;
+  return Math.max(0, Math.round((days / 365.25) * 100) / 100);
+}
+
+export function seniorityBase(years, settings) {
+  if (years === null || years === undefined) return null;
+  const table = [...(settings.seniorityTable?.length ? settings.seniorityTable : DEFAULT_SENIORITY_TABLE)].sort((a, b) => Number(a.min) - Number(b.min));
+  let base = Number(table[0]?.base ?? 0);
+  for (const row of table) if (years >= Number(row.min)) base = Number(row.base);
+  return base;
+}
+
+/** 年終月數 = 年資基數 × 考評基數（未滿 1 年，考評基數 × 年資） */
+export function bonusMonths(years, factor, settings) {
+  const base = seniorityBase(years, settings);
+  if (base === null || factor === null || factor === undefined) return null;
+  const f = years < 1 ? factor * years : factor;
+  return base * f;
+}
+
 export function defaultYearSettings(year) {
   return {
     w: { A: 25, B: 30, C: 30, D: 15 },
@@ -206,14 +247,15 @@ export function defaultYearSettings(year) {
     bonusCap: 10,
     base_months: 1,
     leader_bonus: 0,
+    // 考評基數（照往年：90 以上 1.5、85 以上 1.2、80 以上 1.0、80 以下 0.8）
     bands: [
-      { min: 95, factor: 1.3 },
-      { min: 90, factor: 1.2 },
+      { min: 90, factor: 1.5 },
+      { min: 85, factor: 1.2 },
       { min: 80, factor: 1.0 },
-      { min: 70, factor: 0.8 },
-      { min: 60, factor: 0.6 },
-      { min: -9999, factor: 0.4 },
+      { min: -9999, factor: 0.8 },
     ],
+    seniorityTable: DEFAULT_SENIORITY_TABLE.map((x) => ({ ...x })),
+    seniorityYears: {},
     salaries: {},
     leaders: [],
     manual: {},
@@ -780,9 +822,11 @@ export function computeTeacherYear({ teacher, info, sources, events, assignments
   const factor = total === null ? null : factorFor(total, settings.bands);
   const salary = Number(settings.salaries?.[teacher.id]) || 0;
   const isLeader = (settings.leaders || []).includes(teacher.id);
-  const pay = factor === null ? 0 : salary * Number(settings.base_months || 0) * factor + (isLeader ? Number(settings.leader_bonus || 0) : 0);
+  const years = seniorityYears(teacher, settings, info.range.to);
+  const months = bonusMonths(years, factor, settings);
+  const pay = months === null ? 0 : salary * months + (isLeader ? Number(settings.leader_bonus || 0) : 0);
 
-  return { teacher, spring, fall, bonus, bonusRaw, bonusList, deduct, deductList, base, total, factor, salary, isLeader, pay };
+  return { teacher, spring, fall, bonus, bonusRaw, bonusList, deduct, deductList, base, total, factor, salary, isLeader, pay, years, seniorityBase: seniorityBase(years, settings), months };
 }
 
 /** 可以在年度設定關掉的系統指標 */
