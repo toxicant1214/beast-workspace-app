@@ -1151,7 +1151,7 @@ function YearEndPanel({ rows, locked, settings, saving, onSave, info }) {
     <section style={S.section}>
       <h2 style={S.sectionTitle}>年終試算</h2>
       <p style={S.hint}>
-        年終 = 月薪 × 年資基數 × 考評基數 ＋ 組長加給（{money(settings.leader_bonus)}）。未滿 1 年：考評基數再乘年資（例如 9 個月 × 0.75）。
+        年終 = 月薪 × 年資基數 × 考評基數（最多 {settings.maxMonths || "不限"} 個月）＋ 組長加給（{money(settings.leader_bonus)}）。未滿 1 年：考評基數再乘年資（例如 9 個月 × 0.75）。
         年資算到 {info.range.to}；沒有到職日的老師請直接填年資。{locked ? "已封存，金額鎖定。" : "年資基數表、考評級距在「年度設定」改。"}
       </p>
       {missingYears > 0 && !locked && <p style={{ ...S.hint, color: "#b26a00" }}>⚠ 還有 {missingYears} 位老師沒有年資，年終算不出來。</p>}
@@ -2599,6 +2599,11 @@ function YearSettingsPanel({ info, settings, types, teachers, locked, saving, on
 
       <h3 style={S.subTitle}>年資基數</h3>
       <p style={S.hint}>年終 = 月薪 × 年資基數 × 考評基數。年資滿幾年用哪個基數；未滿 1 年用第一列，考評基數再乘年資。</p>
+      <div style={S.inlineGroup}>
+        <span style={{ minWidth: "110px" }}>年終月數上限</span>
+        <input style={S.smallInput} type="number" step="0.1" min="0" disabled={locked} value={draft.maxMonths ?? ""} onChange={(e) => set(["maxMonths"], num(e.target.value))} />
+        個月（留空＝不設上限）
+      </div>
       {(draft.seniorityTable?.length ? draft.seniorityTable : DEFAULT_SENIORITY_TABLE).map((row, i, arr) => {
         const table = draft.seniorityTable?.length ? draft.seniorityTable : DEFAULT_SENIORITY_TABLE.map((x) => ({ ...x }));
         const next = arr[i + 1];

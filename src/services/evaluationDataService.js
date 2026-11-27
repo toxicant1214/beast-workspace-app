@@ -206,7 +206,8 @@ export function bonusMonths(years, factor, settings) {
   const base = seniorityBase(years, settings);
   if (base === null || factor === null || factor === undefined) return null;
   const f = years < 1 ? factor * years : factor;
-  return base * f;
+  const cap = Number(settings.maxMonths);
+  return cap > 0 ? Math.min(base * f, cap) : base * f;
 }
 
 export function defaultYearSettings(year) {
@@ -247,14 +248,15 @@ export function defaultYearSettings(year) {
     bonusCap: 10,
     base_months: 1,
     leader_bonus: 0,
-    // 考評基數（照往年：90 以上 1.5、85 以上 1.2、80 以上 1.0、80 以下 0.8）
+    // 考評基數：90 以上 1.3、85 以上 1.2、80 以上 1.0、80 以下 0.8；年終月數上限 maxMonths
     bands: [
-      { min: 90, factor: 1.5 },
+      { min: 90, factor: 1.3 },
       { min: 85, factor: 1.2 },
       { min: 80, factor: 1.0 },
       { min: -9999, factor: 0.8 },
     ],
     seniorityTable: DEFAULT_SENIORITY_TABLE.map((x) => ({ ...x })),
+    maxMonths: 3,
     seniorityYears: {},
     salaries: {},
     leaders: [],
