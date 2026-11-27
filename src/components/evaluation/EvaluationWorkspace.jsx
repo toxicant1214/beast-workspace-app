@@ -2333,7 +2333,7 @@ function YearSettingsPanel({ info, settings, types, teachers, locked, saving, on
           <thead>
             <tr>
               <th style={S.th}>老師</th>
-              {["一", "二", "三", "四", "五", "六"].map((d) => <th key={d} style={S.thNum}>{d}</th>)}
+              {["一", "二", "三", "四", "五"].map((d) => <th key={d} style={S.thNum}>{d}</th>)}
               <th style={S.th}>打卡名字</th>
             </tr>
           </thead>
@@ -2341,7 +2341,7 @@ function YearSettingsPanel({ info, settings, types, teachers, locked, saving, on
             {(teachers || []).map((t) => (
               <tr key={t.id}>
                 <td style={S.td}>{teacherName(t)}</td>
-                {[1, 2, 3, 4, 5, 6].map((wd) => (
+                {[1, 2, 3, 4, 5].map((wd) => (
                   <td key={wd} style={S.tdNum}>
                     <input
                       style={{ ...S.smallInput, width: 96 }}

@@ -92,6 +92,7 @@ export function lateList(teacherId, range, settings) {
   for (const [date, time] of Object.entries(punches)) {
     if (!inRange(date, range)) continue;
     const wd = new Date(`${date}T00:00:00`).getDay() || 7;
+    if (wd > 5) continue; // 週六、週日不算遲到
     const start = toMin(sched[wd]);
     const arrive = toMin(time);
     if (start === null || arrive === null) continue;
