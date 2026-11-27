@@ -94,11 +94,33 @@ export function noLateRanges(settings, sources) {
 
 export function lateList(teacherId, range, settings, sources) {
   const skip = noLateRanges(settings, sources);
+  const out = [];
+  // ---- 未打卡：那天有人打卡（代表有上班）、這位老師沒打卡、也沒請假 ----
+  const own = settings.punches?.[teacherId] || {};
+  const ownDates = Object.keys(own).sort();
+  const sched0 = settings.workSchedule?.[teacherId] || {};
+  if (ownDates.length) {
+    const firstDay = ownDates[0];
+    const workDays = new Set();
+    for (const [tid, days] of Object.entries(settings.punches || {})) {
+      if (tid === teacherId) continue;
+      for (const d of Object.keys(days)) workDays.add(d);
+    }
+    const leaves = (settings.leaveLog || []).filter((l) => l.teacherId === teacherId);
+    const exempt0 = settings.lateExempt?.[teacherId] || {};
+    for (const date of workDays) {
+      if (!inRange(date, range) || date < firstDay || own[date]) continue;
+      const wd = new Date(`${date}T00:00:00`).getDay() || 7;
+      if (wd > 5 || !sched0[wd]) continue;
+      if (skip.some((x) => date >= x.from && date <= x.to)) continue;
+      if (leaves.some((l) => date >= l.from && date <= (l.to || l.from))) continue;
+      out.push({ date, time: null, start: sched0[wd], minutes: null, missing: true, points: Number(settings.missingPunchPoints ?? 2), exempt: Boolean(exempt0[date]) });
+    }
+  }
   const sched = settings.workSchedule?.[teacherId] || {};
   const punches = settings.punches?.[teacherId] || {};
   const exempt = settings.lateExempt?.[teacherId] || {};
   const grace = Number(settings.lateGrace ?? 0);
-  const out = [];
   for (const [date, time] of Object.entries(punches)) {
     if (!inRange(date, range)) continue;
     const wd = new Date(`${date}T00:00:00`).getDay() || 7;
@@ -172,6 +194,7 @@ export function defaultYearSettings(year) {
     punches: {},
     lateExempt: {},
     lateGrace: 0,
+    missingPunchPoints: 2,
     // 不算遲到的期間（營隊管理裡的冬令營／夏令營會自動加進來）
     noLateRanges: [{ name: "暑假", from: `${year}-07-01`, to: `${year}-08-31` }],
     lateTiers: DEFAULT_LATE_TIERS.map((t) => ({ ...t })),
@@ -608,6 +631,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const punchLate = lateList(teacherId, range, settings, sources).filter((x) => !x.exempt);
   const hasPunch = Object.keys(settings.punches?.[teacherId] || {}).some((d) => inRange(d, range));
   const lateCount = punchLate.length + countOf("遲到");
+  const missingCount = punchLate.filter((x) => x.missing).length;
   const latePts = punchLate.reduce((a, x) => a + x.points, 0) + countOf("遲到") * latePoints(15, settings);
   const myLeaves = (settings.leaveLog || []).filter((l) => l.teacherId === teacherId && inRange(l.from, range));
   const lastMinuteLeaves = myLeaves.filter((l) => l.lastMinute).length;
@@ -642,7 +666,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
         "late",
         "遲到",
         hasPunch || lateCount
-          ? `${lateCount} 次、扣 ${latePts}${punchLate.length ? `：${punchLate.map((x) => `${x.date.slice(5).replace("-", "/")} 晚 ${x.minutes} 分`).join("、")}` : ""}`
+          ? `${lateCount - missingCount} 次遲到${missingCount ? `＋${missingCount} 次未打卡` : ""}、扣 ${latePts}${punchLate.length ? `：${punchLate.map((x) => `${x.date.slice(5).replace("-", "/")} ${x.missing ? "未打卡" : `晚 ${x.minutes} 分`}`).join("、")}` : ""}`
           : "還沒有打卡資料",
         hasPunch || lateCount ? clamp(100 - latePts) : null,
         "打卡"

@@ -571,6 +571,16 @@ export default function EvaluationWorkspace({ tab }) {
     setSettings(next);
   }
 
+  async function saveLeaves(newOnes) {
+    const latest = await getYearSettings(year);
+    if (latest.locked) throw new Error("locked");
+    const ids = new Set(newOnes.map((l) => l.id));
+    const list = [...(latest.leaveLog || []).filter((l) => !ids.has(l.id)), ...newOnes].sort((a, b) => b.from.localeCompare(a.from));
+    const next = { ...latest, leaveLog: list };
+    await saveYearSettings(year, next);
+    setSettings(next);
+  }
+
   async function deleteLeave(id) {
     const latest = await getYearSettings(year);
     const next = { ...latest, leaveLog: (latest.leaveLog || []).filter((l) => l.id !== id) };
@@ -860,6 +870,15 @@ export default function EvaluationWorkspace({ tab }) {
             }
           }}
           onToggleLateExempt={toggleLateExempt}
+          onSaveLeaves={async (list, text) => {
+            try {
+              await saveLeaves(list);
+              showMessage(text);
+            } catch (error) {
+              console.error(error);
+              showMessage("假單匯入失敗，請再試一次。", true);
+            }
+          }}
           onChanged={afterChange}
         />
       )}
@@ -1196,7 +1215,7 @@ function semProgress(entry, basics, manualMode, semKey) {
 // 日常登記：事件＋抽查
 // ---------------------------------------------------------
 
-function DailyLogPanel({ info, sources, settings, teachers, events, teacherMap, locked, onNewEvent, onSaveInspection, onDeleteInspection, onSaveLeave, onDeleteLeave, onSavePunches, onToggleLateExempt, onChanged }) {
+function DailyLogPanel({ info, sources, settings, teachers, events, teacherMap, locked, onNewEvent, onSaveInspection, onDeleteInspection, onSaveLeave, onDeleteLeave, onSavePunches, onToggleLateExempt, onSaveLeaves, onChanged }) {
   const [editing, setEditing] = useState(null);
   const [leaveEditing, setLeaveEditing] = useState(null);
   const [leaveFilter, setLeaveFilter] = useState("");
@@ -1256,15 +1275,27 @@ function DailyLogPanel({ info, sources, settings, teachers, events, teacherMap, 
         )}
       </section>
 
-      <PunchSection info={info} sources={sources} settings={settings} teachers={teachers} locked={locked} onSave={onSavePunches} onToggle={onToggleLateExempt} />
+      <PunchSection
+        info={info}
+        sources={sources}
+        settings={settings}
+        teachers={teachers}
+        locked={locked}
+        onSave={onSavePunches}
+        onToggle={onToggleLateExempt}
+        onLeave={(tid, date) => setLeaveEditing({ id: `l${Date.now()}`, teacherId: tid, from: date, to: date, type: "事假", hours: 8, lastMinute: false, note: "" })}
+      />
 
       <section style={S.section}>
         <div style={S.rowBetween}>
           <h2 style={S.sectionTitle}>請假紀錄</h2>
+          <span style={S.actionRow}>
+          {!locked && <LeaveUpload teachers={teachers} settings={settings} onSave={onSaveLeaves} />}
           <select style={S.rangeSelect} value={leaveFilter} onChange={(e) => setLeaveFilter(e.target.value)}>
             <option value="">全部老師</option>
             {teachers.map((t) => <option key={t.id} value={t.id}>{teacherName(t)}</option>)}
           </select>
+          </span>
         </div>
         {leaves.length ? (
           <div style={S.list}>
@@ -1346,7 +1377,7 @@ function avg(list) {
 }
 
 /** 打卡紀錄：上傳打卡 Excel，只讀「倍思學院」分頁、只認系統裡的老師 */
-function PunchSection({ info, sources, settings, teachers, locked, onSave, onToggle }) {
+function PunchSection({ info, sources, settings, teachers, locked, onSave, onToggle, onLeave }) {
   const [busy, setBusy] = useState(false);
   const [openTid, setOpenTid] = useState("");
   const fileRef = useRef(null);
@@ -1408,7 +1439,7 @@ function PunchSection({ info, sources, settings, teachers, locked, onSave, onTog
       <h2 style={S.sectionTitle}>打卡紀錄（遲到）</h2>
       <p style={S.hint}>
         每月把打卡 Excel 檔上傳一次（可以一次選好幾個月）。系統只讀「倍思學院」分頁、只認考核名單裡的老師；
-        每天第一次上班打卡比上班時間晚就算遲到，依晚到分鐘數分級扣分；週六日和寒暑假（
+        每天第一次上班打卡比上班時間晚就算遲到，依晚到分鐘數分級扣分；有上班日卻沒打卡、也沒請假，算「未打卡」扣 {settings.missingPunchPoints ?? 2} 分（是請假就按「登記請假」）；週六日和寒暑假（
         {noLateRanges(settings, sources).map((x) => `${x.name} ${x.from.slice(5).replace("-", "/")}～${x.to.slice(5).replace("-", "/")}`).join("、") || "未設定"}
         ）不算。上班時間、扣分級距、寒暑假期間在「年度設定」修改。
       </p>
@@ -1428,7 +1459,7 @@ function PunchSection({ info, sources, settings, teachers, locked, onSave, onTog
                 {!hasSched && <span style={{ ...S.chip, ...S.chipWarn, marginLeft: 6 }}>未設上班時間</span>}
               </div>
               <span style={counted ? S.minusText : S.muted}>
-                遲到 {counted} 次{counted ? `・扣 ${list.filter((x) => !x.exempt).reduce((a, x) => a + x.points, 0)}` : ""}{list.length ? (openTid === t.id ? " ▾" : " ▸") : ""}
+                {list.some((x) => x.missing && !x.exempt) ? `未打卡 ${list.filter((x) => x.missing && !x.exempt).length}・` : ""}遲到 {counted - list.filter((x) => x.missing && !x.exempt).length} 次{counted ? `・扣 ${list.filter((x) => !x.exempt).reduce((a, x) => a + x.points, 0)}` : ""}{list.length ? (openTid === t.id ? " ▾" : " ▸") : ""}
               </span>
             </div>
             {openTid === t.id && (
@@ -1436,7 +1467,15 @@ function PunchSection({ info, sources, settings, teachers, locked, onSave, onTog
                 {list.map((x) => (
                   <div key={x.date} style={{ ...S.actionRow, padding: "3px 0", opacity: x.exempt ? 0.5 : 1 }}>
                     <span style={{ width: 90 }}>{x.date.slice(5).replace("-", "/")}（{"日一二三四五六"[new Date(`${x.date}T00:00:00`).getDay()]}）</span>
-                    <span style={S.muted}>上班 {x.start}・打卡 {x.time}・晚 {x.minutes} 分・扣 {x.points}</span>
+                    {x.missing ? (
+                      <>
+                        <span style={{ ...S.chip, ...S.chipWarn }}>未打卡</span>
+                        <span style={S.muted}>沒有打卡也沒有請假・扣 {x.points}</span>
+                        {!locked && <button type="button" style={S.linkButton} onClick={() => onLeave(t.id, x.date)}>登記請假</button>}
+                      </>
+                    ) : (
+                      <span style={S.muted}>上班 {x.start}・打卡 {x.time}・晚 {x.minutes} 分・扣 {x.points}</span>
+                    )}
                     {!locked && (
                       <label style={S.muted}>
                         <input type="checkbox" checked={x.exempt} onChange={(e) => onToggle(t.id, x.date, e.target.checked)} /> 不算
@@ -1450,6 +1489,63 @@ function PunchSection({ info, sources, settings, teachers, locked, onSave, onTog
         ))}
       </div>
     </section>
+  );
+}
+
+/** 上傳假單 Excel（請假姓名、開始日期、結束日期、假別、總計），只認考核名單裡的老師 */
+function LeaveUpload({ teachers, settings, onSave }) {
+  const ref = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const nameMap = new Map();
+  for (const t of teachers) {
+    for (const n of [t.chinese_name, t.english_name, settings.punchNames?.[t.id]]) if (n && String(n).trim()) nameMap.set(String(n).trim(), t.id);
+  }
+  const pad = (n) => String(n).padStart(2, "0");
+  const toParts = (v) => {
+    if (v instanceof Date) return { date: `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`, time: `${pad(v.getHours())}:${pad(v.getMinutes())}` };
+    const m = String(v || "").match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
+    return m ? { date: `${m[1]}-${pad(m[2])}-${pad(m[3])}`, time: m[4] ? `${pad(m[4])}:${m[5]}` : "" } : null;
+  };
+
+  async function handle(files) {
+    setBusy(true);
+    const out = [];
+    let skipped = 0;
+    try {
+      for (const file of files) {
+        const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+        const hi = rows.findIndex((r) => r.some((c) => String(c).includes("請假姓名")));
+        if (hi < 0) continue;
+        const h = rows[hi].map((c) => String(c));
+        const col = (k) => h.findIndex((c) => c.includes(k));
+        const iN = col("請假姓名"), iS = col("開始"), iE = col("結束"), iT = col("假別"), iH = col("總計"), iR = col("原因");
+        for (const r of rows.slice(hi + 1)) {
+          const name = String(r[iN] || "").trim();
+          if (!name) continue;
+          const tid = nameMap.get(name);
+          if (!tid) { skipped += 1; continue; }
+          const s = toParts(r[iS]);
+          const e = toParts(r[iE]) || s;
+          if (!s) continue;
+          const rawType = String(r[iT] || "").trim();
+          const type = [...LEAVE_TYPES, ...PROTECTED_LEAVE_TYPES].find((t) => rawType.includes(t.replace("假", ""))) || (rawType ? "其他" : "事假");
+          const hours = Number(String(r[iH] || "").replace(/[^\d.]/g, "")) || 8;
+          out.push({ id: `x-${tid}-${s.date}${s.time}`, teacherId: tid, from: s.date, to: e.date, type, hours, lastMinute: false, note: [rawType !== type ? rawType : "", String(r[iR] || "").trim(), s.time && e.time ? `${s.time}–${e.time}` : ""].filter(Boolean).join("・") });
+        }
+      }
+      await onSave(out, `已匯入 ${out.length} 筆請假${skipped ? `，其他 ${skipped} 筆不是考核名單已略過` : ""}。重複上傳不會重複登記。`);
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = "";
+    }
+  }
+
+  return (
+    <>
+      <input ref={ref} type="file" accept=".xlsx,.xls" multiple style={{ display: "none" }} onChange={(e) => e.target.files?.length && handle([...e.target.files])} />
+      <button type="button" style={S.ghostButton} disabled={busy} onClick={() => ref.current?.click()}>{busy ? "匯入中…" : "上傳假單"}</button>
+    </>
   );
 }
 
