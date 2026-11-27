@@ -34,6 +34,7 @@ import {
   leaveWeight,
   lateList,
   firstPunch,
+  DEFAULT_LATE_TIERS,
   SUBJECTS,
   getYearSettings,
   loadEvaluationSources,
@@ -1405,7 +1406,7 @@ function PunchSection({ info, settings, teachers, locked, onSave, onToggle }) {
       <h2 style={S.sectionTitle}>打卡紀錄（遲到）</h2>
       <p style={S.hint}>
         每月把打卡 Excel 檔上傳一次（可以一次選好幾個月）。系統只讀「倍思學院」分頁、只認考核名單裡的老師；
-        每天第一次上班打卡比上班時間晚超過 {settings.lateGrace ?? 5} 分鐘算遲到一次，每次扣 {settings.latePenalty ?? 2} 分。上班時間在「年度設定」修改。
+        每天第一次上班打卡比上班時間晚就算遲到，依晚到分鐘數分級扣分。上班時間和扣分級距在「年度設定」修改。
       </p>
       {!locked && (
         <div style={S.actionRow}>
@@ -1422,14 +1423,16 @@ function PunchSection({ info, settings, teachers, locked, onSave, onToggle }) {
                 <span style={S.muted}>・打卡 {days} 天</span>
                 {!hasSched && <span style={{ ...S.chip, ...S.chipWarn, marginLeft: 6 }}>未設上班時間</span>}
               </div>
-              <span style={counted ? S.minusText : S.muted}>遲到 {counted} 次{list.length ? (openTid === t.id ? " ▾" : " ▸") : ""}</span>
+              <span style={counted ? S.minusText : S.muted}>
+                遲到 {counted} 次{counted ? `・扣 ${list.filter((x) => !x.exempt).reduce((a, x) => a + x.points, 0)}` : ""}{list.length ? (openTid === t.id ? " ▾" : " ▸") : ""}
+              </span>
             </div>
             {openTid === t.id && (
               <div style={{ padding: "4px 0 10px 16px" }}>
                 {list.map((x) => (
                   <div key={x.date} style={{ ...S.actionRow, padding: "3px 0", opacity: x.exempt ? 0.5 : 1 }}>
                     <span style={{ width: 90 }}>{x.date.slice(5).replace("-", "/")}（{"日一二三四五六"[new Date(`${x.date}T00:00:00`).getDay()]}）</span>
-                    <span style={S.muted}>上班 {x.start}・打卡 {x.time}・晚 {x.minutes} 分</span>
+                    <span style={S.muted}>上班 {x.start}・打卡 {x.time}・晚 {x.minutes} 分・扣 {x.points}</span>
                     {!locked && (
                       <label style={S.muted}>
                         <input type="checkbox" checked={x.exempt} onChange={(e) => onToggle(t.id, x.date, e.target.checked)} /> 不算
@@ -2302,9 +2305,28 @@ function YearSettingsPanel({ info, settings, types, teachers, locked, saving, on
 
       <h3 style={S.subTitle}>上班時間（算遲到用）</h3>
       <p style={S.hint}>每位老師星期幾的上班時間；空白的那天不算遲到。打卡名字跟系統不同時，在「打卡名字」填打卡檔上的名字。</p>
-      <div style={S.settingsGrid}>
-        {field("遲到寬限（分鐘）", ["lateGrace"], draft.lateGrace)}
-        {field("每次遲到扣", ["latePenalty"], draft.latePenalty, 0.5)}
+      <div style={{ marginTop: 6 }}>
+        <strong style={{ fontSize: 14 }}>遲到扣分級距</strong>
+        {(draft.lateTiers?.length ? draft.lateTiers : DEFAULT_LATE_TIERS).map((t, i, arr) => {
+          const prev = i === 0 ? 1 : Number(arr[i - 1].upTo) + 1;
+          const tiers = draft.lateTiers?.length ? draft.lateTiers : DEFAULT_LATE_TIERS.map((x) => ({ ...x }));
+          const put = (k, v) => set(["lateTiers"], tiers.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+          const last = i === arr.length - 1;
+          return (
+            <div key={i} style={{ ...S.actionRow, marginTop: 4 }}>
+              <span style={S.muted}>晚 {prev} 分</span>
+              {last ? <span style={S.muted}>以上</span> : (
+                <>
+                  <span style={S.muted}>～</span>
+                  <input style={S.smallInput} type="number" min="1" disabled={locked} value={t.upTo} onChange={(e) => put("upTo", num(e.target.value))} />
+                  <span style={S.muted}>分</span>
+                </>
+              )}
+              <span style={S.muted}>扣</span>
+              <input style={S.smallInput} type="number" min="0" step="0.5" disabled={locked} value={t.points} onChange={(e) => put("points", num(e.target.value))} />
+            </div>
+          );
+        })}
       </div>
       <div style={{ ...S.tableWrap, marginTop: 8 }}>
         <table style={S.table}>

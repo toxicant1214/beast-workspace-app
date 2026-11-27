@@ -62,6 +62,22 @@ export function leaveWeight(settings, type) {
 // settings.workSchedule = { [tid]: { 1:"12:00", …, 5:"11:00" } }
 // settings.punches = { [tid]: { "2026-09-01": "11:48" } }、lateExempt = { [tid]: { date: true } }
 // ---------------------------------------------------------
+/** 遲到分級：晚到幾分鐘以內扣幾分（最後一級 upTo 留空＝以上） */
+export const DEFAULT_LATE_TIERS = [
+  { upTo: 15, points: 1 },
+  { upTo: 30, points: 2 },
+  { upTo: 60, points: 3 },
+  { upTo: "", points: 5 },
+];
+
+export function latePoints(minutes, settings) {
+  const tiers = settings.lateTiers?.length ? settings.lateTiers : DEFAULT_LATE_TIERS;
+  for (const t of tiers) {
+    if (t.upTo === "" || t.upTo === null || t.upTo === undefined || minutes <= Number(t.upTo)) return Number(t.points) || 0;
+  }
+  return Number(tiers[tiers.length - 1]?.points) || 0;
+}
+
 const toMin = (t) => {
   const [h, m] = String(t || "").split(":").map(Number);
   return Number.isNaN(h) ? null : h * 60 + (m || 0);
@@ -71,7 +87,7 @@ export function lateList(teacherId, range, settings) {
   const sched = settings.workSchedule?.[teacherId] || {};
   const punches = settings.punches?.[teacherId] || {};
   const exempt = settings.lateExempt?.[teacherId] || {};
-  const grace = Number(settings.lateGrace ?? 5);
+  const grace = Number(settings.lateGrace ?? 0);
   const out = [];
   for (const [date, time] of Object.entries(punches)) {
     if (!inRange(date, range)) continue;
@@ -80,7 +96,7 @@ export function lateList(teacherId, range, settings) {
     const arrive = toMin(time);
     if (start === null || arrive === null) continue;
     const minutes = arrive - start;
-    if (minutes > grace) out.push({ date, time, start: sched[wd], minutes, exempt: Boolean(exempt[date]) });
+    if (minutes > grace) out.push({ date, time, start: sched[wd], minutes, points: latePoints(minutes, settings), exempt: Boolean(exempt[date]) });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -143,8 +159,8 @@ export function defaultYearSettings(year) {
     punchNames: {},
     punches: {},
     lateExempt: {},
-    lateGrace: 5,
-    latePenalty: 2,
+    lateGrace: 0,
+    lateTiers: DEFAULT_LATE_TIERS.map((t) => ({ ...t })),
     leaveWeights: { ...DEFAULT_LEAVE_WEIGHTS },
     // 成績記在教室系統：預設由主管每學期手動填「達標人數／應考人數」
     examMode: "manual",
@@ -578,6 +594,7 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
   const punchLate = lateList(teacherId, range, settings).filter((x) => !x.exempt);
   const hasPunch = Object.keys(settings.punches?.[teacherId] || {}).some((d) => inRange(d, range));
   const lateCount = punchLate.length + countOf("遲到");
+  const latePts = punchLate.reduce((a, x) => a + x.points, 0) + countOf("遲到") * latePoints(15, settings);
   const myLeaves = (settings.leaveLog || []).filter((l) => l.teacherId === teacherId && inRange(l.from, range));
   const lastMinuteLeaves = myLeaves.filter((l) => l.lastMinute).length;
   const leaveLost = myLeaves.reduce((sum, l) => sum + ((Number(l.hours) || 0) / 8) * leaveWeight(settings, l.type), 0);
@@ -611,9 +628,9 @@ export function computeSystemSemester({ teacherId, range, sources, events, assig
         "late",
         "遲到",
         hasPunch || lateCount
-          ? `${lateCount} 次${punchLate.length ? `：${punchLate.map((x) => `${x.date.slice(5).replace("-", "/")} 晚 ${x.minutes} 分`).join("、")}` : ""}`
+          ? `${lateCount} 次、扣 ${latePts}${punchLate.length ? `：${punchLate.map((x) => `${x.date.slice(5).replace("-", "/")} 晚 ${x.minutes} 分`).join("、")}` : ""}`
           : "還沒有打卡資料",
-        hasPunch || lateCount ? clamp(100 - lateCount * Number(settings.latePenalty ?? 2)) : null,
+        hasPunch || lateCount ? clamp(100 - latePts) : null,
         "打卡"
       ),
       ind("mistakes", "工作疏失／沒交接", `${mistakes} 次`, countScore(mistakes, settings), "事件"),
